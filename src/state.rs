@@ -1,5 +1,6 @@
 //use std::collections::HashMap;
 use crate::farm;
+use rand::prelude::SliceRandom;
 use rand::Rng;
 use std::ops::{Index, IndexMut};
 
@@ -17,7 +18,42 @@ enum ActionSpace {
     GrainSeeds,
     MeetingPlace,
     Farmland,
+    FarmExpansion,
+    Lessons1,
+    Lessons2,
+    GrainUtilization,
+    Fencing,
+    SheepMarket,
+    Improvements,
+    WesternQuarry,
+    WishForChildren,
+    HouseDevelopment,
+    PigMarket,
+    VegetableSeeds,
+    EasternQuarry,
+    CattleMarket,
+    Cultivation,
+    UrgentWishForChildren,
+    FarmRedevelopment,
 }
+
+const NUM_HIDDEN_SPACES: usize = 14;
+const HIDDEN_SPACES: [ActionSpace; NUM_HIDDEN_SPACES] = [
+    ActionSpace::GrainUtilization,
+    ActionSpace::Fencing,
+    ActionSpace::SheepMarket,
+    ActionSpace::Improvements,
+    ActionSpace::WesternQuarry,
+    ActionSpace::WishForChildren,
+    ActionSpace::HouseDevelopment,
+    ActionSpace::PigMarket,
+    ActionSpace::VegetableSeeds,
+    ActionSpace::EasternQuarry,
+    ActionSpace::CattleMarket,
+    ActionSpace::Cultivation,
+    ActionSpace::UrgentWishForChildren,
+    ActionSpace::FarmRedevelopment,
+];
 
 enum Resource {
     Food,
@@ -259,10 +295,13 @@ impl State {
     }
 }
 
-pub fn get_init_state(first_player_idx: usize, num_players: usize) -> State {
+pub fn get_init_state(num_players: usize) -> State {
     assert!(num_players > 0);
     assert!(num_players < 5);
-    assert!(first_player_idx < num_players);
+
+    let first_player_idx = rand::thread_rng().gen_range(0..num_players);
+
+    println!("First player is {}", first_player_idx);
 
     let spaces = vec![
         Space {
@@ -396,7 +435,52 @@ pub fn get_init_state(first_player_idx: usize, num_players: usize) -> State {
             resource_space: false,
             resource: [0; NUM_RESOURCES],
         },
+        Space {
+            name: String::from("Farm Expansion"),
+            action_space: ActionSpace::FarmExpansion,
+            visible: true,
+            occupied: false,
+            accumulation_space: false,
+            resource_space: false,
+            resource: [0; NUM_RESOURCES],
+        },
+        Space {
+            name: String::from("Lessons 1"),
+            action_space: ActionSpace::Lessons1,
+            visible: true,
+            occupied: false,
+            accumulation_space: false,
+            resource_space: false,
+            resource: [0; NUM_RESOURCES],
+        },
+        Space {
+            name: String::from("Lessons 2"),
+            action_space: ActionSpace::Lessons2,
+            visible: true,
+            occupied: false,
+            accumulation_space: false,
+            resource_space: false,
+            resource: [0; NUM_RESOURCES],
+        },
     ];
+
+    let mut rng = &mut rand::thread_rng();
+    let mut stages: [[usize; 4]; 5] = [
+        [0, 1, 2, 3],
+        [4, 5, 6, 100],
+        [7, 8, 100, 100],
+        [9, 10, 100, 100],
+        [11, 12, 100, 100],
+    ];
+
+    for stage in &mut stages {
+        stage.shuffle(&mut rng);
+    }
+
+    let mut stages: Vec<&usize> = stages.iter().flat_map(|s| s.iter()).collect();
+    stages.retain(|&i| i < &100);
+
+    println!("Shuffled: {:?}", stages);
 
     let mut state = State {
         spaces,
