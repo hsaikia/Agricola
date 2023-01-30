@@ -48,25 +48,6 @@ In a Monte Carlo simulation, a large number of games are played and based on the
 
 Playing out an entire game is often expensive especially with a large branching factor (lot of agents and lot of actions), in this case, a game is also played till a certain horizon in the future and the reward at that point is used to weigh the valuation of actions at the current time.
 
-# Agricola
-
-## Fence arrangements
-
-| Spaces | Pastures (Wood) |
-|---|---|
-|1|1 (4)|
-|2|1 (6), 2 (7)|
-|3|1 (8), 2 (9), 3 (10)|
-|4|1 (8), 2(10), 3(11), 4(12)|
-|5|1 (10), 2(11), 3(13), 4(14), 5(15)|
-|6|1 (10), 2(12), 3(13, 14), 4(15)|
-|7|1 (12), 2(13), 3(15)|
-|8|1 (12), 2(14), 3(15)|
-|9|1 (12), 2(15), 3(15)|
-|10|1 (14), 2(15)|
-|11|1 (14)|
-|12|1 (14)|
-
 
 
 
