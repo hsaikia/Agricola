@@ -1,4 +1,4 @@
-//use std::collections::HashMap;
+use crate::major_improvements::MajorImprovement;
 use crate::player::Player;
 use crate::primitives::{print_resources, Resource, Resources, NUM_RESOURCES};
 use rand::Rng;
@@ -96,15 +96,22 @@ impl Space {
 pub struct Game {
     spaces: Vec<Space>,
     players: Vec<Player>,
+    major_improvements: Vec<MajorImprovement>,
     current_player_idx: usize,
     starting_player_idx: usize,
     next_visible_idx: usize,
 }
 
 impl Game {
-    pub fn create_new(p_spaces: Vec<Space>, first_player_idx: usize, num_players: usize) -> Game {
+    pub fn create_new(
+        p_spaces: Vec<Space>,
+        p_majors: Vec<MajorImprovement>,
+        first_player_idx: usize,
+        num_players: usize,
+    ) -> Game {
         let mut state = Game {
             spaces: p_spaces,
+            major_improvements: p_majors,
             players: Vec::<Player>::new(),
             current_player_idx: first_player_idx,
             starting_player_idx: first_player_idx,
@@ -130,6 +137,14 @@ impl Game {
                 print!("\n[-] {}.{} ", i, &space.name);
                 print_resources(&space.resource);
             }
+        }
+
+        if !self.major_improvements.is_empty() {
+            print!("\nMajors Available [");
+            for major in &self.major_improvements {
+                print!("{}, ", &major.name());
+            }
+            println!("]");
         }
 
         println!("\n\n-- Players --");
@@ -285,6 +300,13 @@ impl Game {
                 }
                 // Since we assume that the actions are all accessible
                 // no further checks are necessary
+                ActionSpace::GrainUtilization => {
+                    player.sow();
+                }
+                ActionSpace::Improvements => {
+                    player.build_major(&mut self.major_improvements);
+                    // TODO add minors
+                }
                 ActionSpace::Fencing => {
                     player.fence();
                 }
@@ -296,6 +318,12 @@ impl Game {
                 }
                 ActionSpace::UrgentWishForChildren => {
                     player.grow_family_without_room();
+                }
+                ActionSpace::FarmRedevelopment => {
+                    player.renovate();
+                    if player.can_fence() {
+                        player.fence();
+                    }
                 }
                 _ => (),
             }
@@ -333,7 +361,12 @@ impl Game {
                         continue;
                     }
                 }
-                ActionSpace::Improvements => continue, // TODO Not implemented - action not available
+                ActionSpace::Improvements => {
+                    if !player.can_build_major(&self.major_improvements) {
+                        continue;
+                    }
+                    // TODO - Add minors
+                }
                 ActionSpace::WishForChildren => {
                     if !player.can_grow_family_with_room() {
                         continue;
@@ -344,14 +377,23 @@ impl Game {
                         continue;
                     }
                 }
-                ActionSpace::GrainUtilization => continue, // TODO Not implemented - action not available
+                ActionSpace::GrainUtilization => {
+                    if !player.can_sow() {
+                        continue;
+                    }
+                    // TODO - Add baking bread
+                }
                 ActionSpace::HouseRedevelopment => {
                     if !player.can_renovate() {
                         continue;
                     }
                 }
                 ActionSpace::Cultivation => continue, // TODO Not implemented - action not available
-                ActionSpace::FarmRedevelopment => continue, // TODO Not implemented - action not available
+                ActionSpace::FarmRedevelopment => {
+                    if !player.can_renovate() {
+                        continue;
+                    }
+                }
                 ActionSpace::UrgentWishForChildren => {
                     if !player.can_grow_family_without_room() {
                         continue;

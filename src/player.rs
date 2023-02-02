@@ -1,6 +1,9 @@
 use crate::primitives::{
     can_pay_for_resource, pay_for_resource, print_resources, Resource, Resources, NUM_RESOURCES,
 };
+use crate::major_improvements::{MajorImprovementType, MajorImprovement};
+use rand::Rng;
+//use std::cmp;
 
 const FIELD_SCORE: [i32; 6] = [-1, -1, 1, 2, 3, 4];
 const PASTURE_SCORE: [i32; 5] = [-1, 1, 2, 3, 4];
@@ -11,7 +14,6 @@ const PIGS_SCORE: [i32; 8] = [-1, 1, 1, 2, 2, 3, 3, 4];
 const CATTLE_SCORE: [i32; 7] = [-1, 1, 2, 2, 3, 3, 4];
 const MAX_STABLES: u32 = 4;
 const MAX_FAMILY_MEMBERS: u32 = 5;
-const INF_RES: u32 = 1000;
 lazy_static! {
     // map[idx] = (p, w) : Choice of p pastures using w wood when idx number of fences remain.
     static ref FENCING_CHOICES: [Vec<(u32, u32)>; 16] = [
@@ -73,11 +75,19 @@ impl Field {
             amount: 0,
         }
     }
+
+    fn display(&self) {
+        match self.seed {
+            PlantedSeed::Empty => print!("[0]"),
+            PlantedSeed::Grain => print!("[{}G]", self.amount),
+            PlantedSeed::Vegetable => print!("[{}V]", self.amount),
+        }
+    }
 }
 
 struct Pasture {
     farmyard_spaces: u32,
-    stable: bool,
+    stable: bool, // TODO pastures can have multiple stables
     animal: Animal,
     amount: u32,
 }
@@ -130,6 +140,7 @@ struct Farm {
     pastures: Vec<Pasture>,
     unfenced_stables: u32,
     fences_left: u32,
+    pet : Animal,
 }
 
 impl Farm {
@@ -141,8 +152,82 @@ impl Farm {
             pastures: Vec::new(),
             unfenced_stables: 0,
             fences_left: 15,
+            pet: Animal::Empty,
         }
     }
+
+    fn reorg_animals(&mut self) {
+        todo!()
+    }
+
+    // fn add_animal_and_reoorg(&mut self, res : &Resources) {
+    //     let mut sheep_new : u32 = &mut res[Resource::Sheep];
+    //     let mut pigs_new : u32 = &mut res[Resource::Pigs];
+    //     let mut cattle_new : u32 = &mut res[Resource::Cattle];
+
+    //     for p in &mut self.pastures {
+    //         match p.animal {
+    //             Animal::Sheep => if p.capacity() > p.amount {
+    //                 let sheep_to_take = cmp::min(sheep_new, p.capacity() - p.amount);
+    //                 p.amount += sheep_to_take;
+    //                 sheep_new -= sheep_to_take;
+    //             },
+    //             Animal::Pigs => if p.capacity() > p.amount {
+    //                 let pigs_to_take = cmp::min(pigs_new, p.capacity() - p.amount);
+    //                 p.amount += sheep_to_take;
+    //                 sheep_new -= sheep_to_take;
+    //             },
+    //             Animal::Cattle => cattle_capacity += (p.capacity() - p.amount),
+    //             _ => (),
+    //         }
+    //     }
+
+    //     // If there is room in the house
+    //     if let Animal::Empty = self.pet {
+    //         return true;
+    //     }
+
+    //     // If an unfenced stable is unoccupied
+    //     for uf in &self.unfenced_stables {
+    //         if let Animal::Empty = uf {
+    //             return true;
+    //         }
+    //     }
+
+    //     // If house and unfenced stables are full and no pastures
+    //     if self.pastures.is_empty() {
+    //         return false;
+    //     }
+
+    //     for p in &self.pastures {
+    //         // If any pasture is empty
+    //         if let Animal::Empty = p.animal {
+    //             return true;
+    //         }
+    //     }
+
+    //     let mut sheep_capacity = 0;
+    //     let mut pigs_capacity = 0;
+    //     let mut cattle_capacity = 0;
+
+    //     for p in &self.pastures {
+    //         match p.animal {
+    //             Animal::Sheep => sheep_capacity += (p.capacity() - p.amount),
+    //             Animal::Pigs => pigs_capacity += (p.capacity() - p.amount),
+    //             Animal::Cattle => cattle_capacity += (p.capacity() - p.amount),
+    //             _ => (),
+    //         }
+    //     }
+
+    //     match res {
+    //         Resource::Sheep => return sheep_capacity > 0;
+    //         Resource::Pigs => return pigs_capacity > 0;
+    //         Resource::Cattle => return cattle_capacity > 0;
+    //         _ => (),
+    //     }
+
+    //     false
+    // }
 
     fn display(&self) {
         print!("[{} Room ", self.rooms);
@@ -162,7 +247,11 @@ impl Farm {
         }
 
         if !self.fields.is_empty() {
-            print!("[{} Fields]", self.fields.len());
+            print!("[Fields ");
+            for f in &self.fields {
+                f.display();
+            }
+            print!("]");
         }
         let ns: u32 = self.unfenced_stables;
         if ns > 0 {
@@ -190,6 +279,7 @@ impl Farm {
 }
 
 pub struct Player {
+    // Animals in this resources array are the ones that are pets in the house and the ones that are kept in unfenced stables
     resources: Resources,
     people_placed: u32,
     family_members: u32,
@@ -197,6 +287,8 @@ pub struct Player {
     build_room_cost: Resources,
     build_stable_cost: Resources,
     renovation_cost: Resources,
+    majors : Vec<MajorImprovementType>,
+    cards_score: u32,
     farm: Farm,
 }
 
@@ -224,8 +316,92 @@ impl Player {
             build_room_cost: room_cost,
             build_stable_cost: stable_cost,
             renovation_cost: reno_cost,
+            majors: Vec::new(),
+            cards_score: 0,
             farm: Farm::new(),
         }
+    }
+
+    // Animals can always be taken
+    // pub fn take_animal(&self, res : &mut Resources) {
+
+    //     // If animal can be adjusted in the farm
+    //     if self.farm.add_animal(res) 
+
+    //     // Whichever animals could not be adjusted might be discarded or eaten
+    //     // If animal can be eaten
+    //     for mi in &self.majors {
+    //         match mi {
+    //             MajorImprovementType::Fireplace2 | MajorImprovementType::Fireplace3 | MajorImprovementType::CookingHearth4 | MajorImprovementType::CookingHearth5 => todo!(),
+    //             _ => (), 
+    //         }
+    //     }
+    // }
+
+    // TODO - make this generic
+    // Currently builds a random major
+    pub fn build_major(&mut self, majors : &mut Vec<MajorImprovement>) {
+        let mut available : Vec<usize> = Vec::new();
+        for (i, major) in majors.iter().enumerate() {
+            if can_pay_for_resource(major.cost(), &self.resources) {
+                available.push(i)
+            }
+        }
+
+        // TODO if choose CH, give back FP
+        // TODO for Well place 1 food on next 4 round spaces
+        // TODO for Ovens, immediate bake bread action
+
+        let idx = rand::thread_rng().gen_range(0..available.len());
+        pay_for_resource(majors[available[idx]].cost(), &mut self.resources);
+        self.majors.push(majors[available[idx]].major_type());
+        self.cards_score += majors[available[idx]].points();
+        majors.remove(available[idx]);
+    }
+
+    pub fn sow(&mut self) {
+        let mut empty_field_idx: usize = 0;
+        let mut grain_fields: u32 = 0;
+        let mut veg_fields: u32 = 0;
+        for (i, f) in &mut self.farm.fields.iter().enumerate() {
+            match f.seed {
+                PlantedSeed::Grain => grain_fields += 1,
+                PlantedSeed::Vegetable => veg_fields += 1,
+                PlantedSeed::Empty => empty_field_idx = i,
+            }
+        }
+
+        let field_to_sow = &mut self.farm.fields[empty_field_idx];
+
+        if self.resources[Resource::Vegetable] == 0 || grain_fields <= veg_fields {
+            assert!(self.resources[Resource::Grain] > 0);
+            field_to_sow.seed = PlantedSeed::Grain;
+            field_to_sow.amount = 3;
+            self.resources[Resource::Grain] -= 1;
+        } else if self.resources[Resource::Grain] == 0 || veg_fields < grain_fields {
+            assert!(self.resources[Resource::Vegetable] > 0);
+            field_to_sow.seed = PlantedSeed::Vegetable;
+            field_to_sow.amount = 2;
+            self.resources[Resource::Vegetable] -= 1;
+        }
+
+        if self.can_sow() {
+            // Sow as much as possible
+            self.sow();
+        }
+    }
+
+    pub fn can_sow(&self) -> bool {
+        if self.resources[Resource::Grain] == 0 && self.resources[Resource::Vegetable] == 0 {
+            return false;
+        }
+
+        for f in &self.farm.fields {
+            if let PlantedSeed::Empty = f.seed {
+                return true;
+            }
+        }
+        false
     }
 
     pub fn fence(&mut self) {
@@ -389,6 +565,15 @@ impl Player {
         can_pay_for_resource(&self.build_stable_cost, &self.resources)
     }
 
+    pub fn can_build_major(&self, majors : &Vec<MajorImprovement>) -> bool {
+        for major in majors {
+            if can_pay_for_resource(major.cost(), &self.resources) {
+                return true;
+            }
+        }
+        false
+    }
+
     fn score_plants(&self) -> i32 {
         let mut num_grain: usize = 0;
         let mut num_veg: usize = 0;
@@ -406,25 +591,23 @@ impl Player {
     }
 
     fn score_animals(&self) -> i32 {
-        let mut num_sheep: usize = 0;
-        let mut num_pigs: usize = 0;
-        let mut num_cattle: usize = 0;
+        // All animals kept as pets and in unfenced stables
+        let mut num_sheep = self.resources[Resource::Sheep];
+        let mut num_pigs = self.resources[Resource::Pigs];
+        let mut num_cattle = self.resources[Resource::Cattle];
 
         for pasture in &self.farm.pastures {
             match pasture.animal {
-                Animal::Sheep => num_sheep += pasture.amount as usize,
-                Animal::Pigs => num_pigs += pasture.amount as usize,
-                Animal::Cattle => num_cattle += pasture.amount as usize,
+                Animal::Sheep => num_sheep += pasture.amount,
+                Animal::Pigs => num_pigs += pasture.amount,
+                Animal::Cattle => num_cattle += pasture.amount,
                 _ => (),
             }
         }
-        num_sheep += self.resources[Resource::Sheep] as usize;
-        num_pigs += self.resources[Resource::Pigs] as usize;
-        num_cattle += self.resources[Resource::Cattle] as usize;
 
-        calc_score(num_sheep, &SHEEP_SCORE)
-            + calc_score(num_pigs, &PIGS_SCORE)
-            + calc_score(num_cattle, &CATTLE_SCORE)
+        calc_score(num_sheep as usize, &SHEEP_SCORE)
+            + calc_score(num_pigs as usize, &PIGS_SCORE)
+            + calc_score(num_cattle as usize, &CATTLE_SCORE)
     }
 
     fn score_fields(&self) -> i32 {
@@ -478,7 +661,43 @@ impl Player {
         ret += self.score_animals();
         // House, Family and Empty Spaces
         ret += self.score_house_family_empty_spaces_begging();
-        // TODO Score Cards
+        // Score Majors
+        ret += self.cards_score as i32;
+
+        for major in &self.majors {
+            match major {
+                MajorImprovementType::Joinery => {
+                    if self.resources[Resource::Wood] >= 7 {
+                        ret += 3;
+                    } else if self.resources[Resource::Wood] >= 5 {
+                        ret += 2;
+                    } else if self.resources[Resource::Wood] >= 3 {
+                        ret += 1;
+                    }
+                }
+                MajorImprovementType::Pottery => {
+                    if self.resources[Resource::Clay] >= 7 {
+                        ret += 3;
+                    } else if self.resources[Resource::Clay] >= 5 {
+                        ret += 2;
+                    } else if self.resources[Resource::Clay] >= 3 {
+                        ret += 1;
+                    }
+                }
+                MajorImprovementType::BasketmakersWorkshop => {
+                    if self.resources[Resource::Reed] >= 5 {
+                        ret += 3;
+                    } else if self.resources[Resource::Reed] >= 4 {
+                        ret += 2;
+                    } else if self.resources[Resource::Reed] >= 2 {
+                        ret += 1;
+                    }
+                }
+                _ => (),
+            }
+        }
+
+        // TODO Score minors/occs
 
         ret
     }
@@ -507,6 +726,21 @@ impl Player {
         );
         print_resources(&self.resources);
         self.farm.display();
+
+        for major in &self.majors {
+            match major {
+                MajorImprovementType::Fireplace2 => print!("[FP2]"),
+                MajorImprovementType::Fireplace3 => print!("[FP3]"),
+                MajorImprovementType::CookingHearth4 => print!("[CH4]"),
+                MajorImprovementType::CookingHearth5 => print!("[CH5]"),
+                MajorImprovementType::Well => print!("[WL]"),
+                MajorImprovementType::ClayOven => print!("[CO]"),
+                MajorImprovementType::StoneOven => print!("[SO]"),
+                MajorImprovementType::Joinery => print!("[JY]"),
+                MajorImprovementType::Pottery => print!("[PY]"),
+                MajorImprovementType::BasketmakersWorkshop => print!("[BMW]"),
+            }
+        }
     }
 
     pub fn reset_for_next_round(&mut self) {

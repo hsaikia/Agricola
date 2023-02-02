@@ -1,6 +1,8 @@
-# Game Simulator
+# Game Simulator (Agricola)
 
 The game simulator is a library that can be used to quickly implement any turn based game and simulate playing it. Its objective is to find the best possible strategy to play the game, and in the process identify broken strategies and OP components etc. This enables the game developers to fine tune these strategies and reduce the effect of OP components - thereby making the game more balanced.
+
+The current version is a simulator of the popular strategy board game Agricola.
 
 ## System Design
 
@@ -48,7 +50,15 @@ In a Monte Carlo simulation, a large number of games are played and based on the
 
 Playing out an entire game is often expensive especially with a large branching factor (lot of agents and lot of actions), in this case, a game is also played till a certain horizon in the future and the reward at that point is used to weigh the valuation of actions at the current time.
 
+### TODO
 
+- Improvements
+- Animal re-org
+- Harvest, Cooking, Baking bread, Field harvest, Animal breeding
+- Simulation! Rewrite functions such that `f(state) = Vec<actions>`, and `action(state_1) = state_2` can be called
+- Implement human player
+- Implement AI player that chooses the best action by doing `n` random playouts from each immediate action and averaging the score for every action.
+- Implement pure MCTS
 
 
 

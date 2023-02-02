@@ -2,6 +2,7 @@
 extern crate lazy_static;
 
 mod game;
+mod major_improvements;
 mod player;
 mod primitives;
 mod setup;

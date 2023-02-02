@@ -14,7 +14,6 @@ pub enum Resource {
 }
 
 pub const NUM_RESOURCES: usize = 10;
-// Animals in the resources array are the ones that are kept in the house and unfenced stables
 const RESOURCE_NAMES: [&str; NUM_RESOURCES] = [
     "Fd", "Wd", "Cl", "St", "Rd", "Gr", "Vg", "Sheep", "Pig", "Cow",
 ];

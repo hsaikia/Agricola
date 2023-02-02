@@ -1,4 +1,5 @@
 use crate::game::{ActionSpace, Game, Space, HIDDEN_SPACES};
+use crate::major_improvements::{MajorImprovement, MajorImprovementType};
 use crate::primitives::{Resource, NUM_RESOURCES};
 use rand::prelude::SliceRandom;
 use rand::Rng;
@@ -156,5 +157,123 @@ pub fn get_init_state(num_players: usize) -> Game {
         }
     }
 
-    Game::create_new(spaces, first_player_idx, num_players)
+    let mut majors: Vec<MajorImprovement> = Vec::new();
+
+    majors.push(MajorImprovement::create_new(
+        "Fireplace (2)",
+        MajorImprovementType::Fireplace2,
+        {
+            let mut res = [0; NUM_RESOURCES];
+            res[Resource::Clay] = 2;
+            res
+        },
+        1,
+    ));
+
+    majors.push(MajorImprovement::create_new(
+        "Fireplace (3)",
+        MajorImprovementType::Fireplace3,
+        {
+            let mut res = [0; NUM_RESOURCES];
+            res[Resource::Clay] = 3;
+            res
+        },
+        1,
+    ));
+
+    majors.push(MajorImprovement::create_new(
+        "Cooking Hearth (4)",
+        MajorImprovementType::CookingHearth4,
+        {
+            let mut res = [0; NUM_RESOURCES];
+            res[Resource::Clay] = 4;
+            res
+        },
+        1,
+    ));
+
+    majors.push(MajorImprovement::create_new(
+        "Cooking Hearth (5)",
+        MajorImprovementType::CookingHearth5,
+        {
+            let mut res = [0; NUM_RESOURCES];
+            res[Resource::Clay] = 5;
+            res
+        },
+        1,
+    ));
+
+    majors.push(MajorImprovement::create_new(
+        "Well",
+        MajorImprovementType::Well,
+        {
+            let mut res = [0; NUM_RESOURCES];
+            res[Resource::Wood] = 1;
+            res[Resource::Stone] = 3;
+            res
+        },
+        4,
+    ));
+
+    majors.push(MajorImprovement::create_new(
+        "Clay Oven",
+        MajorImprovementType::ClayOven,
+        {
+            let mut res = [0; NUM_RESOURCES];
+            res[Resource::Clay] = 3;
+            res[Resource::Stone] = 1;
+            res
+        },
+        2,
+    ));
+
+    majors.push(MajorImprovement::create_new(
+        "Stone Oven",
+        MajorImprovementType::StoneOven,
+        {
+            let mut res = [0; NUM_RESOURCES];
+            res[Resource::Clay] = 1;
+            res[Resource::Stone] = 3;
+            res
+        },
+        3,
+    ));
+    
+    majors.push(MajorImprovement::create_new(
+        "Joinery",
+        MajorImprovementType::Joinery,
+        {
+            let mut res = [0; NUM_RESOURCES];
+            res[Resource::Wood] = 2;
+            res[Resource::Stone] = 2;
+            res
+        },
+        2,
+    ));
+
+    majors.push(MajorImprovement::create_new(
+        "Pottery",
+        MajorImprovementType::Pottery,
+        {
+            let mut res = [0; NUM_RESOURCES];
+            res[Resource::Clay] = 2;
+            res[Resource::Stone] = 2;
+            res
+        },
+        2,
+    ));
+
+    majors.push(MajorImprovement::create_new(
+        "Basketmaker's Workshop",
+        MajorImprovementType::BasketmakersWorkshop,
+        {
+            let mut res = [0; NUM_RESOURCES];
+            res[Resource::Reed] = 2;
+            res[Resource::Stone] = 2;
+            res
+        },
+        2,
+    ));
+
+    Game::create_new(spaces, majors, first_player_idx, num_players)
 }
