@@ -280,6 +280,14 @@ impl Game {
             let res = &space.resource;
             player.take_res(res);
 
+            // If animal accumulation space, re-org animals in the farm
+            match space.action_space {
+                ActionSpace::SheepMarket | ActionSpace::PigMarket | ActionSpace::CattleMarket => {
+                    player.reorg_animals()
+                }
+                _ => (),
+            }
+
             // Zero resources if space is an accumulation space
             if space.accumulation_space {
                 self.spaces[action_idx].resource = [0; NUM_RESOURCES];

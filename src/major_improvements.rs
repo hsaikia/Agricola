@@ -22,7 +22,12 @@ pub struct MajorImprovement {
 }
 
 impl MajorImprovement {
-    pub fn create_new(p_name: &str, p_type: MajorImprovementType, p_cost: Resources, p_points : u32) -> Self {
+    pub fn create_new(
+        p_name: &str,
+        p_type: MajorImprovementType,
+        p_cost: Resources,
+        p_points: u32,
+    ) -> Self {
         MajorImprovement {
             name: String::from(p_name),
             imp_type: p_type,

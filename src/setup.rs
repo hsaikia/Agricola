@@ -238,7 +238,7 @@ pub fn get_init_state(num_players: usize) -> Game {
         },
         3,
     ));
-    
+
     majors.push(MajorImprovement::create_new(
         "Joinery",
         MajorImprovementType::Joinery,

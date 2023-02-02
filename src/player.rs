@@ -1,9 +1,9 @@
+use crate::major_improvements::{MajorImprovement, MajorImprovementType};
 use crate::primitives::{
     can_pay_for_resource, pay_for_resource, print_resources, Resource, Resources, NUM_RESOURCES,
 };
-use crate::major_improvements::{MajorImprovementType, MajorImprovement};
 use rand::Rng;
-//use std::cmp;
+use std::cmp;
 
 const FIELD_SCORE: [i32; 6] = [-1, -1, 1, 2, 3, 4];
 const PASTURE_SCORE: [i32; 5] = [-1, 1, 2, 3, 4];
@@ -140,7 +140,6 @@ struct Farm {
     pastures: Vec<Pasture>,
     unfenced_stables: u32,
     fences_left: u32,
-    pet : Animal,
 }
 
 impl Farm {
@@ -152,82 +151,8 @@ impl Farm {
             pastures: Vec::new(),
             unfenced_stables: 0,
             fences_left: 15,
-            pet: Animal::Empty,
         }
     }
-
-    fn reorg_animals(&mut self) {
-        todo!()
-    }
-
-    // fn add_animal_and_reoorg(&mut self, res : &Resources) {
-    //     let mut sheep_new : u32 = &mut res[Resource::Sheep];
-    //     let mut pigs_new : u32 = &mut res[Resource::Pigs];
-    //     let mut cattle_new : u32 = &mut res[Resource::Cattle];
-
-    //     for p in &mut self.pastures {
-    //         match p.animal {
-    //             Animal::Sheep => if p.capacity() > p.amount {
-    //                 let sheep_to_take = cmp::min(sheep_new, p.capacity() - p.amount);
-    //                 p.amount += sheep_to_take;
-    //                 sheep_new -= sheep_to_take;
-    //             },
-    //             Animal::Pigs => if p.capacity() > p.amount {
-    //                 let pigs_to_take = cmp::min(pigs_new, p.capacity() - p.amount);
-    //                 p.amount += sheep_to_take;
-    //                 sheep_new -= sheep_to_take;
-    //             },
-    //             Animal::Cattle => cattle_capacity += (p.capacity() - p.amount),
-    //             _ => (),
-    //         }
-    //     }
-
-    //     // If there is room in the house
-    //     if let Animal::Empty = self.pet {
-    //         return true;
-    //     }
-
-    //     // If an unfenced stable is unoccupied
-    //     for uf in &self.unfenced_stables {
-    //         if let Animal::Empty = uf {
-    //             return true;
-    //         }
-    //     }
-
-    //     // If house and unfenced stables are full and no pastures
-    //     if self.pastures.is_empty() {
-    //         return false;
-    //     }
-
-    //     for p in &self.pastures {
-    //         // If any pasture is empty
-    //         if let Animal::Empty = p.animal {
-    //             return true;
-    //         }
-    //     }
-
-    //     let mut sheep_capacity = 0;
-    //     let mut pigs_capacity = 0;
-    //     let mut cattle_capacity = 0;
-
-    //     for p in &self.pastures {
-    //         match p.animal {
-    //             Animal::Sheep => sheep_capacity += (p.capacity() - p.amount),
-    //             Animal::Pigs => pigs_capacity += (p.capacity() - p.amount),
-    //             Animal::Cattle => cattle_capacity += (p.capacity() - p.amount),
-    //             _ => (),
-    //         }
-    //     }
-
-    //     match res {
-    //         Resource::Sheep => return sheep_capacity > 0;
-    //         Resource::Pigs => return pigs_capacity > 0;
-    //         Resource::Cattle => return cattle_capacity > 0;
-    //         _ => (),
-    //     }
-
-    //     false
-    // }
 
     fn display(&self) {
         print!("[{} Room ", self.rooms);
@@ -287,7 +212,7 @@ pub struct Player {
     build_room_cost: Resources,
     build_stable_cost: Resources,
     renovation_cost: Resources,
-    majors : Vec<MajorImprovementType>,
+    majors: Vec<MajorImprovementType>,
     cards_score: u32,
     farm: Farm,
 }
@@ -322,26 +247,114 @@ impl Player {
         }
     }
 
-    // Animals can always be taken
-    // pub fn take_animal(&self, res : &mut Resources) {
+    fn num_free_animals(&self) -> u32 {
+        self.resources[Resource::Sheep]
+            + self.resources[Resource::Pigs]
+            + self.resources[Resource::Cattle]
+    }
 
-    //     // If animal can be adjusted in the farm
-    //     if self.farm.add_animal(res) 
+    pub fn reorg_animals(&mut self) {
+        // Can free animals be kept in the house and UF stables?
+        let free_animal_spaces = self.farm.unfenced_stables + 1;
+        if self.num_free_animals() <= free_animal_spaces {
+            return;
+        }
 
-    //     // Whichever animals could not be adjusted might be discarded or eaten
-    //     // If animal can be eaten
-    //     for mi in &self.majors {
-    //         match mi {
-    //             MajorImprovementType::Fireplace2 | MajorImprovementType::Fireplace3 | MajorImprovementType::CookingHearth4 | MajorImprovementType::CookingHearth5 => todo!(),
-    //             _ => (), 
-    //         }
-    //     }
-    // }
+        // Try and fit in pastures
+        if !self.farm.pastures.is_empty() {
+            // Add pasture animals to the resources (free) array
+            for p in &mut self.farm.pastures {
+                match p.animal {
+                    Animal::Sheep => self.resources[Resource::Sheep] += p.amount,
+                    Animal::Pigs => self.resources[Resource::Pigs] += p.amount,
+                    Animal::Cattle => self.resources[Resource::Cattle] += p.amount,
+                    _ => (),
+                }
+                p.amount = 0;
+                p.animal = Animal::Empty;
+            }
+
+            let mut free_animals = vec![
+                (self.resources[Resource::Sheep], Resource::Sheep),
+                (self.resources[Resource::Pigs], Resource::Pigs),
+                (self.resources[Resource::Cattle], Resource::Cattle),
+            ];
+            let mut curr_idx = 0;
+
+            // sort by decreasing order
+            free_animals.sort_by(|a, b| b.0.cmp(&a.0));
+            self.farm.pastures.sort_by_key(|k| 1000 - k.capacity());
+
+            // Fill pastures
+            // TODO this should be made generic
+            for p in &mut self.farm.pastures {
+                match free_animals[curr_idx].1 {
+                    Resource::Sheep => p.animal = Animal::Sheep,
+                    Resource::Pigs => p.animal = Animal::Pigs,
+                    Resource::Cattle => p.animal = Animal::Cattle,
+                    _ => (),
+                }
+                p.amount = cmp::min(free_animals[curr_idx].0, p.capacity());
+                free_animals[curr_idx].0 -= p.amount;
+                curr_idx = (curr_idx + 1) % 3;
+            }
+
+            for (a, t) in free_animals {
+                self.resources[t] = a;
+            }
+
+            // Can free animals be kept in the house and UF stables?
+            if self.num_free_animals() <= free_animal_spaces {
+                return;
+            }
+        }
+        // Animals are in excess, keep only the valuable ones
+        let mut to_keep = free_animal_spaces;
+
+        let cattle_kept = cmp::min(self.resources[Resource::Cattle], to_keep);
+        let cattle_to_eat_or_discard = self.resources[Resource::Cattle] - cattle_kept;
+        self.resources[Resource::Cattle] = cattle_kept;
+        to_keep -= cattle_kept;
+
+        let pigs_kept = cmp::min(self.resources[Resource::Pigs], to_keep);
+        let pigs_to_eat_or_discard = self.resources[Resource::Pigs] - pigs_kept;
+        self.resources[Resource::Pigs] = pigs_kept;
+        to_keep -= pigs_kept;
+
+        let sheep_kept = cmp::min(self.resources[Resource::Sheep], to_keep);
+        let sheep_to_eat_or_discard = self.resources[Resource::Sheep] - sheep_kept;
+        self.resources[Resource::Sheep] = sheep_kept;
+
+        // Eat
+        let mut food: u32 = 0;
+        for mi in &self.majors {
+            match mi {
+                MajorImprovementType::Fireplace2 | MajorImprovementType::Fireplace3 => {
+                    food = cmp::max(
+                        food,
+                        sheep_to_eat_or_discard * 2
+                            + pigs_to_eat_or_discard * 2
+                            + cattle_to_eat_or_discard * 3,
+                    );
+                }
+                MajorImprovementType::CookingHearth4 | MajorImprovementType::CookingHearth5 => {
+                    food = cmp::max(
+                        food,
+                        sheep_to_eat_or_discard * 2
+                            + pigs_to_eat_or_discard * 3
+                            + cattle_to_eat_or_discard * 4,
+                    );
+                }
+                _ => (),
+            }
+        }
+        self.resources[Resource::Food] += food;
+    }
 
     // TODO - make this generic
     // Currently builds a random major
-    pub fn build_major(&mut self, majors : &mut Vec<MajorImprovement>) {
-        let mut available : Vec<usize> = Vec::new();
+    pub fn build_major(&mut self, majors: &mut Vec<MajorImprovement>) {
+        let mut available: Vec<usize> = Vec::new();
         for (i, major) in majors.iter().enumerate() {
             if can_pay_for_resource(major.cost(), &self.resources) {
                 available.push(i)
@@ -373,7 +386,9 @@ impl Player {
 
         let field_to_sow = &mut self.farm.fields[empty_field_idx];
 
-        if self.resources[Resource::Vegetable] == 0 || grain_fields <= veg_fields {
+        if self.resources[Resource::Vegetable] == 0
+            || (self.resources[Resource::Grain] > 0 && grain_fields <= veg_fields)
+        {
             assert!(self.resources[Resource::Grain] > 0);
             field_to_sow.seed = PlantedSeed::Grain;
             field_to_sow.amount = 3;
@@ -418,6 +433,9 @@ impl Player {
                 break;
             }
         }
+
+        self.reorg_animals();
+
         if recurse {
             self.fence();
         }
@@ -565,7 +583,7 @@ impl Player {
         can_pay_for_resource(&self.build_stable_cost, &self.resources)
     }
 
-    pub fn can_build_major(&self, majors : &Vec<MajorImprovement>) -> bool {
+    pub fn can_build_major(&self, majors: &Vec<MajorImprovement>) -> bool {
         for major in majors {
             if can_pay_for_resource(major.cost(), &self.resources) {
                 return true;
