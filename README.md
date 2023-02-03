@@ -54,11 +54,23 @@ Playing out an entire game is often expensive especially with a large branching 
 
 - Improvements
 - Animal re-org
-- Harvest, Cooking, Baking bread, Field harvest, Animal breeding
-- Simulation! Rewrite functions such that `f(state) = Vec<actions>`, and `action(state_1) = state_2` can be called
+- Cooking and Baking and converting other resources to food using majors
+- Harvest : Food deduction, Grains and Veg from fields, Animal breeding
+- Getting resources from future action spaces (e.g Well)
+- Simulation!! Rewrite functions such that `f(state) = Vec<actions>`, and `action(state_1) = state_2` can be called
 - Implement human player
 - Implement AI player that chooses the best action by doing `n` random playouts from each immediate action and averaging the score for every action.
 - Implement pure MCTS
+
+
+## Misc commands
+
+Show public functions and modules
+
+```
+cargo install cargo-modules
+cargo modules generate tree --with-fns
+```
 
 
 

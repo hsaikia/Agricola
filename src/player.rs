@@ -1,6 +1,6 @@
 use crate::major_improvements::{MajorImprovement, MajorImprovementType};
 use crate::primitives::{
-    can_pay_for_resource, pay_for_resource, print_resources, Resource, Resources, NUM_RESOURCES,
+    can_pay_for_resource, pay_for_resource, print_resources, Resource, Resources, NUM_RESOURCES, new_res,
 };
 use rand::Rng;
 use std::cmp;
@@ -215,6 +215,7 @@ pub struct Player {
     majors: Vec<MajorImprovementType>,
     cards_score: u32,
     farm: Farm,
+    promised_resources : Vec<Resources>,
 }
 
 impl Player {
@@ -244,6 +245,7 @@ impl Player {
             majors: Vec::new(),
             cards_score: 0,
             farm: Farm::new(),
+            promised_resources : Vec::new(),
         }
     }
 
@@ -274,10 +276,12 @@ impl Player {
                 p.animal = Animal::Empty;
             }
 
+            // Sorting preserves order in case of equality
+            // Hence pre-sorting according to animal importance wrt scoring
             let mut free_animals = vec![
-                (self.resources[Resource::Sheep], Resource::Sheep),
-                (self.resources[Resource::Pigs], Resource::Pigs),
                 (self.resources[Resource::Cattle], Resource::Cattle),
+                (self.resources[Resource::Pigs], Resource::Pigs),
+                (self.resources[Resource::Sheep], Resource::Sheep),
             ];
             let mut curr_idx = 0;
 
@@ -310,45 +314,107 @@ impl Player {
         }
         // Animals are in excess, keep only the valuable ones
         let mut to_keep = free_animal_spaces;
+        let mut leftover: Resources = [0; NUM_RESOURCES];
 
         let cattle_kept = cmp::min(self.resources[Resource::Cattle], to_keep);
-        let cattle_to_eat_or_discard = self.resources[Resource::Cattle] - cattle_kept;
+        leftover[Resource::Cattle] = self.resources[Resource::Cattle] - cattle_kept;
         self.resources[Resource::Cattle] = cattle_kept;
         to_keep -= cattle_kept;
 
         let pigs_kept = cmp::min(self.resources[Resource::Pigs], to_keep);
-        let pigs_to_eat_or_discard = self.resources[Resource::Pigs] - pigs_kept;
+        leftover[Resource::Pigs] = self.resources[Resource::Pigs] - pigs_kept;
         self.resources[Resource::Pigs] = pigs_kept;
         to_keep -= pigs_kept;
 
         let sheep_kept = cmp::min(self.resources[Resource::Sheep], to_keep);
-        let sheep_to_eat_or_discard = self.resources[Resource::Sheep] - sheep_kept;
+        leftover[Resource::Sheep] = self.resources[Resource::Sheep] - sheep_kept;
         self.resources[Resource::Sheep] = sheep_kept;
 
         // Eat
+        self.resources[Resource::Food] +=
+            Player::convert_to_food(&self.majors, leftover, false, false);
+    }
+
+    // Takes a resource array and converts the entire array to food
+    // This is done to preserve the original resource array for the player and delegate
+    // the decision of which resources to convert to food to a separate function.
+    fn convert_to_food(
+        majors: &Vec<MajorImprovementType>,
+        res: Resources,
+        bake: bool,
+        harvest: bool,
+    ) -> u32 {
         let mut food: u32 = 0;
-        for mi in &self.majors {
+        let mut fp_ch_food: u32 = 0;
+        let mut bake_food: u32 = 0;
+        for mi in majors {
             match mi {
                 MajorImprovementType::Fireplace2 | MajorImprovementType::Fireplace3 => {
-                    food = cmp::max(
-                        food,
-                        sheep_to_eat_or_discard * 2
-                            + pigs_to_eat_or_discard * 2
-                            + cattle_to_eat_or_discard * 3,
+                    fp_ch_food = cmp::max(
+                        fp_ch_food,
+                        res[Resource::Sheep] * 2
+                            + res[Resource::Pigs] * 2
+                            + res[Resource::Vegetable] * 2
+                            + res[Resource::Cattle] * 3,
                     );
                 }
                 MajorImprovementType::CookingHearth4 | MajorImprovementType::CookingHearth5 => {
-                    food = cmp::max(
-                        food,
-                        sheep_to_eat_or_discard * 2
-                            + pigs_to_eat_or_discard * 3
-                            + cattle_to_eat_or_discard * 4,
+                    fp_ch_food = cmp::max(
+                        fp_ch_food,
+                        res[Resource::Sheep] * 2
+                            + res[Resource::Pigs] * 3
+                            + res[Resource::Vegetable] * 3
+                            + res[Resource::Cattle] * 4,
                     );
+                }
+                MajorImprovementType::ClayOven => {
+                    if bake && res[Resource::Grain] > 0 {
+                        // Clay Oven bakes 1 grain for 5 food
+                        // bake bread with 1 grain and eat the rest raw, 5 + n - 1 = 4 + n
+                        bake_food = cmp::max(bake_food, 4 + res[Resource::Grain]);
+                    }
+                }
+                MajorImprovementType::StoneOven => {
+                    // Stone Oven bakes 1 grain for 4 food or 2 grain for 8 food
+                    if bake && res[Resource::Grain] > 0 {
+                        let bread = cmp::min(2, res[Resource::Grain]);
+                        // bake bread with x grain and eat the rest raw, 4 * x + n - x = 3 * x - n
+                        bake_food = cmp::max(bake_food, 3 * bread + res[Resource::Grain]);
+                    }
+                }
+                MajorImprovementType::Joinery => {
+                    // Joinery lets a player convert 1 wood to 2 food during harvest
+                    if harvest && res[Resource::Wood] > 0 {
+                        food += 2;
+                    }
+                }
+                MajorImprovementType::Pottery => {
+                    // Pottery lets a player convert 1 clay to 2 food during harvest
+                    if harvest && res[Resource::Clay] > 0 {
+                        food += 2;
+                    }
+                }
+                MajorImprovementType::BasketmakersWorkshop => {
+                    // BMW lets a player convert 1 reed to 3 food during harvest
+                    if harvest && res[Resource::Reed] > 0 {
+                        food += 3;
+                    }
                 }
                 _ => (),
             }
         }
-        self.resources[Resource::Food] += food;
+
+        if bake_food == 0 {
+            // No baking improvements - eat raw grain
+            bake_food = res[Resource::Grain];
+        }
+
+        if fp_ch_food == 0 {
+            // No cooking improvements - eat raw veg
+            fp_ch_food = res[Resource::Vegetable];
+        }
+
+        food + bake_food + fp_ch_food
     }
 
     // TODO - make this generic
@@ -359,15 +425,43 @@ impl Player {
             if can_pay_for_resource(major.cost(), &self.resources) {
                 available.push(i)
             }
+            // TODO if choose CH, give back FP
         }
 
-        // TODO if choose CH, give back FP
-        // TODO for Well place 1 food on next 4 round spaces
-        // TODO for Ovens, immediate bake bread action
 
         let idx = rand::thread_rng().gen_range(0..available.len());
         pay_for_resource(majors[available[idx]].cost(), &mut self.resources);
-        self.majors.push(majors[available[idx]].major_type());
+
+        let mi_type = majors[available[idx]].major_type();
+
+        match mi_type {
+            MajorImprovementType::Well => {
+                while self.promised_resources.len() < 5 {
+                    let res = new_res();
+                    self.promised_resources.push(res);
+                }
+                for i in 0..5 {
+                    self.promised_resources[i][Resource::Food] += 1;
+                }
+            }
+            MajorImprovementType::ClayOven => {
+                if self.resources[Resource::Grain] > 0 {
+                    self.resources[Resource::Grain] -= 1;
+                    self.resources[Resource::Food] += 5;
+                }
+            }
+            MajorImprovementType::StoneOven => {
+                for _ in 0..2 {
+                    if self.resources[Resource::Grain] > 0 {
+                        self.resources[Resource::Grain] -= 1;
+                        self.resources[Resource::Food] += 4;
+                    }
+                }
+            }
+            _ => ()
+        }
+
+        self.majors.push(mi_type);
         self.cards_score += majors[available[idx]].points();
         majors.remove(available[idx]);
     }
@@ -762,6 +856,9 @@ impl Player {
     }
 
     pub fn reset_for_next_round(&mut self) {
+        if let Some(res) = self.promised_resources.pop() {
+            self.take_res(&res);
+        }
         self.people_placed = 0;
     }
 

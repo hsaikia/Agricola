@@ -19,6 +19,10 @@ const RESOURCE_NAMES: [&str; NUM_RESOURCES] = [
 ];
 pub type Resources = [u32; NUM_RESOURCES];
 
+pub fn new_res() -> Resources {
+    [0; NUM_RESOURCES]
+}
+
 impl Index<Resource> for Resources {
     type Output = u32;
     fn index(&self, res: Resource) -> &Self::Output {
