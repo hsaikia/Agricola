@@ -121,6 +121,16 @@ impl ResourceConversion {
         ]
     }
 
+    pub fn default_grain_conversions() -> Vec<Self> {
+        vec![Self::food_conversion(
+            Resource::Grain,
+            1,
+            1,
+            MAX_RESOURCE_TO_CONVERT,
+            ConversionTime::Any,
+        )]
+    }
+
     pub fn can_convert(&self, res: &Resources, conv_time: &ConversionTime) -> bool {
         match conv_time {
             ConversionTime::Harvest | ConversionTime::Any => {

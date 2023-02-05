@@ -1,7 +1,8 @@
 use crate::major_improvements::ALL_MAJORS;
-use crate::player::Player;
+use crate::player::{Player, PlayerKind};
 use crate::primitives::{new_res, print_resources, Resource, Resources};
 use rand::Rng;
+use std::io;
 
 pub enum ActionSpace {
     Copse,
@@ -100,6 +101,7 @@ pub struct Game {
     current_player_idx: usize,
     starting_player_idx: usize,
     next_visible_idx: usize,
+    people_placed_this_round: u32,
 }
 
 impl Game {
@@ -111,62 +113,96 @@ impl Game {
             current_player_idx: first_player_idx,
             starting_player_idx: first_player_idx,
             next_visible_idx: 16,
+            people_placed_this_round: 0,
         };
         state.init_players(first_player_idx, num_players);
         state
     }
 
-    pub fn play_game(&mut self) {
-        self.display();
-        for round in 1..15 {
-            self.play_round();
+    pub fn play(&mut self) {
+        loop {
+            let maybe_actions = self.get_all_available_actions();
             self.display();
-            if round == 4 || round == 7 || round == 9 || round == 11 || round == 13 || round == 14 {
-                println!("\n--- HARVEST --- ");
-                self.harvest();
-                self.display();
+            match maybe_actions {
+                Some(actions) => {
+                    println!("\n\nAvailable actions {:?}", actions);
+
+                    match self.player_kind() {
+                        PlayerKind::DumbMachine => {
+                            // Chose a random action
+                            let action_idx = rand::thread_rng().gen_range(0..actions.len());
+                            self.apply_action(actions[action_idx]);
+                        }
+                        PlayerKind::Human => {
+                            let stdin = io::stdin();
+                            print!("Enter an action index : ");
+                            let mut user_input = String::new();
+                            let _res = stdin.read_line(&mut user_input);
+
+                            match user_input.trim().parse::<usize>() {
+                                Ok(input_int) => {
+                                    println!("Your input [{}]", input_int);
+
+                                    if !actions.contains(&input_int) {
+                                        println!("Invalid action.. quitting");
+                                        break;
+                                    }
+
+                                    self.apply_action(input_int);
+                                }
+                                Err(_e) => continue,
+                            }
+                        }
+                        PlayerKind::Machine => todo!(),
+                    }
+                }
+                None => break,
             }
         }
+    }
+
+    pub fn get_all_available_actions(&mut self) -> Option<Vec<usize>> {
+        if self.people_placed_this_round == 0 {
+            if self.next_visible_idx == 20
+                || self.next_visible_idx == 23
+                || self.next_visible_idx == 25
+                || self.next_visible_idx == 27
+                || self.next_visible_idx == 29
+            {
+                self.harvest();
+            }
+
+            if self.next_visible_idx == 30 {
+                println!("\nGAME OVER!");
+                return None;
+            }
+
+            // Init a new round
+            self.init_new_round();
+        }
+
+        let mut total_people = 0;
+        for p in &self.players {
+            total_people += p.workers();
+        }
+
+        if self.people_placed_this_round < total_people {
+            // If current player has run out of people, then move to the next player
+            while self.players[self.current_player_idx].all_people_placed() {
+                self.advance_turn();
+            }
+
+            return Some(self.available_actions());
+        }
+
+        self.people_placed_this_round = 0;
+        self.get_all_available_actions()
     }
 
     fn harvest(&mut self) {
         for (pi, p) in self.players.iter_mut().enumerate() {
             print!("\nPlayer {} paying for harvest..", pi);
             p.harvest();
-        }
-    }
-
-    fn display(&self) {
-        println!("\n\n-- Board --");
-        for i in 0..self.next_visible_idx {
-            let space = &self.spaces[i];
-            if space.occupied {
-                print!("\n[X] {}.{} is occupied", i, &space.name);
-            } else {
-                print!("\n[-] {}.{} ", i, &space.name);
-                print_resources(&space.resource);
-            }
-        }
-
-        print!("\nMajors Available [");
-        for (i, e) in self.major_improvements.iter().enumerate() {
-            if *e {
-                print!("{}, ", &ALL_MAJORS[i].name());
-            }
-        }
-        println!("]");
-
-        println!("\n\n-- Players --");
-        for i in 0..self.players.len() {
-            let p = &self.players[i];
-            print!("\n{}.", i);
-            p.display();
-            if i == self.current_player_idx {
-                print!("[X]");
-            }
-            if i == self.starting_player_idx {
-                print!("[S]");
-            }
         }
     }
 
@@ -243,32 +279,7 @@ impl Game {
         }
     }
 
-    fn play_round(&mut self) {
-        // Init round
-        self.init_new_round();
-
-        let mut total_people = 0;
-        // Computing this earlier, prevents using new children in the same round
-        for p in &self.players {
-            total_people += p.workers();
-        }
-
-        for _ in 0..total_people {
-            // If current player has run out of people, then move to the next player
-            while self.players[self.current_player_idx].all_people_placed() {
-                self.advance_turn();
-            }
-
-            // Print available actions
-            let remaining_actions = self.available_actions();
-            println!("\n\nAvailable actions {:?}", remaining_actions);
-            // Chose a random action
-            let action_idx = rand::thread_rng().gen_range(0..remaining_actions.len());
-            self.apply_action(remaining_actions[action_idx]);
-        }
-    }
-
-    fn apply_action(&mut self, action_idx: usize) {
+    pub fn apply_action(&mut self, action_idx: usize) {
         // This function assumes that the action is available to the current player
 
         let space = &self.spaces[action_idx];
@@ -313,7 +324,7 @@ impl Game {
                 // no further checks are necessary
                 ActionSpace::GrainUtilization => {
                     player.sow();
-                    // TODO +bake bread here
+                    player.bake_bread();
                 }
                 ActionSpace::Improvements => {
                     player.build_major(&mut self.major_improvements);
@@ -324,6 +335,10 @@ impl Game {
                 }
                 ActionSpace::HouseRedevelopment => {
                     player.renovate();
+                    if player.can_build_major(&self.major_improvements) {
+                        player.build_major(&mut self.major_improvements);
+                    }
+                    // TODO minors
                 }
                 ActionSpace::WishForChildren => {
                     player.grow_family_with_room();
@@ -337,11 +352,20 @@ impl Game {
                         player.fence();
                     }
                 }
+                ActionSpace::Cultivation => {
+                    if player.can_add_new_field() {
+                        player.add_new_field();
+                    }
+                    if player.can_sow() {
+                        player.sow();
+                    }
+                }
                 _ => (),
             }
         }
         // Increment people placed by player
         player.increment_people_placed();
+        self.people_placed_this_round += 1;
         // Set the space to occupied
         self.spaces[action_idx].occupied = true;
         // Move to the next player
@@ -393,14 +417,17 @@ impl Game {
                     if !player.can_sow() {
                         continue;
                     }
-                    // TODO - Add baking bread
                 }
                 ActionSpace::HouseRedevelopment => {
                     if !player.can_renovate() {
                         continue;
                     }
                 }
-                ActionSpace::Cultivation => continue, // TODO Not implemented - action not available
+                ActionSpace::Cultivation => {
+                    if !player.can_add_new_field() && !player.can_sow() {
+                        continue;
+                    }
+                }
                 ActionSpace::FarmRedevelopment => {
                     if !player.can_renovate() {
                         continue;
@@ -418,11 +445,54 @@ impl Game {
         ret
     }
 
+    fn player_kind(&self) -> PlayerKind {
+        self.players[self.current_player_idx].kind()
+    }
+
     fn init_players(&mut self, first_idx: usize, num: usize) {
         for i in 0..num {
             let food = if i == first_idx { 2 } else { 3 };
-            let player = Player::create_new(food);
-            self.players.push(player);
+            if i == 0 {
+                let player = Player::create_new(food, PlayerKind::Human);
+                self.players.push(player);
+            } else {
+                let player = Player::create_new(food, PlayerKind::DumbMachine);
+                self.players.push(player);
+            }
+        }
+    }
+
+    pub fn display(&self) {
+        println!("\n\n-- Board --");
+        for i in 0..self.next_visible_idx {
+            let space = &self.spaces[i];
+            if space.occupied {
+                print!("\n[X] {}.{} is occupied", i, &space.name);
+            } else {
+                print!("\n[-] {}.{} ", i, &space.name);
+                print_resources(&space.resource);
+            }
+        }
+
+        print!("\nMajors Available [");
+        for (i, e) in self.major_improvements.iter().enumerate() {
+            if *e {
+                print!("{}, ", &ALL_MAJORS[i].name());
+            }
+        }
+        println!("]");
+
+        println!("\n\n-- Players --");
+        for i in 0..self.players.len() {
+            let p = &self.players[i];
+            print!("\n{}.", i);
+            p.display();
+            if i == self.current_player_idx {
+                print!("[X]");
+            }
+            if i == self.starting_player_idx {
+                print!("[S]");
+            }
         }
     }
 }

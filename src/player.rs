@@ -46,8 +46,16 @@ fn calc_score(num: usize, scores: &[i32]) -> i32 {
     }
 }
 
+#[derive(Clone)]
+pub enum PlayerKind {
+    Human,
+    Machine,
+    DumbMachine, // Random
+}
+
 pub struct Player {
     // Animals in this resources array are the ones that are pets in the house and the ones that are kept in unfenced stables
+    kind: PlayerKind,
     resources: Resources,
     people_placed: u32,
     adults: u32,
@@ -63,7 +71,7 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn create_new(food: u32) -> Self {
+    pub fn create_new(food: u32, p_kind: PlayerKind) -> Self {
         let mut res = new_res();
         res[Resource::Food] = food;
 
@@ -79,6 +87,7 @@ impl Player {
         reno_cost[Resource::Reed] = 1;
 
         Player {
+            kind: p_kind,
             resources: res,
             people_placed: 0,
             adults: 2,
@@ -92,6 +101,10 @@ impl Player {
             farm: Farm::new(),
             promised_resources: Vec::new(),
         }
+    }
+
+    pub fn kind(&self) -> PlayerKind {
+        self.kind.clone()
     }
 
     pub fn harvest(&mut self) {
@@ -289,8 +302,10 @@ impl Player {
         }
 
         // If CH4 and CH5 are both present remove the expensive one
-        if available[MajorImprovement::CookingHearth4.index()]
-            && available[MajorImprovement::CookingHearth5.index()]
+        // Or if CH4 is already built remove CH5
+        if (available[MajorImprovement::CookingHearth4.index()]
+            && available[MajorImprovement::CookingHearth5.index()])
+            || self.major_cards[MajorImprovement::CookingHearth4.index()]
         {
             available[MajorImprovement::CookingHearth5.index()] = false;
         }
@@ -356,8 +371,18 @@ impl Player {
 
         // Add conversions
         self.conversions.clear();
-        self.conversions
-            .extend(ResourceConversion::default_conversions());
+
+        if self.major_cards[MajorImprovement::Fireplace2.index()]
+            || self.major_cards[MajorImprovement::Fireplace3.index()]
+            || self.major_cards[MajorImprovement::CookingHearth4.index()]
+            || self.major_cards[MajorImprovement::CookingHearth5.index()]
+        {
+            self.conversions
+                .extend(ResourceConversion::default_grain_conversions());
+        } else {
+            self.conversions
+                .extend(ResourceConversion::default_conversions());
+        }
 
         for (i, e) in self.major_cards.iter().enumerate() {
             if !e {
@@ -389,7 +414,7 @@ impl Player {
         }
     }
 
-    fn bake_bread(&mut self) {
+    pub fn bake_bread(&mut self) {
         let mut best_conversion = self.resources;
         for conv in &mut self.conversions {
             let mut res = self.resources;
