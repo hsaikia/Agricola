@@ -1,5 +1,8 @@
 use std::ops::{Index, IndexMut};
 
+pub const MAX_RESOURCE_TO_CONVERT: u32 = 1000; // Large enough number to simulate infinity
+
+#[derive(Clone, Debug)]
 pub enum Resource {
     Food,
     Wood,
@@ -13,7 +16,7 @@ pub enum Resource {
     Cattle,
 }
 
-pub const NUM_RESOURCES: usize = 10;
+const NUM_RESOURCES: usize = 10;
 const RESOURCE_NAMES: [&str; NUM_RESOURCES] = [
     "Fd", "Wd", "Cl", "St", "Rd", "Gr", "Vg", "Sheep", "Pig", "Cow",
 ];
@@ -45,8 +48,9 @@ pub fn print_resources(res: &Resources) {
 }
 
 pub fn can_pay_for_resource(cost: &Resources, store: &Resources) -> bool {
-    for (i, e) in cost.iter().enumerate().take(NUM_RESOURCES) {
-        if e > &store[i] {
+    for it in cost.iter().zip(store.iter()) {
+        let (a, b) = it;
+        if a > b {
             return false;
         }
     }
@@ -55,7 +59,99 @@ pub fn can_pay_for_resource(cost: &Resources, store: &Resources) -> bool {
 
 pub fn pay_for_resource(cost: &Resources, store: &mut Resources) {
     assert!(can_pay_for_resource(cost, store));
-    for (i, e) in cost.iter().enumerate().take(NUM_RESOURCES) {
-        store[i] -= e;
+    for it in cost.iter().zip(store.iter_mut()) {
+        let (a, b) = it;
+        *b -= a;
+    }
+}
+
+#[derive(Debug)]
+pub enum ConversionTime {
+    Any,
+    Harvest,
+    Bake,
+}
+
+#[derive(Debug)]
+pub struct ResourceConversion {
+    from: Resource,
+    to: Resource,
+    from_amt: u32,
+    to_amt: u32,
+    times: u32,
+    used: u32,
+    conv_time: ConversionTime,
+}
+
+impl ResourceConversion {
+    pub fn food_conversion(
+        p_from: Resource,
+        p_from_amt: u32,
+        p_to_amt: u32,
+        p_times: u32,
+        p_conv_time: ConversionTime,
+    ) -> Self {
+        ResourceConversion {
+            from: p_from,
+            to: Resource::Food,
+            from_amt: p_from_amt,
+            to_amt: p_to_amt,
+            times: p_times,
+            used: 0,
+            conv_time: p_conv_time,
+        }
+    }
+
+    pub fn default_conversions() -> Vec<Self> {
+        vec![
+            Self::food_conversion(
+                Resource::Grain,
+                1,
+                1,
+                MAX_RESOURCE_TO_CONVERT,
+                ConversionTime::Any,
+            ),
+            Self::food_conversion(
+                Resource::Vegetable,
+                1,
+                1,
+                MAX_RESOURCE_TO_CONVERT,
+                ConversionTime::Any,
+            ),
+        ]
+    }
+
+    pub fn can_convert(&self, res: &Resources, conv_time: &ConversionTime) -> bool {
+        match conv_time {
+            ConversionTime::Harvest | ConversionTime::Any => {
+                if let ConversionTime::Bake = self.conv_time {
+                    return false;
+                }
+            }
+            ConversionTime::Bake => match self.conv_time {
+                ConversionTime::Harvest | ConversionTime::Any => return false,
+                _ => (),
+            },
+        }
+        self.used < self.times && res[self.from.clone()] >= self.from_amt
+    }
+
+    pub fn convert_all(&mut self, res: &mut Resources, conv_time: &ConversionTime) {
+        while self.can_convert(res, conv_time) {
+            self.convert_once(res, conv_time)
+        }
+    }
+
+    pub fn convert_once(&mut self, res: &mut Resources, conv_time: &ConversionTime) {
+        if self.can_convert(res, conv_time) {
+            print!("\nConverting a {:?} to {} Food.", &self.from, self.to_amt);
+            res[self.from.clone()] -= self.from_amt;
+            res[self.to.clone()] += self.to_amt;
+            self.used += 1;
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.used = 0;
     }
 }

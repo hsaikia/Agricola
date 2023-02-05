@@ -1,6 +1,6 @@
-use crate::major_improvements::MajorImprovement;
+use crate::major_improvements::ALL_MAJORS;
 use crate::player::Player;
-use crate::primitives::{print_resources, Resource, Resources, NUM_RESOURCES};
+use crate::primitives::{new_res, print_resources, Resource, Resources};
 use rand::Rng;
 
 pub enum ActionSpace {
@@ -71,7 +71,7 @@ impl Space {
     ) -> Space {
         let mut p_resource_space = false;
         let mut p_accumulation_space = false;
-        let mut def_resource = [0; NUM_RESOURCES];
+        let mut def_resource = new_res();
 
         if let Some(res) = p_resource {
             def_resource = res;
@@ -96,22 +96,17 @@ impl Space {
 pub struct Game {
     spaces: Vec<Space>,
     players: Vec<Player>,
-    major_improvements: Vec<MajorImprovement>,
+    major_improvements: [bool; 10],
     current_player_idx: usize,
     starting_player_idx: usize,
     next_visible_idx: usize,
 }
 
 impl Game {
-    pub fn create_new(
-        p_spaces: Vec<Space>,
-        p_majors: Vec<MajorImprovement>,
-        first_player_idx: usize,
-        num_players: usize,
-    ) -> Game {
+    pub fn create_new(p_spaces: Vec<Space>, first_player_idx: usize, num_players: usize) -> Game {
         let mut state = Game {
             spaces: p_spaces,
-            major_improvements: p_majors,
+            major_improvements: [true; 10],
             players: Vec::<Player>::new(),
             current_player_idx: first_player_idx,
             starting_player_idx: first_player_idx,
@@ -122,8 +117,22 @@ impl Game {
     }
 
     pub fn play_game(&mut self) {
-        for _ in 0..14 {
+        self.display();
+        for round in 1..15 {
             self.play_round();
+            self.display();
+            if round == 4 || round == 7 || round == 9 || round == 11 || round == 13 || round == 14 {
+                println!("\n--- HARVEST --- ");
+                self.harvest();
+                self.display();
+            }
+        }
+    }
+
+    fn harvest(&mut self) {
+        for (pi, p) in self.players.iter_mut().enumerate() {
+            print!("\nPlayer {} paying for harvest..", pi);
+            p.harvest();
         }
     }
 
@@ -139,13 +148,13 @@ impl Game {
             }
         }
 
-        if !self.major_improvements.is_empty() {
-            print!("\nMajors Available [");
-            for major in &self.major_improvements {
-                print!("{}, ", &major.name());
+        print!("\nMajors Available [");
+        for (i, e) in self.major_improvements.iter().enumerate() {
+            if *e {
+                print!("{}, ", &ALL_MAJORS[i].name());
             }
-            println!("]");
         }
+        println!("]");
 
         println!("\n\n-- Players --");
         for i in 0..self.players.len() {
@@ -166,7 +175,7 @@ impl Game {
 
         // Reveal the next action space
         println!(
-            "\nRound {}. Action {} is revealed!",
+            "\n\nRound {}. Action {} is revealed!",
             self.next_visible_idx - 15,
             &self.spaces[self.next_visible_idx].name
         );
@@ -235,14 +244,14 @@ impl Game {
     }
 
     fn play_round(&mut self) {
+        // Init round
+        self.init_new_round();
+
         let mut total_people = 0;
         // Computing this earlier, prevents using new children in the same round
         for p in &self.players {
-            total_people += p.family_size();
+            total_people += p.workers();
         }
-
-        // Init round
-        self.init_new_round();
 
         for _ in 0..total_people {
             // If current player has run out of people, then move to the next player
@@ -250,19 +259,13 @@ impl Game {
                 self.advance_turn();
             }
 
-            // Display board
-            self.display();
-
             // Print available actions
             let remaining_actions = self.available_actions();
-            println!("\nAvailable actions {:?}", remaining_actions);
+            println!("\n\nAvailable actions {:?}", remaining_actions);
             // Chose a random action
             let action_idx = rand::thread_rng().gen_range(0..remaining_actions.len());
             self.apply_action(remaining_actions[action_idx]);
         }
-
-        // Display final board
-        self.display();
     }
 
     fn apply_action(&mut self, action_idx: usize) {
@@ -270,7 +273,7 @@ impl Game {
 
         let space = &self.spaces[action_idx];
         print!(
-            "\nCurrent Player {} uses action {}.",
+            "Current Player {} uses action {}.",
             self.current_player_idx, &space.name
         );
 
@@ -283,14 +286,14 @@ impl Game {
             // If animal accumulation space, re-org animals in the farm
             match space.action_space {
                 ActionSpace::SheepMarket | ActionSpace::PigMarket | ActionSpace::CattleMarket => {
-                    player.reorg_animals()
+                    player.reorg_animals(false)
                 }
                 _ => (),
             }
 
             // Zero resources if space is an accumulation space
             if space.accumulation_space {
-                self.spaces[action_idx].resource = [0; NUM_RESOURCES];
+                self.spaces[action_idx].resource = new_res();
             }
         } else {
             match space.action_space {
@@ -310,6 +313,7 @@ impl Game {
                 // no further checks are necessary
                 ActionSpace::GrainUtilization => {
                     player.sow();
+                    // TODO +bake bread here
                 }
                 ActionSpace::Improvements => {
                     player.build_major(&mut self.major_improvements);

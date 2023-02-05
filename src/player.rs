@@ -1,6 +1,8 @@
-use crate::major_improvements::{MajorImprovement, MajorImprovementType};
+use crate::farm::{Animal, Farm, Field, House, Pasture, PlantedSeed};
+use crate::major_improvements::{MajorImprovement, ALL_MAJORS};
 use crate::primitives::{
-    can_pay_for_resource, pay_for_resource, print_resources, Resource, Resources, NUM_RESOURCES, new_res,
+    can_pay_for_resource, new_res, pay_for_resource, print_resources, ConversionTime, Resource,
+    ResourceConversion, Resources,
 };
 use rand::Rng;
 use std::cmp;
@@ -44,209 +46,120 @@ fn calc_score(num: usize, scores: &[i32]) -> i32 {
     }
 }
 
-enum House {
-    Wood,
-    Clay,
-    Stone,
-}
-
-enum PlantedSeed {
-    Empty,
-    Grain,
-    Vegetable,
-}
-
-enum Animal {
-    Empty,
-    Sheep,
-    Pigs,
-    Cattle,
-}
-
-struct Field {
-    seed: PlantedSeed,
-    amount: u32,
-}
-
-impl Field {
-    fn new() -> Self {
-        Field {
-            seed: PlantedSeed::Empty,
-            amount: 0,
-        }
-    }
-
-    fn display(&self) {
-        match self.seed {
-            PlantedSeed::Empty => print!("[0]"),
-            PlantedSeed::Grain => print!("[{}G]", self.amount),
-            PlantedSeed::Vegetable => print!("[{}V]", self.amount),
-        }
-    }
-}
-
-struct Pasture {
-    farmyard_spaces: u32,
-    stable: bool, // TODO pastures can have multiple stables
-    animal: Animal,
-    amount: u32,
-}
-
-impl Pasture {
-    fn create_new(num_spaces: u32, num_unfenced_stables: &mut u32) -> Self {
-        let mut around_stable: bool = false;
-        if num_unfenced_stables > &mut 0 {
-            around_stable = true;
-            *num_unfenced_stables -= 1;
-        }
-        Pasture {
-            farmyard_spaces: num_spaces,
-            stable: around_stable,
-            animal: Animal::Empty,
-            amount: 0,
-        }
-    }
-
-    fn display(&self) {
-        print!("[");
-        print!("{}", self.farmyard_spaces);
-        if self.stable {
-            print!(" + S");
-        }
-        if self.amount > 0 {
-            match self.animal {
-                Animal::Sheep => print!(" => {} Sheep", self.amount),
-                Animal::Pigs => print!(" => {} Pig(s)", self.amount),
-                Animal::Cattle => print!(" => {} Cow(s)", self.amount),
-                _ => (),
-            }
-        }
-        print!("]");
-    }
-
-    fn capacity(&self) -> u32 {
-        if self.stable {
-            4 * self.farmyard_spaces
-        } else {
-            2 * self.farmyard_spaces
-        }
-    }
-}
-
-struct Farm {
-    house: House,
-    rooms: u32,
-    fields: Vec<Field>,
-    pastures: Vec<Pasture>,
-    unfenced_stables: u32,
-    fences_left: u32,
-}
-
-impl Farm {
-    fn new() -> Self {
-        Farm {
-            house: House::Wood,
-            rooms: 2,
-            fields: Vec::new(),
-            pastures: Vec::new(),
-            unfenced_stables: 0,
-            fences_left: 15,
-        }
-    }
-
-    fn display(&self) {
-        print!("[{} Room ", self.rooms);
-        match self.house {
-            House::Wood => print!("Wood"),
-            House::Clay => print!("Clay"),
-            House::Stone => print!("Stone"),
-        }
-        print!(" House]");
-
-        if !self.pastures.is_empty() {
-            print!("[Pastures ");
-            for p in &self.pastures {
-                p.display();
-            }
-            print!("]");
-        }
-
-        if !self.fields.is_empty() {
-            print!("[Fields ");
-            for f in &self.fields {
-                f.display();
-            }
-            print!("]");
-        }
-        let ns: u32 = self.unfenced_stables;
-        if ns > 0 {
-            print!("[{} UF Stables]", ns);
-        }
-    }
-
-    fn num_stables(&self) -> u32 {
-        let mut ret: u32 = 0;
-        for p in &self.pastures {
-            ret += u32::from(p.stable)
-        }
-        ret += self.unfenced_stables;
-        ret
-    }
-
-    fn empty_farmyard_spaces(&self) -> u32 {
-        let mut pasture_spaces: u32 = 0;
-        for pasture in &self.pastures {
-            pasture_spaces += pasture.farmyard_spaces;
-        }
-
-        15 - self.rooms - self.fields.len() as u32 - pasture_spaces - self.unfenced_stables
-    }
-}
-
 pub struct Player {
     // Animals in this resources array are the ones that are pets in the house and the ones that are kept in unfenced stables
     resources: Resources,
     people_placed: u32,
-    family_members: u32,
+    adults: u32,
+    children: u32,
     begging_tokens: u32,
     build_room_cost: Resources,
     build_stable_cost: Resources,
     renovation_cost: Resources,
-    majors: Vec<MajorImprovementType>,
-    cards_score: u32,
+    major_cards: [bool; ALL_MAJORS.len()],
+    conversions: Vec<ResourceConversion>,
     farm: Farm,
-    promised_resources : Vec<Resources>,
+    promised_resources: Vec<Resources>,
 }
 
 impl Player {
     pub fn create_new(food: u32) -> Self {
-        let mut res = [0; NUM_RESOURCES];
+        let mut res = new_res();
         res[Resource::Food] = food;
 
-        let mut room_cost = [0; NUM_RESOURCES];
+        let mut room_cost = new_res();
         room_cost[Resource::Wood] = 5;
         room_cost[Resource::Reed] = 2;
 
-        let mut stable_cost = [0; NUM_RESOURCES];
+        let mut stable_cost = new_res();
         stable_cost[Resource::Wood] = 2;
 
-        let mut reno_cost = [0; NUM_RESOURCES];
+        let mut reno_cost = new_res();
         reno_cost[Resource::Clay] = 2;
         reno_cost[Resource::Reed] = 1;
 
         Player {
             resources: res,
             people_placed: 0,
-            family_members: 2,
+            adults: 2,
+            children: 0,
             begging_tokens: 0,
             build_room_cost: room_cost,
             build_stable_cost: stable_cost,
             renovation_cost: reno_cost,
-            majors: Vec::new(),
-            cards_score: 0,
+            major_cards: [false; ALL_MAJORS.len()],
+            conversions: ResourceConversion::default_conversions(),
             farm: Farm::new(),
-            promised_resources : Vec::new(),
+            promised_resources: Vec::new(),
         }
+    }
+
+    pub fn harvest(&mut self) {
+        let food_required = 2 * self.adults + self.children;
+
+        // Harvest grain and veggies
+        let (gr, veg) = self.farm.harvest_fields();
+        self.resources[Resource::Grain] += gr;
+        self.resources[Resource::Vegetable] += veg;
+
+        // Move animals to the resources array if some of them need to be cooked
+        if food_required > self.resources[Resource::Food] {
+            self.add_animals_in_pastures_to_resources();
+        }
+
+        // If food isn't enough, try and convert some resources
+        while food_required > self.resources[Resource::Food] {
+            let mut found = false;
+            for conv in &mut self.conversions {
+                if conv.can_convert(&self.resources, &ConversionTime::Harvest) {
+                    //print!("\nUsing conversion {:?}", conv);
+                    conv.convert_once(&mut self.resources, &ConversionTime::Harvest);
+                    found = true;
+                }
+
+                if food_required <= self.resources[Resource::Food] {
+                    break;
+                }
+            }
+
+            if !found {
+                break;
+            }
+        }
+
+        // Reset conversions
+        for conv in &mut self.conversions {
+            conv.reset();
+        }
+
+        // Breed animals
+        if self.resources[Resource::Sheep] > 1 {
+            print!("\nBreeding Sheep!");
+            self.resources[Resource::Sheep] += 1;
+        }
+
+        if self.resources[Resource::Pigs] > 1 {
+            print!("\nBreeding Pigs!");
+            self.resources[Resource::Pigs] += 1;
+        }
+
+        if self.resources[Resource::Cattle] > 1 {
+            print!("\nBreeding Cattle!");
+            self.resources[Resource::Cattle] += 1;
+        }
+
+        // Place animals back in pastures
+        self.reorg_animals(true);
+
+        let food_provided = cmp::min(food_required, self.resources[Resource::Food]);
+        self.resources[Resource::Food] -= food_provided;
+        if food_required > food_provided {
+            print!(
+                "\nBegging Tokens as {} food is missing :( ",
+                food_required - food_provided
+            );
+        }
+        self.begging_tokens += food_required - food_provided;
     }
 
     fn num_free_animals(&self) -> u32 {
@@ -255,7 +168,20 @@ impl Player {
             + self.resources[Resource::Cattle]
     }
 
-    pub fn reorg_animals(&mut self) {
+    fn add_animals_in_pastures_to_resources(&mut self) {
+        for p in &mut self.farm.pastures {
+            match p.animal {
+                Animal::Sheep => self.resources[Resource::Sheep] += p.amount,
+                Animal::Pigs => self.resources[Resource::Pigs] += p.amount,
+                Animal::Cattle => self.resources[Resource::Cattle] += p.amount,
+                _ => (),
+            }
+            p.amount = 0;
+            p.animal = Animal::Empty;
+        }
+    }
+
+    pub fn reorg_animals(&mut self, discard_leftovers: bool) {
         // Can free animals be kept in the house and UF stables?
         let free_animal_spaces = self.farm.unfenced_stables + 1;
         if self.num_free_animals() <= free_animal_spaces {
@@ -265,16 +191,7 @@ impl Player {
         // Try and fit in pastures
         if !self.farm.pastures.is_empty() {
             // Add pasture animals to the resources (free) array
-            for p in &mut self.farm.pastures {
-                match p.animal {
-                    Animal::Sheep => self.resources[Resource::Sheep] += p.amount,
-                    Animal::Pigs => self.resources[Resource::Pigs] += p.amount,
-                    Animal::Cattle => self.resources[Resource::Cattle] += p.amount,
-                    _ => (),
-                }
-                p.amount = 0;
-                p.animal = Animal::Empty;
-            }
+            self.add_animals_in_pastures_to_resources();
 
             // Sorting preserves order in case of equality
             // Hence pre-sorting according to animal importance wrt scoring
@@ -314,7 +231,7 @@ impl Player {
         }
         // Animals are in excess, keep only the valuable ones
         let mut to_keep = free_animal_spaces;
-        let mut leftover: Resources = [0; NUM_RESOURCES];
+        let mut leftover: Resources = new_res();
 
         let cattle_kept = cmp::min(self.resources[Resource::Cattle], to_keep);
         leftover[Resource::Cattle] = self.resources[Resource::Cattle] - cattle_kept;
@@ -330,112 +247,130 @@ impl Player {
         leftover[Resource::Sheep] = self.resources[Resource::Sheep] - sheep_kept;
         self.resources[Resource::Sheep] = sheep_kept;
 
-        // Eat
-        self.resources[Resource::Food] +=
-            Player::convert_to_food(&self.majors, leftover, false, false);
+        if !discard_leftovers {
+            // Eat the leftover animals :(
+            for conv in &mut self.conversions {
+                conv.convert_all(&mut leftover, &ConversionTime::Any);
+                conv.reset();
+            }
+            self.resources[Resource::Food] += leftover[Resource::Food];
+        }
     }
 
-    // Takes a resource array and converts the entire array to food
-    // This is done to preserve the original resource array for the player and delegate
-    // the decision of which resources to convert to food to a separate function.
-    fn convert_to_food(
-        majors: &Vec<MajorImprovementType>,
-        res: Resources,
-        bake: bool,
-        harvest: bool,
-    ) -> u32 {
-        let mut food: u32 = 0;
-        let mut fp_ch_food: u32 = 0;
-        let mut bake_food: u32 = 0;
-        for mi in majors {
-            match mi {
-                MajorImprovementType::Fireplace2 | MajorImprovementType::Fireplace3 => {
-                    fp_ch_food = cmp::max(
-                        fp_ch_food,
-                        res[Resource::Sheep] * 2
-                            + res[Resource::Pigs] * 2
-                            + res[Resource::Vegetable] * 2
-                            + res[Resource::Cattle] * 3,
-                    );
+    fn available_majors_to_build(&self, majors: &[bool; ALL_MAJORS.len()]) -> Vec<usize> {
+        // If one of the FPs are already built
+        let fp2_built: bool = self.major_cards[MajorImprovement::Fireplace2.index()];
+        let fp3_built: bool = self.major_cards[MajorImprovement::Fireplace3.index()];
+
+        let mut available = [false; ALL_MAJORS.len()];
+
+        for idx in 0..ALL_MAJORS.len() {
+            if !majors[idx] {
+                continue;
+            }
+
+            // If FP2 or FP3 is already built
+            if fp2_built || fp3_built {
+                if idx == MajorImprovement::CookingHearth4.index()
+                    || idx == MajorImprovement::CookingHearth5.index()
+                {
+                    available[idx] = true;
                 }
-                MajorImprovementType::CookingHearth4 | MajorImprovementType::CookingHearth5 => {
-                    fp_ch_food = cmp::max(
-                        fp_ch_food,
-                        res[Resource::Sheep] * 2
-                            + res[Resource::Pigs] * 3
-                            + res[Resource::Vegetable] * 3
-                            + res[Resource::Cattle] * 4,
-                    );
+
+                if idx == MajorImprovement::Fireplace2.index()
+                    || idx == MajorImprovement::Fireplace3.index()
+                {
+                    continue;
                 }
-                MajorImprovementType::ClayOven => {
-                    if bake && res[Resource::Grain] > 0 {
-                        // Clay Oven bakes 1 grain for 5 food
-                        // bake bread with 1 grain and eat the rest raw, 5 + n - 1 = 4 + n
-                        bake_food = cmp::max(bake_food, 4 + res[Resource::Grain]);
-                    }
-                }
-                MajorImprovementType::StoneOven => {
-                    // Stone Oven bakes 1 grain for 4 food or 2 grain for 8 food
-                    if bake && res[Resource::Grain] > 0 {
-                        let bread = cmp::min(2, res[Resource::Grain]);
-                        // bake bread with x grain and eat the rest raw, 4 * x + n - x = 3 * x - n
-                        bake_food = cmp::max(bake_food, 3 * bread + res[Resource::Grain]);
-                    }
-                }
-                MajorImprovementType::Joinery => {
-                    // Joinery lets a player convert 1 wood to 2 food during harvest
-                    if harvest && res[Resource::Wood] > 0 {
-                        food += 2;
-                    }
-                }
-                MajorImprovementType::Pottery => {
-                    // Pottery lets a player convert 1 clay to 2 food during harvest
-                    if harvest && res[Resource::Clay] > 0 {
-                        food += 2;
-                    }
-                }
-                MajorImprovementType::BasketmakersWorkshop => {
-                    // BMW lets a player convert 1 reed to 3 food during harvest
-                    if harvest && res[Resource::Reed] > 0 {
-                        food += 3;
-                    }
-                }
-                _ => (),
+            }
+            if can_pay_for_resource(&ALL_MAJORS[idx].cost(), &self.resources) {
+                available[idx] = true;
             }
         }
 
-        if bake_food == 0 {
-            // No baking improvements - eat raw grain
-            bake_food = res[Resource::Grain];
+        // If CH4 and CH5 are both present remove the expensive one
+        if available[MajorImprovement::CookingHearth4.index()]
+            && available[MajorImprovement::CookingHearth5.index()]
+        {
+            available[MajorImprovement::CookingHearth5.index()] = false;
         }
 
-        if fp_ch_food == 0 {
-            // No cooking improvements - eat raw veg
-            fp_ch_food = res[Resource::Vegetable];
+        // If FP2 and FP3 are both present remove the expensive one
+        if available[MajorImprovement::Fireplace2.index()]
+            && available[MajorImprovement::Fireplace3.index()]
+        {
+            available[MajorImprovement::Fireplace3.index()] = false;
         }
 
-        food + bake_food + fp_ch_food
+        // Choose random index
+        let mut available_indices = vec![];
+
+        for (i, e) in available.iter().enumerate() {
+            if *e {
+                available_indices.push(i);
+            }
+        }
+
+        available_indices
     }
 
     // TODO - make this generic
     // Currently builds a random major
-    pub fn build_major(&mut self, majors: &mut Vec<MajorImprovement>) {
-        let mut available: Vec<usize> = Vec::new();
-        for (i, major) in majors.iter().enumerate() {
-            if can_pay_for_resource(major.cost(), &self.resources) {
-                available.push(i)
+    pub fn build_major(&mut self, majors: &mut [bool; ALL_MAJORS.len()]) {
+        let available_indices = self.available_majors_to_build(majors);
+        assert!(!available_indices.is_empty());
+
+        let idx = rand::thread_rng().gen_range(0..available_indices.len());
+        let chosen_major: MajorImprovement = ALL_MAJORS[available_indices[idx]].clone();
+
+        println!("Chosen major {:?}", chosen_major);
+
+        // If one of the FPs are already built
+        let fp2_built: bool = self.major_cards[MajorImprovement::Fireplace2.index()];
+        let fp3_built: bool = self.major_cards[MajorImprovement::Fireplace3.index()];
+
+        // Build major
+        match chosen_major {
+            // Pay
+            MajorImprovement::CookingHearth4 | MajorImprovement::CookingHearth5 => {
+                if fp2_built {
+                    self.major_cards[MajorImprovement::Fireplace2.index()] = false;
+                    // Add FP2 back to board
+                    majors[MajorImprovement::Fireplace2.index()] = true;
+                }
+                if fp3_built {
+                    self.major_cards[MajorImprovement::Fireplace3.index()] = false;
+                    // Add FP3 back to board
+                    majors[MajorImprovement::Fireplace3.index()] = true;
+                }
             }
-            // TODO if choose CH, give back FP
+            _ => {
+                pay_for_resource(&chosen_major.cost(), &mut self.resources);
+            }
+        }
+        // Built
+        self.major_cards[available_indices[idx]] = true;
+
+        // Remove from board
+        majors[available_indices[idx]] = false;
+
+        // Add conversions
+        self.conversions.clear();
+        self.conversions
+            .extend(ResourceConversion::default_conversions());
+
+        for (i, e) in self.major_cards.iter().enumerate() {
+            if !e {
+                continue;
+            }
+            if let Some(v) = ALL_MAJORS[i].conversions_to_food() {
+                self.conversions.extend(v);
+            }
         }
 
-
-        let idx = rand::thread_rng().gen_range(0..available.len());
-        pay_for_resource(majors[available[idx]].cost(), &mut self.resources);
-
-        let mi_type = majors[available[idx]].major_type();
-
-        match mi_type {
-            MajorImprovementType::Well => {
+        // Free actions + resources
+        match chosen_major {
+            MajorImprovement::Well => {
                 while self.promised_resources.len() < 5 {
                     let res = new_res();
                     self.promised_resources.push(res);
@@ -444,26 +379,26 @@ impl Player {
                     self.promised_resources[i][Resource::Food] += 1;
                 }
             }
-            MajorImprovementType::ClayOven => {
-                if self.resources[Resource::Grain] > 0 {
-                    self.resources[Resource::Grain] -= 1;
-                    self.resources[Resource::Food] += 5;
-                }
+            MajorImprovement::ClayOven => {
+                self.bake_bread();
             }
-            MajorImprovementType::StoneOven => {
-                for _ in 0..2 {
-                    if self.resources[Resource::Grain] > 0 {
-                        self.resources[Resource::Grain] -= 1;
-                        self.resources[Resource::Food] += 4;
-                    }
-                }
+            MajorImprovement::StoneOven => {
+                self.bake_bread();
             }
-            _ => ()
+            _ => (),
         }
+    }
 
-        self.majors.push(mi_type);
-        self.cards_score += majors[available[idx]].points();
-        majors.remove(available[idx]);
+    fn bake_bread(&mut self) {
+        let mut best_conversion = self.resources;
+        for conv in &mut self.conversions {
+            let mut res = self.resources;
+            conv.convert_all(&mut res, &ConversionTime::Bake);
+            if res[Resource::Food] > best_conversion[Resource::Food] {
+                best_conversion = res;
+            }
+        }
+        self.resources = best_conversion;
     }
 
     pub fn sow(&mut self) {
@@ -528,7 +463,7 @@ impl Player {
             }
         }
 
-        self.reorg_animals();
+        self.reorg_animals(false);
 
         if recurse {
             self.fence();
@@ -569,20 +504,20 @@ impl Player {
 
     pub fn grow_family_with_room(&mut self) {
         assert!(self.can_grow_family_with_room());
-        self.family_members += 1;
+        self.children += 1;
     }
 
     pub fn grow_family_without_room(&mut self) {
         assert!(self.can_grow_family_without_room());
-        self.family_members += 1;
+        self.children += 1;
     }
 
     pub fn can_grow_family_with_room(&self) -> bool {
-        self.family_members < MAX_FAMILY_MEMBERS && self.family_members < self.farm.rooms
+        self.family_members() < MAX_FAMILY_MEMBERS && self.family_members() < self.farm.rooms
     }
 
     pub fn can_grow_family_without_room(&self) -> bool {
-        self.family_members < MAX_FAMILY_MEMBERS && self.family_members >= self.farm.rooms
+        self.family_members() < MAX_FAMILY_MEMBERS && self.family_members() >= self.farm.rooms
     }
 
     pub fn renovate(&mut self) {
@@ -677,13 +612,8 @@ impl Player {
         can_pay_for_resource(&self.build_stable_cost, &self.resources)
     }
 
-    pub fn can_build_major(&self, majors: &Vec<MajorImprovement>) -> bool {
-        for major in majors {
-            if can_pay_for_resource(major.cost(), &self.resources) {
-                return true;
-            }
-        }
-        false
+    pub fn can_build_major(&self, majors: &[bool; ALL_MAJORS.len()]) -> bool {
+        !self.available_majors_to_build(majors).is_empty()
     }
 
     fn score_plants(&self) -> i32 {
@@ -750,7 +680,7 @@ impl Player {
         }
 
         // Family members
-        ret += 3 * self.family_members as i32;
+        ret += 3 * self.family_members() as i32;
 
         // Empty spaces
         ret -= self.farm.empty_farmyard_spaces() as i32;
@@ -773,12 +703,15 @@ impl Player {
         ret += self.score_animals();
         // House, Family and Empty Spaces
         ret += self.score_house_family_empty_spaces_begging();
-        // Score Majors
-        ret += self.cards_score as i32;
 
-        for major in &self.majors {
-            match major {
-                MajorImprovementType::Joinery => {
+        // Score Majors
+        for (i, e) in self.major_cards.iter().enumerate() {
+            if !e {
+                continue;
+            }
+            ret += ALL_MAJORS[i].points() as i32;
+            match ALL_MAJORS[i] {
+                MajorImprovement::Joinery => {
                     if self.resources[Resource::Wood] >= 7 {
                         ret += 3;
                     } else if self.resources[Resource::Wood] >= 5 {
@@ -787,7 +720,7 @@ impl Player {
                         ret += 1;
                     }
                 }
-                MajorImprovementType::Pottery => {
+                MajorImprovement::Pottery => {
                     if self.resources[Resource::Clay] >= 7 {
                         ret += 3;
                     } else if self.resources[Resource::Clay] >= 5 {
@@ -796,7 +729,7 @@ impl Player {
                         ret += 1;
                     }
                 }
-                MajorImprovementType::BasketmakersWorkshop => {
+                MajorImprovement::BasketmakersWorkshop => {
                     if self.resources[Resource::Reed] >= 5 {
                         ret += 3;
                     } else if self.resources[Resource::Reed] >= 4 {
@@ -815,8 +748,9 @@ impl Player {
     }
 
     pub fn take_res(&mut self, acc_res: &Resources) {
-        for (i, elem) in acc_res.iter().enumerate().take(NUM_RESOURCES) {
-            self.resources[i] += elem;
+        for it in acc_res.iter().zip(self.resources.iter_mut()) {
+            let (a, b) = it;
+            *b += a;
         }
     }
 
@@ -833,24 +767,33 @@ impl Player {
         print!(
             "Player ({}/{}) SCORE {} has ",
             self.people_placed,
-            self.family_members,
+            self.adults,
             self.score()
         );
+        if self.children > 0 {
+            print!("[{} Children]", self.children);
+        }
+        if self.begging_tokens > 0 {
+            print!("[{} :(]", self.begging_tokens);
+        }
         print_resources(&self.resources);
         self.farm.display();
 
-        for major in &self.majors {
-            match major {
-                MajorImprovementType::Fireplace2 => print!("[FP2]"),
-                MajorImprovementType::Fireplace3 => print!("[FP3]"),
-                MajorImprovementType::CookingHearth4 => print!("[CH4]"),
-                MajorImprovementType::CookingHearth5 => print!("[CH5]"),
-                MajorImprovementType::Well => print!("[WL]"),
-                MajorImprovementType::ClayOven => print!("[CO]"),
-                MajorImprovementType::StoneOven => print!("[SO]"),
-                MajorImprovementType::Joinery => print!("[JY]"),
-                MajorImprovementType::Pottery => print!("[PY]"),
-                MajorImprovementType::BasketmakersWorkshop => print!("[BMW]"),
+        for (i, e) in self.major_cards.iter().enumerate() {
+            if !e {
+                continue;
+            }
+            match ALL_MAJORS[i] {
+                MajorImprovement::Fireplace2 => print!("[FP2]"),
+                MajorImprovement::Fireplace3 => print!("[FP3]"),
+                MajorImprovement::CookingHearth4 => print!("[CH4]"),
+                MajorImprovement::CookingHearth5 => print!("[CH5]"),
+                MajorImprovement::Well => print!("[WL]"),
+                MajorImprovement::ClayOven => print!("[CO]"),
+                MajorImprovement::StoneOven => print!("[SO]"),
+                MajorImprovement::Joinery => print!("[JY]"),
+                MajorImprovement::Pottery => print!("[PY]"),
+                MajorImprovement::BasketmakersWorkshop => print!("[BMW]"),
             }
         }
     }
@@ -859,11 +802,17 @@ impl Player {
         if let Some(res) = self.promised_resources.pop() {
             self.take_res(&res);
         }
+        self.adults += self.children;
+        self.children = 0;
         self.people_placed = 0;
     }
 
-    pub fn family_size(&self) -> u32 {
-        self.family_members
+    pub fn workers(&self) -> u32 {
+        self.adults
+    }
+
+    pub fn family_members(&self) -> u32 {
+        self.adults + self.children
     }
 
     pub fn increment_people_placed(&mut self) {
@@ -871,6 +820,6 @@ impl Player {
     }
 
     pub fn all_people_placed(&self) -> bool {
-        self.people_placed == self.family_members
+        self.people_placed == self.adults
     }
 }

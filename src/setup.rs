@@ -1,6 +1,5 @@
 use crate::game::{ActionSpace, Game, Space, HIDDEN_SPACES};
-use crate::major_improvements::{MajorImprovement, MajorImprovementType};
-use crate::primitives::{Resource, NUM_RESOURCES};
+use crate::primitives::{new_res, Resource};
 use rand::prelude::SliceRandom;
 use rand::Rng;
 
@@ -13,34 +12,34 @@ pub fn get_init_state(num_players: usize) -> Game {
     println!("First player is {}", first_player_idx);
 
     let mut spaces = vec![
-        Space::create_new("Copse", ActionSpace::Copse, Some([0; NUM_RESOURCES])),
-        Space::create_new("Grove", ActionSpace::Grove, Some([0; NUM_RESOURCES])),
-        Space::create_new("Forest", ActionSpace::Forest, Some([0; NUM_RESOURCES])),
+        Space::create_new("Copse", ActionSpace::Copse, Some(new_res())),
+        Space::create_new("Grove", ActionSpace::Grove, Some(new_res())),
+        Space::create_new("Forest", ActionSpace::Forest, Some(new_res())),
         Space::create_new(
             "Resource Market",
             ActionSpace::ResourceMarket,
             Some({
-                let mut res = [0; NUM_RESOURCES];
+                let mut res = new_res();
                 res[Resource::Food] = 1;
                 res[Resource::Stone] = 1;
                 res[Resource::Reed] = 1;
                 res
             }),
         ),
-        Space::create_new("Hollow", ActionSpace::Hollow, Some([0; NUM_RESOURCES])),
-        Space::create_new("Clay Pit", ActionSpace::ClayPit, Some([0; NUM_RESOURCES])),
-        Space::create_new("Reed Bank", ActionSpace::ReedBank, Some([0; NUM_RESOURCES])),
+        Space::create_new("Hollow", ActionSpace::Hollow, Some(new_res())),
+        Space::create_new("Clay Pit", ActionSpace::ClayPit, Some(new_res())),
+        Space::create_new("Reed Bank", ActionSpace::ReedBank, Some(new_res())),
         Space::create_new(
             "Traveling Players",
             ActionSpace::TravelingPlayers,
-            Some([0; NUM_RESOURCES]),
+            Some(new_res()),
         ),
-        Space::create_new("Fishing", ActionSpace::Fishing, Some([0; NUM_RESOURCES])),
+        Space::create_new("Fishing", ActionSpace::Fishing, Some(new_res())),
         Space::create_new(
             "Day Laborer",
             ActionSpace::DayLaborer,
             Some({
-                let mut res = [0; NUM_RESOURCES];
+                let mut res = new_res();
                 res[Resource::Food] = 2;
                 res
             }),
@@ -49,7 +48,7 @@ pub fn get_init_state(num_players: usize) -> Game {
             "Grain Seeds",
             ActionSpace::GrainSeeds,
             Some({
-                let mut res = [0; NUM_RESOURCES];
+                let mut res = new_res();
                 res[Resource::Grain] = 1;
                 res
             }),
@@ -92,7 +91,7 @@ pub fn get_init_state(num_players: usize) -> Game {
             ActionSpace::SheepMarket => spaces.push(Space::create_new(
                 "Sheep Market",
                 ActionSpace::SheepMarket,
-                Some([0; NUM_RESOURCES]),
+                Some(new_res()),
             )),
             ActionSpace::Improvements => spaces.push(Space::create_new(
                 "Improvements",
@@ -102,7 +101,7 @@ pub fn get_init_state(num_players: usize) -> Game {
             ActionSpace::WesternQuarry => spaces.push(Space::create_new(
                 "Western Quarry",
                 ActionSpace::WesternQuarry,
-                Some([0; NUM_RESOURCES]),
+                Some(new_res()),
             )),
             ActionSpace::WishForChildren => spaces.push(Space::create_new(
                 "Wish For Children",
@@ -117,13 +116,13 @@ pub fn get_init_state(num_players: usize) -> Game {
             ActionSpace::PigMarket => spaces.push(Space::create_new(
                 "Pig Market",
                 ActionSpace::PigMarket,
-                Some([0; NUM_RESOURCES]),
+                Some(new_res()),
             )),
             ActionSpace::VegetableSeeds => spaces.push(Space::create_new(
                 "Vegetable Seeds",
                 ActionSpace::VegetableSeeds,
                 Some({
-                    let mut res = [0; NUM_RESOURCES];
+                    let mut res = new_res();
                     res[Resource::Vegetable] = 1;
                     res
                 }),
@@ -131,12 +130,12 @@ pub fn get_init_state(num_players: usize) -> Game {
             ActionSpace::EasternQuarry => spaces.push(Space::create_new(
                 "Eastern Quarry",
                 ActionSpace::EasternQuarry,
-                Some([0; NUM_RESOURCES]),
+                Some(new_res()),
             )),
             ActionSpace::CattleMarket => spaces.push(Space::create_new(
                 "Cattle Market",
                 ActionSpace::CattleMarket,
-                Some([0; NUM_RESOURCES]),
+                Some(new_res()),
             )),
             ActionSpace::Cultivation => spaces.push(Space::create_new(
                 "Cultivation",
@@ -157,123 +156,5 @@ pub fn get_init_state(num_players: usize) -> Game {
         }
     }
 
-    let mut majors: Vec<MajorImprovement> = Vec::new();
-
-    majors.push(MajorImprovement::create_new(
-        "Fireplace (2)",
-        MajorImprovementType::Fireplace2,
-        {
-            let mut res = [0; NUM_RESOURCES];
-            res[Resource::Clay] = 2;
-            res
-        },
-        1,
-    ));
-
-    majors.push(MajorImprovement::create_new(
-        "Fireplace (3)",
-        MajorImprovementType::Fireplace3,
-        {
-            let mut res = [0; NUM_RESOURCES];
-            res[Resource::Clay] = 3;
-            res
-        },
-        1,
-    ));
-
-    majors.push(MajorImprovement::create_new(
-        "Cooking Hearth (4)",
-        MajorImprovementType::CookingHearth4,
-        {
-            let mut res = [0; NUM_RESOURCES];
-            res[Resource::Clay] = 4;
-            res
-        },
-        1,
-    ));
-
-    majors.push(MajorImprovement::create_new(
-        "Cooking Hearth (5)",
-        MajorImprovementType::CookingHearth5,
-        {
-            let mut res = [0; NUM_RESOURCES];
-            res[Resource::Clay] = 5;
-            res
-        },
-        1,
-    ));
-
-    majors.push(MajorImprovement::create_new(
-        "Well",
-        MajorImprovementType::Well,
-        {
-            let mut res = [0; NUM_RESOURCES];
-            res[Resource::Wood] = 1;
-            res[Resource::Stone] = 3;
-            res
-        },
-        4,
-    ));
-
-    majors.push(MajorImprovement::create_new(
-        "Clay Oven",
-        MajorImprovementType::ClayOven,
-        {
-            let mut res = [0; NUM_RESOURCES];
-            res[Resource::Clay] = 3;
-            res[Resource::Stone] = 1;
-            res
-        },
-        2,
-    ));
-
-    majors.push(MajorImprovement::create_new(
-        "Stone Oven",
-        MajorImprovementType::StoneOven,
-        {
-            let mut res = [0; NUM_RESOURCES];
-            res[Resource::Clay] = 1;
-            res[Resource::Stone] = 3;
-            res
-        },
-        3,
-    ));
-
-    majors.push(MajorImprovement::create_new(
-        "Joinery",
-        MajorImprovementType::Joinery,
-        {
-            let mut res = [0; NUM_RESOURCES];
-            res[Resource::Wood] = 2;
-            res[Resource::Stone] = 2;
-            res
-        },
-        2,
-    ));
-
-    majors.push(MajorImprovement::create_new(
-        "Pottery",
-        MajorImprovementType::Pottery,
-        {
-            let mut res = [0; NUM_RESOURCES];
-            res[Resource::Clay] = 2;
-            res[Resource::Stone] = 2;
-            res
-        },
-        2,
-    ));
-
-    majors.push(MajorImprovement::create_new(
-        "Basketmaker's Workshop",
-        MajorImprovementType::BasketmakersWorkshop,
-        {
-            let mut res = [0; NUM_RESOURCES];
-            res[Resource::Reed] = 2;
-            res[Resource::Stone] = 2;
-            res
-        },
-        2,
-    ));
-
-    Game::create_new(spaces, majors, first_player_idx, num_players)
+    Game::create_new(spaces, first_player_idx, num_players)
 }
