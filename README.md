@@ -72,5 +72,9 @@ cargo install cargo-modules
 cargo modules generate tree --with-fns
 ```
 
+LOC
 
+```
+git ls-files | grep '\.rs' | xargs wc -l
+```
 
