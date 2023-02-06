@@ -168,6 +168,7 @@ impl Game {
                 || self.next_visible_idx == 25
                 || self.next_visible_idx == 27
                 || self.next_visible_idx == 29
+                || self.next_visible_idx == 30
             {
                 self.harvest();
             }

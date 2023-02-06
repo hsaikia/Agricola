@@ -372,6 +372,16 @@ impl Player {
         // Add conversions
         self.conversions.clear();
 
+        for (i, e) in self.major_cards.iter().enumerate() {
+            if !e {
+                continue;
+            }
+            if let Some(v) = ALL_MAJORS[i].conversions_to_food() {
+                self.conversions.extend(v);
+            }
+        }
+
+        // Default conversions are usually pretty bad, add them only at the end
         if self.major_cards[MajorImprovement::Fireplace2.index()]
             || self.major_cards[MajorImprovement::Fireplace3.index()]
             || self.major_cards[MajorImprovement::CookingHearth4.index()]
@@ -382,15 +392,6 @@ impl Player {
         } else {
             self.conversions
                 .extend(ResourceConversion::default_conversions());
-        }
-
-        for (i, e) in self.major_cards.iter().enumerate() {
-            if !e {
-                continue;
-            }
-            if let Some(v) = ALL_MAJORS[i].conversions_to_food() {
-                self.conversions.extend(v);
-            }
         }
 
         // Free actions + resources
