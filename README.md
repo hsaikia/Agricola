@@ -52,27 +52,35 @@ Playing out an entire game is often expensive especially with a large branching 
 
 ### TODO
 
-- Improvements
-- Animal re-org
-- Cooking and Baking and converting other resources to food using majors
-- Getting resources from future action spaces (e.g Well)
-- Harvest : Food deduction, Food conversion, Grains and Veg from fields, Animal breeding (discard animals if cannot fit in pastures)
-- Simulation!! Rewrite functions such that `f(state) = Vec<actions>`, and `action(state_1) = state_2` can be called
-- Implement human player
-- Implement AI player that chooses the best action by doing `n` random playouts from each immediate action and averaging the score for every action.
-- Implement pure MCTS
+- Currently a lot of decisions within an action like major improvement build is random. Implement 'within action decisions' such as best major to build, best resource conversion during harvest or best fencing arrangements using the same MCTS strategy.
+- Implement OCCs.
+- Implement Minors.
+- Implement pure MCTS.
 
 ### Results
 
-Results from simplest algorithm - average of scores from 2000 random playouts from each action.
+Results from the simplest algorithm - average of fitness scores from 5000 random playouts from each action.
 
 ```
-0.Player (4/4) SCORE 29 has [1 Fd][6 Wd][8 Cl][1 St][7 Gr][2 Vg][2 Room Clay House][Pastures [2 => 4 Sheep][2][1]][Fields [0][1G][0][1V][0][1V]][FP2][CH5][S]
-1.Player (2/2) SCORE 23 has [10 Rd][4 Gr][3 Vg][1 Sheep][1 Cow][2 Room Wood House][Pastures [1 + S => 4 Pig(s)]][Fields [0][2G][1V][2G][0]][1 UF Stables][BMW][X]
-2.Player (2/2) SCORE 26 has [1 Children][1 St][4 Gr][1 Vg][2 Room Clay House][Pastures [2 => 4 Sheep][2 => 3 Pig(s)][1 => 1 Cow(s)][1]][Fields [1G][0][1G]][WL]
-3.Player (2/2) SCORE 19 has [2 Fd][2 Cl][1 St][1 Gr][2 Vg][2 Room Stone House][Pastures [2 + S => 4 Sheep][1 + S => 3 Cow(s)][1 + S => 3 Pig(s)]][Fields [0]][CH4][CO]
-Time elapsed: 89.421770583s
-Scores [29, 23, 26, 19]
+0.Player (3/3) SCORE 29 has [4 Wd][5 Gr][2 Room Wood House][Pastures [2 + S => 4 Cow(s)][2 + S => 3 Pig(s)][1 + S => 1 Sheep]][Fields [1G][1G][0][0][1G]][WL]
+1.Player (3/3) SCORE 26 has [1 Children][7 Cl][1 St][1 Rd][5 Gr][3 Vg][1 Sheep][2 Room Stone House][Pastures [2 + S => 3 Pig(s)]][Fields [0][0][0]][1 UF Stables][CH4][PY]
+2.Player (2/2) SCORE 18 has [7 Wd][2 Rd][1 Gr][3 Vg][2 Room Wood House][Pastures [2 => 4 Sheep][2 => 1 Cow(s)][1][1]][Fields [0][0]][FP2][JY][X]
+3.Player (2/2) SCORE 33 has [1 Cl][10 Rd][2 Gr][2 Vg][2 Room Clay House][Pastures [2 => 4 Pig(s)][2 => 1 Cow(s)][1 => 1 Sheep][1 => 1 Pig(s)]][Fields [0][1G][0][1G][2G][1V]][CO][BMW][S]
+Time elapsed: 222.746135375s
+Scores [29, 26, 18, 33]
+Fitness [-4, -7, -15, 4]
+```
+
+From only 100 random playouts
+
+```
+0.Player (3/3) SCORE 29 has [1 Children][1 St][1 Rd][9 Gr][4 Vg][1 Sheep][2 Room Wood House][Pastures [2 => 4 Sheep][2 => 3 Pig(s)][1]][Fields [1G][0][0][1G][0][0]][FP2][S]
+1.Player (2/2) SCORE 26 has [8 Wd][1 Gr][2 Vg][2 Room Clay House][Pastures [2 + S => 3 Pig(s)][2 + S][1 + S][1 + S]][Fields [1V][0][1G][2G]][JY][X]
+2.Player (2/2) SCORE 19 has [7 Cl][1 St][2 Gr][4 Vg][1 Sheep][2 Room Stone House][Pastures [1 => 2 Cow(s)]][Fields [0][0][0]][CH4][CO][PY]
+3.Player (2/2) SCORE 22 has [1 Fd][1 St][5 Rd][1 Gr][2 Vg][2 Sheep][2 Room Clay House][Pastures [2 + S => 3 Cow(s)][2 + S => 3 Pig(s)]][Fields [1V][2G]][1 UF Stables][FP3][BMW]
+Time elapsed: 4.477189375s
+Scores [29, 26, 19, 22]
+Fitness [3, -3, -10, -7]
 ```
 
 ## Misc commands

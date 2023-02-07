@@ -39,24 +39,6 @@ pub enum ActionSpace {
     FarmRedevelopment,
 }
 
-const NUM_HIDDEN_SPACES: usize = 14;
-pub const HIDDEN_SPACES: [ActionSpace; NUM_HIDDEN_SPACES] = [
-    ActionSpace::GrainUtilization,
-    ActionSpace::Fencing,
-    ActionSpace::SheepMarket,
-    ActionSpace::Improvements,
-    ActionSpace::WesternQuarry,
-    ActionSpace::WishForChildren,
-    ActionSpace::HouseRedevelopment,
-    ActionSpace::PigMarket,
-    ActionSpace::VegetableSeeds,
-    ActionSpace::EasternQuarry,
-    ActionSpace::CattleMarket,
-    ActionSpace::Cultivation,
-    ActionSpace::UrgentWishForChildren,
-    ActionSpace::FarmRedevelopment,
-];
-
 #[derive(Clone)]
 pub struct Space {
     name: String,
@@ -162,18 +144,18 @@ impl Game {
                             // 1. Simulate n games from each action with each player replaced by a random move AI.
                             // 2. Compute the average score for each action from the n playouts.
                             // 3. Select the move that gives rise to the maximum average score.
-                            let mut best_action_idx : usize = 0;
-                            let mut best_average : f32 = -1000000.0;
+                            let mut best_action_idx: usize = 0;
+                            let mut best_average: f32 = -1000000.0;
 
                             // Play n simulated games
-                            let num_games : u32 = 2000;
-                            for i in 0..actions.len() {
+                            let num_games: u32 = 100;
+                            for (i, action) in actions.iter().enumerate() {
                                 let mut sum = 0;
                                 for _ in 0..num_games {
                                     // Clone the current game state
                                     let mut tmp_game = self.clone();
                                     // Play the current action
-                                    tmp_game.apply_action(actions[i], false);
+                                    tmp_game.apply_action(*action, false);
                                     // Replace all players with a random move AI
                                     tmp_game.replace_all_players_with_dumb_bots();
                                     // Play the game out until the end
@@ -183,7 +165,10 @@ impl Game {
                                 }
                                 let avg = sum as f32 / num_games as f32;
 
-                                print!("\nAvg score from {} simulated playouts for Action {} is {}", num_games, self.spaces[actions[i]].name, avg);
+                                print!(
+                                    "\nAvg score from {} simulated playouts for Action {} is {}",
+                                    num_games, self.spaces[*action].name, avg
+                                );
 
                                 if avg > best_average {
                                     best_average = avg;
@@ -191,7 +176,7 @@ impl Game {
                                 }
                             }
                             self.apply_action(actions[best_action_idx], debug);
-                        },
+                        }
                     }
                 }
                 None => break,
@@ -251,6 +236,32 @@ impl Game {
 
     fn init_new_round(&mut self, debug: bool) {
         assert!(self.next_visible_idx < 30);
+
+        // Shuffle
+        // 16, 17, 18 .. 19
+        // 20, 21 .. 22
+        // 23 .. 24
+        // 25 .. 26
+        // 27 .. 28
+        // 29
+
+        if self.next_visible_idx == 16 || self.next_visible_idx == 17 || self.next_visible_idx == 18
+        {
+            let random_idx = rand::thread_rng().gen_range(self.next_visible_idx..20);
+            self.spaces.swap(random_idx, self.next_visible_idx);
+        } else if self.next_visible_idx == 20 || self.next_visible_idx == 21 {
+            let random_idx = rand::thread_rng().gen_range(self.next_visible_idx..23);
+            self.spaces.swap(random_idx, self.next_visible_idx);
+        } else if self.next_visible_idx == 23 {
+            let random_idx = rand::thread_rng().gen_range(self.next_visible_idx..25);
+            self.spaces.swap(random_idx, self.next_visible_idx);
+        } else if self.next_visible_idx == 25 {
+            let random_idx = rand::thread_rng().gen_range(self.next_visible_idx..27);
+            self.spaces.swap(random_idx, self.next_visible_idx);
+        } else if self.next_visible_idx == 27 {
+            let random_idx = rand::thread_rng().gen_range(self.next_visible_idx..29);
+            self.spaces.swap(random_idx, self.next_visible_idx);
+        }
 
         if debug {
             // Reveal the next action space
@@ -337,7 +348,6 @@ impl Game {
                 self.current_player_idx, &space.name
             );
         }
-        
 
         let player = &mut self.players[self.current_player_idx];
         if space.resource_space {
@@ -509,28 +519,27 @@ impl Game {
     fn init_players(&mut self, first_idx: usize, num: usize) {
         for i in 0..num {
             let food = if i == first_idx { 2 } else { 3 };
-            if i == 0 {
-                let player = Player::create_new(food, PlayerKind::Machine);
-                //let player = Player::create_new(food, PlayerKind::DumbMachine);
-                self.players.push(player);
-            } else {
-                //let player = Player::create_new(food, PlayerKind::DumbMachine);
-                let player = Player::create_new(food, PlayerKind::Machine);
-                self.players.push(player);
-            }
+            let player = Player::create_new(food, PlayerKind::Machine);
+            self.players.push(player);
         }
     }
 
     pub fn fitness(&self) -> Vec<i32> {
         let scores = self.scores();
+
+        if scores.len() == 1 {
+            return scores;
+        }
+
         let mut fitness = scores.clone();
-        let mut sorted_scores = scores.clone();
+        let mut sorted_scores = scores;
         // sort in decreasing order
         sorted_scores.sort_by_key(|k| 1000000 - k);
         // Fitness of winner is defined by the margin of victory = so difference from own score and second best score
         // Fitness of losers are defined by the margin of defeat = so difference from own score and best score
         for f in &mut fitness {
-            if *f == sorted_scores[0] { // winner
+            if *f == sorted_scores[0] {
+                // winner
                 *f -= sorted_scores[1];
             } else {
                 *f -= sorted_scores[0];
@@ -540,9 +549,9 @@ impl Game {
     }
 
     pub fn scores(&self) -> Vec<i32> {
-        let mut scores : Vec<i32> = Vec::new();
+        let mut scores: Vec<i32> = Vec::new();
         for p in &self.players {
-            scores.push(scoring::score(&p));
+            scores.push(scoring::score(p));
         }
         scores
     }

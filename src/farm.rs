@@ -55,18 +55,25 @@ pub struct Pasture {
 }
 
 impl Pasture {
-    pub fn create_new(num_spaces: u32, num_unfenced_stables: &mut u32, no_empty_farmyard_spaces_left : bool) -> Self {
-        let mut stables_to_add : u32 = 0;
+    pub fn create_new(
+        num_spaces: u32,
+        num_unfenced_stables: &mut u32,
+        no_empty_farmyard_spaces_left: bool,
+    ) -> Self {
+        let mut stables_to_add: u32 = 0;
         if num_unfenced_stables > &mut 0 {
             if no_empty_farmyard_spaces_left {
                 // The pasture should encompass as many UF stables as farmyard spaces
-                stables_to_add = num_spaces;    
+                stables_to_add = num_spaces;
             } else {
                 stables_to_add = 1;
             }
 
             if stables_to_add > *num_unfenced_stables {
-                println!("ERROR! Wanting to create pasture with {} FS and {} UFS and No empty FS {}", num_spaces, num_unfenced_stables, no_empty_farmyard_spaces_left);
+                println!(
+                    "ERROR! Wanting to create pasture with {} FS and {} UFS and No empty FS {}",
+                    num_spaces, num_unfenced_stables, no_empty_farmyard_spaces_left
+                );
             }
             *num_unfenced_stables -= stables_to_add;
         }

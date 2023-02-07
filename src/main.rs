@@ -1,5 +1,5 @@
-use std::time::{Instant};
 use std::env;
+use std::time::Instant;
 
 #[macro_use]
 extern crate lazy_static;
@@ -9,8 +9,8 @@ mod game;
 mod major_improvements;
 mod player;
 mod primitives;
-mod setup;
 mod scoring;
+mod setup;
 // mod fencing;
 
 fn main() {

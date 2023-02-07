@@ -1,10 +1,10 @@
 use crate::farm::{Animal, Field, House, Pasture, PlantedSeed};
-use crate::scoring;
 use crate::major_improvements::{MajorImprovement, ALL_MAJORS};
 use crate::primitives::{
     can_pay_for_resource, new_res, pay_for_resource, print_resources, ConversionTime, Resource,
     ResourceConversion, Resources,
 };
+use crate::scoring;
 use rand::Rng;
 use std::cmp;
 
@@ -120,8 +120,17 @@ impl Player {
             pasture_spaces += pasture.farmyard_spaces;
         }
 
-        if self.rooms + self.fields.len() as u32 + pasture_spaces + self.unfenced_stables > FARMYARD_SPACES {
-            println!("\nError! {} Rooms {} fields {} pasture spaces ({} pastures) and {} UF found!", self.rooms, self.fields.len() as u32, pasture_spaces, self.pastures.len(), self.unfenced_stables);
+        if self.rooms + self.fields.len() as u32 + pasture_spaces + self.unfenced_stables
+            > FARMYARD_SPACES
+        {
+            println!(
+                "\nError! {} Rooms {} fields {} pasture spaces ({} pastures) and {} UF found!",
+                self.rooms,
+                self.fields.len() as u32,
+                pasture_spaces,
+                self.pastures.len(),
+                self.unfenced_stables
+            );
         }
 
         FARMYARD_SPACES
@@ -159,7 +168,7 @@ impl Player {
         self.kind.clone()
     }
 
-    pub fn harvest(&mut self, debug : bool) {
+    pub fn harvest(&mut self, debug: bool) {
         let food_required = 2 * self.adults + self.children;
 
         // Harvest grain and veggies
@@ -535,10 +544,15 @@ impl Player {
         // Follow convention as mentioned in can_fence()
         let mut recurse: bool = false;
         for (p, w) in &FENCING_CHOICES[self.fences_left as usize] {
-            if self.resources[Resource::Wood] >= *w && *p <= (self.empty_farmyard_spaces() + self.unfenced_stables) {
-                let no_empty_farmyard_spaces_left : bool = self.empty_farmyard_spaces() == 0;
-                self.pastures
-                    .push(Pasture::create_new(*p, &mut self.unfenced_stables, no_empty_farmyard_spaces_left));
+            if self.resources[Resource::Wood] >= *w
+                && *p <= (self.empty_farmyard_spaces() + self.unfenced_stables)
+            {
+                let no_empty_farmyard_spaces_left: bool = self.empty_farmyard_spaces() == 0;
+                self.pastures.push(Pasture::create_new(
+                    *p,
+                    &mut self.unfenced_stables,
+                    no_empty_farmyard_spaces_left,
+                ));
                 self.fences_left -= *w;
                 self.resources[Resource::Wood] -= *w;
                 recurse = true;
@@ -745,7 +759,7 @@ impl Player {
             "Player ({}/{}) SCORE {} has ",
             self.people_placed,
             self.adults,
-            scoring::score(&self)
+            scoring::score(self)
         );
         if self.children > 0 {
             print!("[{} Children]", self.children);
@@ -754,7 +768,7 @@ impl Player {
             print!("[{} :(]", self.begging_tokens);
         }
         print_resources(&self.resources);
-        
+
         print!("[{} Room ", self.rooms);
         match self.house {
             House::Wood => print!("Wood"),

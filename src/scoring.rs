@@ -1,6 +1,6 @@
-use crate::player::{Player};
 use crate::farm::{Animal, House, PlantedSeed};
 use crate::major_improvements::{MajorImprovement, ALL_MAJORS};
+use crate::player::Player;
 use crate::primitives::Resource;
 
 const FIELD_SCORE: [i32; 6] = [-1, -1, 1, 2, 3, 4];
@@ -19,7 +19,7 @@ fn calc_score(num: usize, scores: &[i32]) -> i32 {
     }
 }
 
-fn score_plants(player : &Player) -> i32 {
+fn score_plants(player: &Player) -> i32 {
     let mut num_grain: usize = 0;
     let mut num_veg: usize = 0;
     for field in &player.fields {
@@ -35,7 +35,7 @@ fn score_plants(player : &Player) -> i32 {
     calc_score(num_grain, &GRAIN_SCORE) + calc_score(num_veg, &VEGETABLE_SCORE)
 }
 
-fn score_animals(player : &Player) -> i32 {
+fn score_animals(player: &Player) -> i32 {
     // All animals kept as pets and in unfenced stables
     let mut num_sheep = player.resources[Resource::Sheep];
     let mut num_pigs = player.resources[Resource::Pigs];
@@ -55,11 +55,11 @@ fn score_animals(player : &Player) -> i32 {
         + calc_score(num_cattle as usize, &CATTLE_SCORE)
 }
 
-fn score_fields(player : &Player) -> i32 {
+fn score_fields(player: &Player) -> i32 {
     calc_score(player.fields.len(), &FIELD_SCORE)
 }
 
-fn score_pastures(player : &Player) -> i32 {
+fn score_pastures(player: &Player) -> i32 {
     let mut ret: i32 = 0;
     // Number of Pastures
     ret += calc_score(player.pastures.len(), &PASTURE_SCORE);
@@ -70,7 +70,7 @@ fn score_pastures(player : &Player) -> i32 {
     ret
 }
 
-fn score_house_family_empty_spaces_begging(player : &Player) -> i32 {
+fn score_house_family_empty_spaces_begging(player: &Player) -> i32 {
     let mut ret: i32 = 0;
 
     // House
@@ -91,19 +91,19 @@ fn score_house_family_empty_spaces_begging(player : &Player) -> i32 {
     ret
 }
 
-pub fn score(player : &Player) -> i32 {
+pub fn score(player: &Player) -> i32 {
     let mut ret: i32 = 0;
 
     // Fields
-    ret += score_fields(&player);
+    ret += score_fields(player);
     // Pastures
-    ret += score_pastures(&player);
+    ret += score_pastures(player);
     // Grain and Veggies
-    ret += score_plants(&player);
+    ret += score_plants(player);
     // Animals
-    ret += score_animals(&player);
+    ret += score_animals(player);
     // House, Family and Empty Spaces
-    ret += score_house_family_empty_spaces_begging(&player);
+    ret += score_house_family_empty_spaces_begging(player);
 
     // Score Majors
     for (i, e) in player.major_cards.iter().enumerate() {
