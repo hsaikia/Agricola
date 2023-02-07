@@ -65,14 +65,14 @@ pub fn pay_for_resource(cost: &Resources, store: &mut Resources) {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ConversionTime {
     Any,
     Harvest,
     Bake,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ResourceConversion {
     from: Resource,
     to: Resource,
@@ -154,7 +154,7 @@ impl ResourceConversion {
 
     pub fn convert_once(&mut self, res: &mut Resources, conv_time: &ConversionTime) {
         if self.can_convert(res, conv_time) {
-            print!("\nConverting a {:?} to {} Food.", &self.from, self.to_amt);
+            //print!("\nConverting a {:?} to {} Food.", &self.from, self.to_amt);
             res[self.from.clone()] -= self.from_amt;
             res[self.to.clone()] += self.to_amt;
             self.used += 1;

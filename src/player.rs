@@ -1,4 +1,5 @@
-use crate::farm::{Animal, Farm, Field, House, Pasture, PlantedSeed};
+use crate::farm::{Animal, Field, House, Pasture, PlantedSeed};
+use crate::scoring;
 use crate::major_improvements::{MajorImprovement, ALL_MAJORS};
 use crate::primitives::{
     can_pay_for_resource, new_res, pay_for_resource, print_resources, ConversionTime, Resource,
@@ -7,15 +8,13 @@ use crate::primitives::{
 use rand::Rng;
 use std::cmp;
 
-const FIELD_SCORE: [i32; 6] = [-1, -1, 1, 2, 3, 4];
-const PASTURE_SCORE: [i32; 5] = [-1, 1, 2, 3, 4];
-const GRAIN_SCORE: [i32; 9] = [-1, 1, 1, 1, 2, 2, 3, 3, 4];
-const VEGETABLE_SCORE: [i32; 5] = [-1, 1, 2, 3, 4];
-const SHEEP_SCORE: [i32; 9] = [-1, 1, 1, 1, 2, 2, 3, 3, 4];
-const PIGS_SCORE: [i32; 8] = [-1, 1, 1, 2, 2, 3, 3, 4];
-const CATTLE_SCORE: [i32; 7] = [-1, 1, 2, 2, 3, 3, 4];
 const MAX_STABLES: u32 = 4;
 const MAX_FAMILY_MEMBERS: u32 = 5;
+const FARMYARD_SPACES: u32 = 15;
+const STARTING_ROOMS: u32 = 2;
+const STARTING_PEOPLE: u32 = 2;
+const MAX_FENCES: u32 = 15;
+
 lazy_static! {
     // map[idx] = (p, w) : Choice of p pastures using w wood when idx number of fences remain.
     static ref FENCING_CHOICES: [Vec<(u32, u32)>; 16] = [
@@ -38,14 +37,6 @@ lazy_static! {
     ];
 }
 
-fn calc_score(num: usize, scores: &[i32]) -> i32 {
-    if num >= scores.len() {
-        scores[scores.len() - 1]
-    } else {
-        scores[num]
-    }
-}
-
 #[derive(Clone)]
 pub enum PlayerKind {
     Human,
@@ -53,20 +44,26 @@ pub enum PlayerKind {
     DumbMachine, // Random
 }
 
+#[derive(Clone)]
 pub struct Player {
     // Animals in this resources array are the ones that are pets in the house and the ones that are kept in unfenced stables
-    kind: PlayerKind,
-    resources: Resources,
+    pub kind: PlayerKind,
+    pub resources: Resources,
     people_placed: u32,
     adults: u32,
     children: u32,
-    begging_tokens: u32,
+    pub begging_tokens: u32,
     build_room_cost: Resources,
     build_stable_cost: Resources,
     renovation_cost: Resources,
-    major_cards: [bool; ALL_MAJORS.len()],
+    pub major_cards: [bool; ALL_MAJORS.len()],
     conversions: Vec<ResourceConversion>,
-    farm: Farm,
+    pub house: House,
+    pub rooms: u32,
+    pub fields: Vec<Field>,
+    pub pastures: Vec<Pasture>,
+    pub unfenced_stables: u32,
+    pub fences_left: u32,
     promised_resources: Vec<Resources>,
 }
 
@@ -90,7 +87,7 @@ impl Player {
             kind: p_kind,
             resources: res,
             people_placed: 0,
-            adults: 2,
+            adults: STARTING_PEOPLE,
             children: 0,
             begging_tokens: 0,
             build_room_cost: room_cost,
@@ -98,20 +95,75 @@ impl Player {
             renovation_cost: reno_cost,
             major_cards: [false; ALL_MAJORS.len()],
             conversions: ResourceConversion::default_conversions(),
-            farm: Farm::new(),
+            house: House::Wood,
+            rooms: STARTING_ROOMS,
+            fields: Vec::new(),
+            pastures: Vec::new(),
+            unfenced_stables: 0,
+            fences_left: MAX_FENCES,
             promised_resources: Vec::new(),
         }
+    }
+
+    pub fn num_stables(&self) -> u32 {
+        let mut ret: u32 = 0;
+        for p in &self.pastures {
+            ret += p.stables;
+        }
+        ret += self.unfenced_stables;
+        ret
+    }
+
+    pub fn empty_farmyard_spaces(&self) -> u32 {
+        let mut pasture_spaces: u32 = 0;
+        for pasture in &self.pastures {
+            pasture_spaces += pasture.farmyard_spaces;
+        }
+
+        if self.rooms + self.fields.len() as u32 + pasture_spaces + self.unfenced_stables > FARMYARD_SPACES {
+            println!("\nError! {} Rooms {} fields {} pasture spaces ({} pastures) and {} UF found!", self.rooms, self.fields.len() as u32, pasture_spaces, self.pastures.len(), self.unfenced_stables);
+        }
+
+        FARMYARD_SPACES
+            - self.rooms
+            - self.fields.len() as u32
+            - pasture_spaces
+            - self.unfenced_stables
+    }
+
+    pub fn harvest_fields(&mut self) -> (u32, u32) {
+        let mut harvested_grain = 0;
+        let mut harvested_veg = 0;
+        for f in &mut self.fields {
+            match f.seed {
+                PlantedSeed::Grain => {
+                    //print!("\nGrain harvested!");
+                    harvested_grain += 1;
+                    f.amount -= 1;
+                }
+                PlantedSeed::Vegetable => {
+                    //print!("\nVegetable harvested!");
+                    harvested_veg += 1;
+                    f.amount -= 1;
+                }
+                _ => (),
+            }
+            if f.amount == 0 {
+                f.seed = PlantedSeed::Empty;
+            }
+        }
+        (harvested_grain, harvested_veg)
     }
 
     pub fn kind(&self) -> PlayerKind {
         self.kind.clone()
     }
 
-    pub fn harvest(&mut self) {
+    pub fn harvest(&mut self, debug : bool) {
         let food_required = 2 * self.adults + self.children;
 
         // Harvest grain and veggies
-        let (gr, veg) = self.farm.harvest_fields();
+        let (gr, veg) = self.harvest_fields();
         self.resources[Resource::Grain] += gr;
         self.resources[Resource::Vegetable] += veg;
 
@@ -129,7 +181,6 @@ impl Player {
                     conv.convert_once(&mut self.resources, &ConversionTime::Harvest);
                     found = true;
                 }
-
                 if food_required <= self.resources[Resource::Food] {
                     break;
                 }
@@ -147,17 +198,23 @@ impl Player {
 
         // Breed animals
         if self.resources[Resource::Sheep] > 1 {
-            print!("\nBreeding Sheep!");
+            if debug {
+                print!("\nBreeding Sheep!");
+            }
             self.resources[Resource::Sheep] += 1;
         }
 
         if self.resources[Resource::Pigs] > 1 {
-            print!("\nBreeding Pigs!");
+            if debug {
+                print!("\nBreeding Pigs!");
+            }
             self.resources[Resource::Pigs] += 1;
         }
 
         if self.resources[Resource::Cattle] > 1 {
-            print!("\nBreeding Cattle!");
+            if debug {
+                print!("\nBreeding Cattle!");
+            }
             self.resources[Resource::Cattle] += 1;
         }
 
@@ -166,7 +223,7 @@ impl Player {
 
         let food_provided = cmp::min(food_required, self.resources[Resource::Food]);
         self.resources[Resource::Food] -= food_provided;
-        if food_required > food_provided {
+        if debug && food_required > food_provided {
             print!(
                 "\nBegging Tokens as {} food is missing :( ",
                 food_required - food_provided
@@ -182,7 +239,7 @@ impl Player {
     }
 
     fn add_animals_in_pastures_to_resources(&mut self) {
-        for p in &mut self.farm.pastures {
+        for p in &mut self.pastures {
             match p.animal {
                 Animal::Sheep => self.resources[Resource::Sheep] += p.amount,
                 Animal::Pigs => self.resources[Resource::Pigs] += p.amount,
@@ -196,13 +253,13 @@ impl Player {
 
     pub fn reorg_animals(&mut self, discard_leftovers: bool) {
         // Can free animals be kept in the house and UF stables?
-        let free_animal_spaces = self.farm.unfenced_stables + 1;
+        let free_animal_spaces = self.unfenced_stables + 1;
         if self.num_free_animals() <= free_animal_spaces {
             return;
         }
 
         // Try and fit in pastures
-        if !self.farm.pastures.is_empty() {
+        if !self.pastures.is_empty() {
             // Add pasture animals to the resources (free) array
             self.add_animals_in_pastures_to_resources();
 
@@ -217,11 +274,11 @@ impl Player {
 
             // sort by decreasing order
             free_animals.sort_by(|a, b| b.0.cmp(&a.0));
-            self.farm.pastures.sort_by_key(|k| 1000 - k.capacity());
+            self.pastures.sort_by_key(|k| 1000 - k.capacity());
 
             // Fill pastures
             // TODO this should be made generic
-            for p in &mut self.farm.pastures {
+            for p in &mut self.pastures {
                 match free_animals[curr_idx].1 {
                     Resource::Sheep => p.animal = Animal::Sheep,
                     Resource::Pigs => p.animal = Animal::Pigs,
@@ -338,7 +395,7 @@ impl Player {
         let idx = rand::thread_rng().gen_range(0..available_indices.len());
         let chosen_major: MajorImprovement = ALL_MAJORS[available_indices[idx]].clone();
 
-        println!("Chosen major {:?}", chosen_major);
+        //println!("Chosen major {:?}", chosen_major);
 
         // If one of the FPs are already built
         let fp2_built: bool = self.major_cards[MajorImprovement::Fireplace2.index()];
@@ -431,7 +488,7 @@ impl Player {
         let mut empty_field_idx: usize = 0;
         let mut grain_fields: u32 = 0;
         let mut veg_fields: u32 = 0;
-        for (i, f) in &mut self.farm.fields.iter().enumerate() {
+        for (i, f) in &mut self.fields.iter().enumerate() {
             match f.seed {
                 PlantedSeed::Grain => grain_fields += 1,
                 PlantedSeed::Vegetable => veg_fields += 1,
@@ -439,7 +496,7 @@ impl Player {
             }
         }
 
-        let field_to_sow = &mut self.farm.fields[empty_field_idx];
+        let field_to_sow = &mut self.fields[empty_field_idx];
 
         if self.resources[Resource::Vegetable] == 0
             || (self.resources[Resource::Grain] > 0 && grain_fields <= veg_fields)
@@ -466,7 +523,7 @@ impl Player {
             return false;
         }
 
-        for f in &self.farm.fields {
+        for f in &self.fields {
             if let PlantedSeed::Empty = f.seed {
                 return true;
             }
@@ -477,12 +534,12 @@ impl Player {
     pub fn fence(&mut self) {
         // Follow convention as mentioned in can_fence()
         let mut recurse: bool = false;
-        for (p, w) in &FENCING_CHOICES[self.farm.fences_left as usize] {
-            if self.resources[Resource::Wood] >= *w {
-                self.farm
-                    .pastures
-                    .push(Pasture::create_new(*p, &mut self.farm.unfenced_stables));
-                self.farm.fences_left -= *w;
+        for (p, w) in &FENCING_CHOICES[self.fences_left as usize] {
+            if self.resources[Resource::Wood] >= *w && *p <= (self.empty_farmyard_spaces() + self.unfenced_stables) {
+                let no_empty_farmyard_spaces_left : bool = self.empty_farmyard_spaces() == 0;
+                self.pastures
+                    .push(Pasture::create_new(*p, &mut self.unfenced_stables, no_empty_farmyard_spaces_left));
+                self.fences_left -= *w;
                 self.resources[Resource::Wood] -= *w;
                 recurse = true;
                 break;
@@ -491,19 +548,19 @@ impl Player {
 
         self.reorg_animals(false);
 
-        if recurse {
+        if recurse && self.can_fence() {
             self.fence();
         }
     }
 
     pub fn can_fence(&self) -> bool {
         // No fences left
-        if self.farm.fences_left == 0 {
+        if self.fences_left == 0 {
             return false;
         }
 
         // No empty farmyard space or an unfenced stable
-        if self.farm.empty_farmyard_spaces() == 0 && self.farm.unfenced_stables == 0 {
+        if self.empty_farmyard_spaces() == 0 && self.unfenced_stables == 0 {
             return false;
         }
 
@@ -519,7 +576,7 @@ impl Player {
         // |   |   |
         // + - + - +   +   +   +
 
-        for (_p, w) in &FENCING_CHOICES[self.farm.fences_left as usize] {
+        for (_p, w) in &FENCING_CHOICES[self.fences_left as usize] {
             if self.resources[Resource::Wood] >= *w {
                 return true;
             }
@@ -539,26 +596,26 @@ impl Player {
     }
 
     pub fn can_grow_family_with_room(&self) -> bool {
-        self.family_members() < MAX_FAMILY_MEMBERS && self.family_members() < self.farm.rooms
+        self.family_members() < MAX_FAMILY_MEMBERS && self.family_members() < self.rooms
     }
 
     pub fn can_grow_family_without_room(&self) -> bool {
-        self.family_members() < MAX_FAMILY_MEMBERS && self.family_members() >= self.farm.rooms
+        self.family_members() < MAX_FAMILY_MEMBERS && self.family_members() >= self.rooms
     }
 
     pub fn renovate(&mut self) {
         assert!(self.can_renovate());
         // TODO for cards like Conservator this must be implemented in a more general way
         pay_for_resource(&self.renovation_cost, &mut self.resources);
-        let current_type = &self.farm.house;
+        let current_type = &self.house;
         match current_type {
             House::Wood => {
-                self.farm.house = House::Clay;
+                self.house = House::Clay;
                 self.build_room_cost[Resource::Wood] = 0;
                 self.build_room_cost[Resource::Clay] = 5;
             }
             House::Clay => {
-                self.farm.house = House::Stone;
+                self.house = House::Stone;
                 self.build_room_cost[Resource::Clay] = 0;
                 self.build_room_cost[Resource::Stone] = 5;
             }
@@ -573,9 +630,9 @@ impl Player {
         // Build as many rooms as possible
         while self.can_build_rooms() {
             pay_for_resource(&self.build_room_cost, &mut self.resources);
-            self.farm.rooms += 1;
+            self.rooms += 1;
 
-            match self.farm.house {
+            match self.house {
                 House::Wood => self.renovation_cost[Resource::Clay] += 1,
                 House::Clay => self.renovation_cost[Resource::Stone] += 1,
                 _ => (),
@@ -584,7 +641,7 @@ impl Player {
     }
 
     pub fn build_stables(&mut self) {
-        assert!(self.farm.num_stables() < MAX_STABLES);
+        assert!(self.num_stables() < MAX_STABLES);
         assert!(self.can_build_stables());
         // TODO - this function should return a Choices array
         // But we follow some convention for now
@@ -593,41 +650,41 @@ impl Player {
             pay_for_resource(&self.build_stable_cost, &mut self.resources);
             // Add to pasture if possible, then unfenced
             let mut found: bool = false;
-            for pasture in &mut self.farm.pastures {
-                if !pasture.stable {
-                    pasture.stable = true;
+            for pasture in &mut self.pastures {
+                if pasture.stables == 0 {
+                    pasture.stables = 1;
                     found = true;
                     break;
                 }
             }
             if !found {
-                self.farm.unfenced_stables += 1;
+                self.unfenced_stables += 1;
             }
         }
     }
 
     pub fn can_renovate(&self) -> bool {
-        if let House::Stone = self.farm.house {
+        if let House::Stone = self.house {
             return false;
         }
         can_pay_for_resource(&self.renovation_cost, &self.resources)
     }
 
     pub fn can_build_rooms(&self) -> bool {
-        if self.farm.empty_farmyard_spaces() == 0 {
+        if self.empty_farmyard_spaces() == 0 {
             return false;
         }
         can_pay_for_resource(&self.build_room_cost, &self.resources)
     }
 
     pub fn can_build_stables(&self) -> bool {
-        if self.farm.num_stables() >= MAX_STABLES {
+        if self.num_stables() >= MAX_STABLES {
             return false;
         }
-        if self.farm.empty_farmyard_spaces() == 0 {
+        if self.empty_farmyard_spaces() == 0 {
             let mut all_filled: bool = true;
-            for pasture in &self.farm.pastures {
-                if !pasture.stable {
+            for pasture in &self.pastures {
+                if pasture.stables == 0 {
                     all_filled = false;
                 }
             }
@@ -642,137 +699,6 @@ impl Player {
         !self.available_majors_to_build(majors).is_empty()
     }
 
-    fn score_plants(&self) -> i32 {
-        let mut num_grain: usize = 0;
-        let mut num_veg: usize = 0;
-        for field in &self.farm.fields {
-            match field.seed {
-                PlantedSeed::Grain => num_grain += field.amount as usize,
-                PlantedSeed::Vegetable => num_veg += field.amount as usize,
-                _ => (),
-            }
-        }
-        num_grain += self.resources[Resource::Grain] as usize;
-        num_veg += self.resources[Resource::Vegetable] as usize;
-
-        calc_score(num_grain, &GRAIN_SCORE) + calc_score(num_veg, &VEGETABLE_SCORE)
-    }
-
-    fn score_animals(&self) -> i32 {
-        // All animals kept as pets and in unfenced stables
-        let mut num_sheep = self.resources[Resource::Sheep];
-        let mut num_pigs = self.resources[Resource::Pigs];
-        let mut num_cattle = self.resources[Resource::Cattle];
-
-        for pasture in &self.farm.pastures {
-            match pasture.animal {
-                Animal::Sheep => num_sheep += pasture.amount,
-                Animal::Pigs => num_pigs += pasture.amount,
-                Animal::Cattle => num_cattle += pasture.amount,
-                _ => (),
-            }
-        }
-
-        calc_score(num_sheep as usize, &SHEEP_SCORE)
-            + calc_score(num_pigs as usize, &PIGS_SCORE)
-            + calc_score(num_cattle as usize, &CATTLE_SCORE)
-    }
-
-    fn score_fields(&self) -> i32 {
-        calc_score(self.farm.fields.len(), &FIELD_SCORE)
-    }
-
-    fn score_pastures(&self) -> i32 {
-        let mut ret: i32 = 0;
-        // Number of Pastures
-        ret += calc_score(self.farm.pastures.len(), &PASTURE_SCORE);
-        // Number of fenced stables
-        for pasture in &self.farm.pastures {
-            if pasture.stable {
-                ret += 1
-            }
-        }
-        ret
-    }
-
-    fn score_house_family_empty_spaces_begging(&self) -> i32 {
-        let mut ret: i32 = 0;
-
-        // House
-        match self.farm.house {
-            House::Clay => ret += self.farm.rooms as i32,
-            House::Stone => ret += 2 * self.farm.rooms as i32,
-            _ => (),
-        }
-
-        // Family members
-        ret += 3 * self.family_members() as i32;
-
-        // Empty spaces
-        ret -= self.farm.empty_farmyard_spaces() as i32;
-
-        // Begging Tokens
-        ret -= 3 * self.begging_tokens as i32;
-        ret
-    }
-
-    pub fn score(&self) -> i32 {
-        let mut ret: i32 = 0;
-
-        // Fields
-        ret += self.score_fields();
-        // Pastures
-        ret += self.score_pastures();
-        // Grain and Veggies
-        ret += self.score_plants();
-        // Animals
-        ret += self.score_animals();
-        // House, Family and Empty Spaces
-        ret += self.score_house_family_empty_spaces_begging();
-
-        // Score Majors
-        for (i, e) in self.major_cards.iter().enumerate() {
-            if !e {
-                continue;
-            }
-            ret += ALL_MAJORS[i].points() as i32;
-            match ALL_MAJORS[i] {
-                MajorImprovement::Joinery => {
-                    if self.resources[Resource::Wood] >= 7 {
-                        ret += 3;
-                    } else if self.resources[Resource::Wood] >= 5 {
-                        ret += 2;
-                    } else if self.resources[Resource::Wood] >= 3 {
-                        ret += 1;
-                    }
-                }
-                MajorImprovement::Pottery => {
-                    if self.resources[Resource::Clay] >= 7 {
-                        ret += 3;
-                    } else if self.resources[Resource::Clay] >= 5 {
-                        ret += 2;
-                    } else if self.resources[Resource::Clay] >= 3 {
-                        ret += 1;
-                    }
-                }
-                MajorImprovement::BasketmakersWorkshop => {
-                    if self.resources[Resource::Reed] >= 5 {
-                        ret += 3;
-                    } else if self.resources[Resource::Reed] >= 4 {
-                        ret += 2;
-                    } else if self.resources[Resource::Reed] >= 2 {
-                        ret += 1;
-                    }
-                }
-                _ => (),
-            }
-        }
-
-        // TODO Score minors/occs
-
-        ret
-    }
-
     pub fn take_res(&mut self, acc_res: &Resources) {
         for it in acc_res.iter().zip(self.resources.iter_mut()) {
             let (a, b) = it;
@@ -782,46 +708,11 @@ impl Player {
 
     pub fn add_new_field(&mut self) {
         let field = Field::new();
-        self.farm.fields.push(field);
+        self.fields.push(field);
     }
 
     pub fn can_add_new_field(&self) -> bool {
-        self.farm.empty_farmyard_spaces() > 0
-    }
-
-    pub fn display(&self) {
-        print!(
-            "Player ({}/{}) SCORE {} has ",
-            self.people_placed,
-            self.adults,
-            self.score()
-        );
-        if self.children > 0 {
-            print!("[{} Children]", self.children);
-        }
-        if self.begging_tokens > 0 {
-            print!("[{} :(]", self.begging_tokens);
-        }
-        print_resources(&self.resources);
-        self.farm.display();
-
-        for (i, e) in self.major_cards.iter().enumerate() {
-            if !e {
-                continue;
-            }
-            match ALL_MAJORS[i] {
-                MajorImprovement::Fireplace2 => print!("[FP2]"),
-                MajorImprovement::Fireplace3 => print!("[FP3]"),
-                MajorImprovement::CookingHearth4 => print!("[CH4]"),
-                MajorImprovement::CookingHearth5 => print!("[CH5]"),
-                MajorImprovement::Well => print!("[WL]"),
-                MajorImprovement::ClayOven => print!("[CO]"),
-                MajorImprovement::StoneOven => print!("[SO]"),
-                MajorImprovement::Joinery => print!("[JY]"),
-                MajorImprovement::Pottery => print!("[PY]"),
-                MajorImprovement::BasketmakersWorkshop => print!("[BMW]"),
-            }
-        }
+        self.empty_farmyard_spaces() > 0
     }
 
     pub fn reset_for_next_round(&mut self) {
@@ -847,5 +738,67 @@ impl Player {
 
     pub fn all_people_placed(&self) -> bool {
         self.people_placed == self.adults
+    }
+
+    pub fn display(&self) {
+        print!(
+            "Player ({}/{}) SCORE {} has ",
+            self.people_placed,
+            self.adults,
+            scoring::score(&self)
+        );
+        if self.children > 0 {
+            print!("[{} Children]", self.children);
+        }
+        if self.begging_tokens > 0 {
+            print!("[{} :(]", self.begging_tokens);
+        }
+        print_resources(&self.resources);
+        
+        print!("[{} Room ", self.rooms);
+        match self.house {
+            House::Wood => print!("Wood"),
+            House::Clay => print!("Clay"),
+            House::Stone => print!("Stone"),
+        }
+        print!(" House]");
+
+        if !self.pastures.is_empty() {
+            print!("[Pastures ");
+            for p in &self.pastures {
+                p.display();
+            }
+            print!("]");
+        }
+
+        if !self.fields.is_empty() {
+            print!("[Fields ");
+            for f in &self.fields {
+                f.display();
+            }
+            print!("]");
+        }
+        let ns: u32 = self.unfenced_stables;
+        if ns > 0 {
+            print!("[{} UF Stables]", ns);
+        }
+
+        for (i, e) in self.major_cards.iter().enumerate() {
+            if !e {
+                continue;
+            }
+            match ALL_MAJORS[i] {
+                MajorImprovement::Fireplace2 => print!("[FP2]"),
+                MajorImprovement::Fireplace3 => print!("[FP3]"),
+                MajorImprovement::CookingHearth4 => print!("[CH4]"),
+                MajorImprovement::CookingHearth5 => print!("[CH5]"),
+                MajorImprovement::Well => print!("[WL]"),
+                MajorImprovement::ClayOven => print!("[CO]"),
+                MajorImprovement::StoneOven => print!("[SO]"),
+                MajorImprovement::Joinery => print!("[JY]"),
+                MajorImprovement::Pottery => print!("[PY]"),
+                MajorImprovement::BasketmakersWorkshop => print!("[BMW]"),
+            }
+        }
     }
 }

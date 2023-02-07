@@ -62,6 +62,18 @@ Playing out an entire game is often expensive especially with a large branching 
 - Implement AI player that chooses the best action by doing `n` random playouts from each immediate action and averaging the score for every action.
 - Implement pure MCTS
 
+### Results
+
+Results from simplest algorithm - average of scores from 2000 random playouts from each action.
+
+```
+0.Player (4/4) SCORE 29 has [1 Fd][6 Wd][8 Cl][1 St][7 Gr][2 Vg][2 Room Clay House][Pastures [2 => 4 Sheep][2][1]][Fields [0][1G][0][1V][0][1V]][FP2][CH5][S]
+1.Player (2/2) SCORE 23 has [10 Rd][4 Gr][3 Vg][1 Sheep][1 Cow][2 Room Wood House][Pastures [1 + S => 4 Pig(s)]][Fields [0][2G][1V][2G][0]][1 UF Stables][BMW][X]
+2.Player (2/2) SCORE 26 has [1 Children][1 St][4 Gr][1 Vg][2 Room Clay House][Pastures [2 => 4 Sheep][2 => 3 Pig(s)][1 => 1 Cow(s)][1]][Fields [1G][0][1G]][WL]
+3.Player (2/2) SCORE 19 has [2 Fd][2 Cl][1 St][1 Gr][2 Vg][2 Room Stone House][Pastures [2 + S => 4 Sheep][1 + S => 3 Cow(s)][1 + S => 3 Pig(s)]][Fields [0]][CH4][CO]
+Time elapsed: 89.421770583s
+Scores [29, 23, 26, 19]
+```
 
 ## Misc commands
 

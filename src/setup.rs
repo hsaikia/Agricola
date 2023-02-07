@@ -3,13 +3,15 @@ use crate::primitives::{new_res, Resource};
 use rand::prelude::SliceRandom;
 use rand::Rng;
 
-pub fn get_init_state(num_players: usize) -> Game {
+pub fn get_init_state(num_players: usize, debug: bool) -> Game {
     assert!(num_players > 0);
     assert!(num_players < 5);
 
     let first_player_idx = rand::thread_rng().gen_range(0..num_players);
 
-    println!("First player is {}", first_player_idx);
+    if debug {
+        println!("First player is {}", first_player_idx);
+    }
 
     let mut spaces = vec![
         Space::create_new("Copse", ActionSpace::Copse, Some(new_res())),
