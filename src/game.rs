@@ -1,11 +1,16 @@
-use crate::major_improvements::ALL_MAJORS;
+use crate::major_improvements::{MajorImprovement, ALL_MAJORS};
 use crate::player::{Player, PlayerKind};
-use crate::primitives::{new_res, print_resources, Resource, Resources};
+use crate::primitives::{
+    new_res, pay_for_resource, print_resources, take_resource, Resource, Resources,
+};
 use crate::scoring;
 use rand::Rng;
+use std::collections::hash_map::DefaultHasher;
+use std::collections::HashSet;
+use std::hash::{Hash, Hasher};
 use std::io;
 
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub enum ActionSpace {
     Copse,
     Grove,
@@ -39,13 +44,13 @@ pub enum ActionSpace {
     FarmRedevelopment,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub struct Space {
     name: String,
     action_space: ActionSpace,
     occupied: bool,
     accumulation_space: bool,
-    resource_space: bool, // all acc spaces are also resource spaces
+    resource_space: bool, // all accumulation spaces are also resource spaces
     resource: Resources,
 }
 
@@ -79,7 +84,7 @@ impl Space {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub struct Game {
     spaces: Vec<Space>,
     players: Vec<Player>,
@@ -91,7 +96,12 @@ pub struct Game {
 }
 
 impl Game {
-    pub fn create_new(p_spaces: Vec<Space>, first_player_idx: usize, num_players: usize) -> Game {
+    pub fn create_new(
+        p_spaces: Vec<Space>,
+        first_player_idx: usize,
+        num_players: usize,
+        human_player: bool,
+    ) -> Game {
         let mut state = Game {
             spaces: p_spaces,
             major_improvements: [true; 10],
@@ -101,8 +111,14 @@ impl Game {
             next_visible_idx: 16,
             people_placed_this_round: 0,
         };
-        state.init_players(first_player_idx, num_players);
+        state.init_players(first_player_idx, num_players, human_player);
         state
+    }
+
+    fn get_hash(&self) -> u64 {
+        let mut s = DefaultHasher::new();
+        self.hash(&mut s);
+        s.finish()
     }
 
     pub fn play(&mut self, debug: bool) {
@@ -114,15 +130,18 @@ impl Game {
             match maybe_actions {
                 Some(actions) => {
                     match self.player_kind() {
-                        PlayerKind::DumbMachine => {
+                        PlayerKind::RandomMachine => {
                             // Chose a random action
                             let action_idx = rand::thread_rng().gen_range(0..actions.len());
-                            self.apply_action(actions[action_idx], debug);
+                            self.apply_action(&actions[action_idx], debug);
                         }
                         PlayerKind::Human => {
                             println!("\n\nAvailable actions {:?}", actions);
                             let stdin = io::stdin();
-                            print!("Enter an action index : ");
+                            print!(
+                                "Enter an action index between 0 and {} inclusive : ",
+                                actions.len()
+                            );
                             let mut user_input = String::new();
                             let _res = stdin.read_line(&mut user_input);
 
@@ -130,12 +149,12 @@ impl Game {
                                 Ok(input_int) => {
                                     println!("Your input [{}]", input_int);
 
-                                    if !actions.contains(&input_int) {
+                                    if input_int >= actions.len() {
                                         println!("Invalid action.. quitting");
                                         break;
                                     }
 
-                                    self.apply_action(input_int, debug);
+                                    self.apply_action(&actions[input_int], debug);
                                 }
                                 Err(_e) => continue,
                             }
@@ -148,26 +167,27 @@ impl Game {
                             let mut best_average: f32 = -1000000.0;
 
                             // Play n simulated games
-                            let num_games: u32 = 100;
+                            let num_games: u32 = 1000;
+                            println!();
                             for (i, action) in actions.iter().enumerate() {
                                 let mut sum = 0;
                                 for _ in 0..num_games {
                                     // Clone the current game state
                                     let mut tmp_game = self.clone();
                                     // Play the current action
-                                    tmp_game.apply_action(*action, false);
+                                    tmp_game.apply_action(action, false);
                                     // Replace all players with a random move AI
-                                    tmp_game.replace_all_players_with_dumb_bots();
+                                    tmp_game.replace_all_players_with_random_bots();
                                     // Play the game out until the end
                                     tmp_game.play(false);
                                     // Sum resultant values
-                                    sum += tmp_game.fitness()[self.current_player_idx];
+                                    sum += tmp_game.win_loss()[self.current_player_idx];
                                 }
                                 let avg = sum as f32 / num_games as f32;
 
                                 print!(
-                                    "\nAvg score from {} simulated playouts for Action {} is {}",
-                                    num_games, self.spaces[*action].name, avg
+                                    "\nAvg score from {} simulated playouts for Action {} is {}.",
+                                    num_games, self.spaces[action[0]].name, avg
                                 );
 
                                 if avg > best_average {
@@ -175,7 +195,7 @@ impl Game {
                                     best_action_idx = i;
                                 }
                             }
-                            self.apply_action(actions[best_action_idx], debug);
+                            self.apply_action(&actions[best_action_idx], debug);
                         }
                     }
                 }
@@ -184,7 +204,7 @@ impl Game {
         }
     }
 
-    pub fn get_all_available_actions(&mut self, debug: bool) -> Option<Vec<usize>> {
+    fn get_all_available_actions(&mut self, debug: bool) -> Option<Vec<Vec<usize>>> {
         if self.people_placed_this_round == 0 {
             if self.next_visible_idx == 20
                 || self.next_visible_idx == 23
@@ -218,11 +238,262 @@ impl Game {
                 self.advance_turn();
             }
 
-            return Some(self.available_actions());
+            return Some(self.available_place_worker_actions());
         }
 
         self.people_placed_this_round = 0;
         self.get_all_available_actions(debug)
+    }
+
+    fn apply_action(&mut self, action_vec: &Vec<usize>, debug: bool) {
+        // This function assumes that the action is available to the current player
+
+        let action_idx = action_vec[0];
+
+        let space = &mut self.spaces[action_idx];
+        if debug {
+            print!(
+                "\nCurrent Player {} chooses action {}.",
+                self.current_player_idx, &space.name
+            );
+        }
+
+        let player = &mut self.players[self.current_player_idx];
+
+        if space.resource_space {
+            // Assumes that the space is accessible and the current player can use this action.
+            let res = &space.resource;
+            take_resource(res, &mut player.resources);
+            // Zero resources if space is an accumulation space
+            if space.accumulation_space {
+                space.resource = new_res();
+            }
+        }
+        match space.action_space {
+            // If animal accumulation space, re-org animals in the farm
+            ActionSpace::SheepMarket | ActionSpace::PigMarket | ActionSpace::CattleMarket => {
+                player.reorg_animals(false)
+            }
+            // TODO also implement playing minor improvement here
+            ActionSpace::MeetingPlace => self.starting_player_idx = self.current_player_idx,
+            ActionSpace::Farmland => player.add_new_field(),
+            ActionSpace::FarmExpansion => {
+                // TODO this should be a choice
+                if player.can_build_rooms() {
+                    player.build_rooms();
+                }
+                if player.can_build_stables() {
+                    player.build_stables();
+                }
+            }
+            // Since we assume that the actions are all accessible
+            // no further checks are necessary
+            ActionSpace::GrainUtilization => {
+                player.sow();
+                player.bake_bread();
+            }
+            ActionSpace::Improvements => {
+                player.build_major(action_vec[1], &mut self.major_improvements, debug);
+                // TODO add minors
+            }
+            ActionSpace::Fencing => {
+                player.fence();
+            }
+            ActionSpace::HouseRedevelopment => {
+                player.renovate();
+                // If major improvement choice is present, build that major
+                if action_vec.len() > 1 {
+                    player.build_major(action_vec[1], &mut self.major_improvements, debug);
+                }
+                // TODO minors
+            }
+            ActionSpace::WishForChildren => {
+                player.grow_family_with_room();
+            }
+            ActionSpace::UrgentWishForChildren => {
+                player.grow_family_without_room();
+            }
+            ActionSpace::FarmRedevelopment => {
+                player.renovate();
+                if player.can_fence() {
+                    player.fence();
+                }
+            }
+            ActionSpace::Cultivation => {
+                if player.can_add_new_field() {
+                    player.add_new_field();
+                }
+                if player.can_sow() {
+                    player.sow();
+                }
+            }
+            _ => (),
+        }
+        // Set the space to occupied
+        space.occupied = true;
+        self.worker_placement_complete();
+    }
+
+    fn worker_placement_complete(&mut self) {
+        let player = &mut self.players[self.current_player_idx];
+        // Increment people placed by player
+        player.increment_people_placed();
+        self.people_placed_this_round += 1;
+        // Move to the next player
+        self.advance_turn();
+    }
+
+    fn available_place_worker_actions(&self) -> Vec<Vec<usize>> {
+        let player = &self.players[self.current_player_idx];
+        let mut ret: Vec<Vec<usize>> = Vec::new();
+        for i in 0..self.next_visible_idx {
+            let mut additional_subsequent_choices: Vec<usize> = Vec::new();
+            let space = &self.spaces[i];
+            if space.occupied {
+                continue;
+            }
+            match space.action_space {
+                ActionSpace::Farmland => {
+                    if !player.can_add_new_field() {
+                        continue;
+                    }
+                }
+                ActionSpace::Lessons1 => continue, // TODO Not implemented - action not available
+                ActionSpace::Lessons2 => continue, // TODO Not implemented - action not available
+                ActionSpace::FarmExpansion => {
+                    if !player.can_build_rooms() && !player.can_build_stables() {
+                        continue;
+                    }
+                }
+                ActionSpace::Improvements => {
+                    additional_subsequent_choices = MajorImprovement::available_majors_to_build(
+                        &player.major_cards,
+                        &self.major_improvements,
+                        &player.resources,
+                    );
+                    if additional_subsequent_choices.is_empty() {
+                        continue;
+                    }
+                    // TODO - Add minors
+                }
+                ActionSpace::WishForChildren => {
+                    if !player.can_grow_family_with_room() {
+                        continue;
+                    }
+                }
+                ActionSpace::Fencing => {
+                    if !player.can_fence() {
+                        continue;
+                    }
+                }
+                ActionSpace::GrainUtilization => {
+                    if !player.can_sow() {
+                        continue;
+                    }
+                }
+                ActionSpace::HouseRedevelopment => {
+                    if !player.can_renovate() {
+                        continue;
+                    }
+                }
+                ActionSpace::Cultivation => {
+                    if !player.can_add_new_field() && !player.can_sow() {
+                        continue;
+                    }
+                }
+                ActionSpace::FarmRedevelopment => {
+                    if !player.can_renovate() {
+                        continue;
+                    }
+                    // Check if after renovating there are enough resources left to play a minor
+                    let mut res = player.resources; // Copy
+                    pay_for_resource(&player.renovation_cost, &mut res);
+                    additional_subsequent_choices = MajorImprovement::available_majors_to_build(
+                        &player.major_cards,
+                        &self.major_improvements,
+                        &res,
+                    );
+                }
+                ActionSpace::UrgentWishForChildren => {
+                    if !player.can_grow_family_without_room() {
+                        continue;
+                    }
+                }
+                _ => (),
+            }
+
+            if !additional_subsequent_choices.is_empty() {
+                for choice in additional_subsequent_choices {
+                    let choices = vec![i, choice];
+                    ret.push(choices);
+                }
+            } else {
+                ret.push(vec![i]);
+            }
+        }
+        ret
+    }
+
+    fn player_kind(&self) -> PlayerKind {
+        self.players[self.current_player_idx].kind()
+    }
+
+    fn replace_all_players_with_random_bots(&mut self) {
+        for p in &mut self.players {
+            p.kind = PlayerKind::RandomMachine;
+        }
+    }
+
+    pub fn win_loss(&self) -> Vec<i32> {
+        let scores: Vec<i32> = self.scores();
+        let max_score = scores.iter().max().unwrap();
+
+        let mut win_loss_ret: Vec<i32> = Vec::new();
+        for score in &scores {
+            if score == max_score {
+                win_loss_ret.push(1);
+            } else {
+                win_loss_ret.push(0);
+            }
+        }
+
+        win_loss_ret
+    }
+
+    pub fn fitness(&self) -> Vec<i32> {
+        let scores = self.scores();
+
+        if scores.len() == 1 {
+            return scores;
+        }
+
+        let mut fitness = scores.clone();
+        let mut sorted_scores = scores;
+        // sort in decreasing order
+        sorted_scores.sort_by_key(|k| 1000000 - k);
+        // Fitness of winner is defined by the margin of victory = so difference from own score and second best score
+        // Fitness of losers are defined by the margin of defeat = so difference from own score and best score
+        for f in &mut fitness {
+            if *f == sorted_scores[0] {
+                // winner
+                *f -= sorted_scores[1];
+            } else {
+                *f -= sorted_scores[0];
+            }
+        }
+        fitness
+    }
+
+    pub fn scores(&self) -> Vec<i32> {
+        let mut scores: Vec<i32> = Vec::new();
+        for p in &self.players {
+            scores.push(scoring::score(p));
+        }
+        scores
+    }
+
+    fn advance_turn(&mut self) {
+        self.current_player_idx = (self.current_player_idx + 1) % self.players.len();
     }
 
     fn harvest(&mut self, debug: bool) {
@@ -338,222 +609,17 @@ impl Game {
         }
     }
 
-    pub fn apply_action(&mut self, action_idx: usize, debug: bool) {
-        // This function assumes that the action is available to the current player
-
-        let space = &self.spaces[action_idx];
-        if debug {
-            print!(
-                "\nCurrent Player {} uses action {}.",
-                self.current_player_idx, &space.name
-            );
-        }
-
-        let player = &mut self.players[self.current_player_idx];
-        if space.resource_space {
-            // Assumes that the space is accessible and the current player can use this action.
-            let res = &space.resource;
-            player.take_res(res);
-
-            // If animal accumulation space, re-org animals in the farm
-            match space.action_space {
-                ActionSpace::SheepMarket | ActionSpace::PigMarket | ActionSpace::CattleMarket => {
-                    player.reorg_animals(false)
-                }
-                _ => (),
-            }
-
-            // Zero resources if space is an accumulation space
-            if space.accumulation_space {
-                self.spaces[action_idx].resource = new_res();
-            }
-        } else {
-            match space.action_space {
-                // TODO also implement playing minor improvement here
-                ActionSpace::MeetingPlace => self.starting_player_idx = self.current_player_idx,
-                ActionSpace::Farmland => player.add_new_field(),
-                ActionSpace::FarmExpansion => {
-                    // TODO this should be a choice
-                    if player.can_build_rooms() {
-                        player.build_rooms();
-                    }
-                    if player.can_build_stables() {
-                        player.build_stables();
-                    }
-                }
-                // Since we assume that the actions are all accessible
-                // no further checks are necessary
-                ActionSpace::GrainUtilization => {
-                    player.sow();
-                    player.bake_bread();
-                }
-                ActionSpace::Improvements => {
-                    player.build_major(&mut self.major_improvements);
-                    // TODO add minors
-                }
-                ActionSpace::Fencing => {
-                    player.fence();
-                }
-                ActionSpace::HouseRedevelopment => {
-                    player.renovate();
-                    if player.can_build_major(&self.major_improvements) {
-                        player.build_major(&mut self.major_improvements);
-                    }
-                    // TODO minors
-                }
-                ActionSpace::WishForChildren => {
-                    player.grow_family_with_room();
-                }
-                ActionSpace::UrgentWishForChildren => {
-                    player.grow_family_without_room();
-                }
-                ActionSpace::FarmRedevelopment => {
-                    player.renovate();
-                    if player.can_fence() {
-                        player.fence();
-                    }
-                }
-                ActionSpace::Cultivation => {
-                    if player.can_add_new_field() {
-                        player.add_new_field();
-                    }
-                    if player.can_sow() {
-                        player.sow();
-                    }
-                }
-                _ => (),
-            }
-        }
-        // Increment people placed by player
-        player.increment_people_placed();
-        self.people_placed_this_round += 1;
-        // Set the space to occupied
-        self.spaces[action_idx].occupied = true;
-        // Move to the next player
-        self.advance_turn();
-    }
-
-    fn advance_turn(&mut self) {
-        self.current_player_idx = (self.current_player_idx + 1) % self.players.len();
-    }
-
-    fn available_actions(&self) -> Vec<usize> {
-        let player = &self.players[self.current_player_idx];
-        let mut ret: Vec<usize> = Vec::new();
-        for i in 0..self.next_visible_idx {
-            let space = &self.spaces[i];
-            if space.occupied {
-                continue;
-            }
-            match space.action_space {
-                ActionSpace::Farmland => {
-                    if !player.can_add_new_field() {
-                        continue;
-                    }
-                }
-                ActionSpace::Lessons1 => continue, // TODO Not implemented - action not available
-                ActionSpace::Lessons2 => continue, // TODO Not implemented - action not available
-                ActionSpace::FarmExpansion => {
-                    if !player.can_build_rooms() && !player.can_build_stables() {
-                        continue;
-                    }
-                }
-                ActionSpace::Improvements => {
-                    if !player.can_build_major(&self.major_improvements) {
-                        continue;
-                    }
-                    // TODO - Add minors
-                }
-                ActionSpace::WishForChildren => {
-                    if !player.can_grow_family_with_room() {
-                        continue;
-                    }
-                }
-                ActionSpace::Fencing => {
-                    if !player.can_fence() {
-                        continue;
-                    }
-                }
-                ActionSpace::GrainUtilization => {
-                    if !player.can_sow() {
-                        continue;
-                    }
-                }
-                ActionSpace::HouseRedevelopment => {
-                    if !player.can_renovate() {
-                        continue;
-                    }
-                }
-                ActionSpace::Cultivation => {
-                    if !player.can_add_new_field() && !player.can_sow() {
-                        continue;
-                    }
-                }
-                ActionSpace::FarmRedevelopment => {
-                    if !player.can_renovate() {
-                        continue;
-                    }
-                }
-                ActionSpace::UrgentWishForChildren => {
-                    if !player.can_grow_family_without_room() {
-                        continue;
-                    }
-                }
-                _ => (),
-            }
-            ret.push(i);
-        }
-        ret
-    }
-
-    fn player_kind(&self) -> PlayerKind {
-        self.players[self.current_player_idx].kind()
-    }
-
-    fn replace_all_players_with_dumb_bots(&mut self) {
-        for p in &mut self.players {
-            p.kind = PlayerKind::DumbMachine;
-        }
-    }
-
-    fn init_players(&mut self, first_idx: usize, num: usize) {
+    fn init_players(&mut self, first_idx: usize, num: usize, human_player: bool) {
         for i in 0..num {
             let food = if i == first_idx { 2 } else { 3 };
-            let player = Player::create_new(food, PlayerKind::Machine);
+            let player_kind = if human_player && i == 0 {
+                PlayerKind::Human
+            } else {
+                PlayerKind::Machine
+            };
+            let player = Player::create_new(food, player_kind);
             self.players.push(player);
         }
-    }
-
-    pub fn fitness(&self) -> Vec<i32> {
-        let scores = self.scores();
-
-        if scores.len() == 1 {
-            return scores;
-        }
-
-        let mut fitness = scores.clone();
-        let mut sorted_scores = scores;
-        // sort in decreasing order
-        sorted_scores.sort_by_key(|k| 1000000 - k);
-        // Fitness of winner is defined by the margin of victory = so difference from own score and second best score
-        // Fitness of losers are defined by the margin of defeat = so difference from own score and best score
-        for f in &mut fitness {
-            if *f == sorted_scores[0] {
-                // winner
-                *f -= sorted_scores[1];
-            } else {
-                *f -= sorted_scores[0];
-            }
-        }
-        fitness
-    }
-
-    pub fn scores(&self) -> Vec<i32> {
-        let mut scores: Vec<i32> = Vec::new();
-        for p in &self.players {
-            scores.push(scoring::score(p));
-        }
-        scores
     }
 
     pub fn display(&self) {

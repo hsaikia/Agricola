@@ -1,65 +1,40 @@
-# Game Simulator (Agricola)
+# Agricola AI
 
-The game simulator is a library that can be used to quickly implement any turn based game and simulate playing it. Its objective is to find the best possible strategy to play the game, and in the process identify broken strategies and OP components etc. This enables the game developers to fine tune these strategies and reduce the effect of OP components - thereby making the game more balanced.
+The Agricola AI is an AI agent, capable of playing the turn-based strategy (tbs) board game Agricola, by Uwe Rosenberg. Its objective is to find the best possible strategy to play the game, and in the process identify broken strategies and OP components (cards for example). The objective to create such an AI agent, in general for any game, is to identify certain broken strategies in the game, and someday allow the game designers to fine tune these strategies and reduce the effect of the OP components - thereby making the game more balanced.
 
-The current version is a simulator of the popular strategy board game Agricola.
+The AI agent has different modes, and even the most simple 'Random AI' mode can play the game at a reasonable level. The strategy of finding the best move is done by simulating play from a given state all the way to the end of the game. The 'MCTS AI' uses the Monte Carlo Tree Search technique to optimally pick the most promising branches arising from a given state.
+
+The project is written entirely in Rust and thus greatly benefits from Rust's memory safety and speed.
 
 ## System Design
 
-Here is a brief explanation of how different entities in the game should interoperate.
+Here is a brief explanation of the several entities in the game. 
+- Game : this is the struct representing the game state.
+- Player : the struct representing the Player state. Several of these structs are part of the game state. Some parts of this struct should be hidden from other Players.
+- ActionSpaces : Spaces on the board where a Player can place one of its workers (i.e., family members) - Agricola is part of a large number of tbs games that categorize themselves as worker-placement games.
 
-### Game State (Data)
+## AI techniques
 
-The game state is the overall representation of the game at any point in time. Some parts of the game state could be visible only to certain agents (see next).
+There are several techniques to evaluate best moves in a tbs game. Minimax / Negamax is a well known technique to find best moves in a two player zero sum game, such as Chess. Alpha-Beta pruning is a technique used to prune the exponentially growing search tree in the Minimax algorithm. Though this is a very good technique, it often fails to explore certain branches which has a delayed reward - e.g., a sacrifice (bad initial move) that leads to checkmate (best final result) - and is very dependent on its evaluation function for a particular game state. 
 
-### Agents (Entity)
+MCTS, on the other hand, makes no such assumptions. It is a purely knowledge-agnostic technique, which means that it requires no prior knowledge of how a game state is evaluated. It picks up on the best strategies as it searches through the game tree and is theoretically capable of perfect play given infinite resources. Hence its performance scales up with the number of searches it performs.
 
-Agents (Players) are entities that change the state of the game. The game itself could be represented as one of the agents (sets up next phase, rewards/punishes other agents etc).
+Agricola is a complex game with several actions within actions - which are known as split actions. MCTS is one of the few techniques that works with split action games as well.
 
-### Phases (Entity)
+## How to Run
 
-A game phase is a period of time in the game, where a fixed set of actions (see later) need to be performed. This could be a part of the Game State.
-
-### Actions (Function)
-
-Actions are a set of functions that an Agent performs which change the game state.
-
-## Objective
-
-The objective of the simulator is to find the best possible action for agent A (the current agent in a turn based manner), given a set of possible actions, so that the outcome of the game is most favourable to A.
-
-The simulator can determine the best possible strategy in one of the following ways
-
-### Using a state evaluation function and simulating 't' actions in the future
-
-This is how a chess engine works for example. Given a good static evaluation function, minimax + alpha-beta pruning can lead to very good results. Usually board games have a running point system to determine which player leads, the evaluation function in this case, can just be the point score + some probabilistic score for the resources/actions in hand.
-
-Algorithm
+To run the release version (assuming you have Rust installed), from the parent directory run 
 
 ```
-1. Input : Game State S and current Agent A. Output best action f for A.
-2. Determine list of actions C available to agent A
-3. Simulate GameState S' <= f(S) for each action f \in C and traverse to depth d. Using minimax and alpha beta pruning, prune list of actions at each turn. Find action f that leads to the highest possible score for A using a static evaluation function at the terminal states. Return f.
+cargo run --release -- <num_players> <optional : human_player>
 ```
 
-### Monte Carlo simulation of a large number of games
+where you can specify the number of players and whether the first player is a human player.
 
-In a Monte Carlo simulation, a large number of games are played and based on the results from these games, certain states are learnt to be better states than some others.
 
-### Reinforcement learning
+## Results
 
-Playing out an entire game is often expensive especially with a large branching factor (lot of agents and lot of actions), in this case, a game is also played till a certain horizon in the future and the reward at that point is used to weigh the valuation of actions at the current time.
-
-### TODO
-
-- Currently a lot of decisions within an action like major improvement build is random. Implement 'within action decisions' such as best major to build, best resource conversion during harvest or best fencing arrangements using the same MCTS strategy.
-- Implement OCCs.
-- Implement Minors.
-- Implement pure MCTS.
-
-### Results
-
-Results from the simplest algorithm - average of fitness scores from 5000 random playouts from each action.
+Results from a game played by 4 Random AI agents. The Random AI calculates a winrate from 5000 random playouts from each action, and picks the action with the best winrate.
 
 ```
 0.Player (3/3) SCORE 29 has [4 Wd][5 Gr][2 Room Wood House][Pastures [2 + S => 4 Cow(s)][2 + S => 3 Pig(s)][1 + S => 1 Sheep]][Fields [1G][1G][0][0][1G]][WL]
@@ -82,6 +57,18 @@ Time elapsed: 4.477189375s
 Scores [29, 26, 19, 22]
 Fitness [3, -3, -10, -7]
 ```
+
+### TODO
+
+- Currently a lot of decisions within an action, like major improvement build is random. Implement 'within action decisions' such as best major to build, best resource conversion during harvest or best fencing arrangements using the same MCTS strategy.
+- Implement OCCs.
+- Implement Minors.
+- Implement pure MCTS.
+- Implement generic actions for fencing, farm expansion etc.
+
+MCTS Strategy
+
+- Randomly sample `n` immediate actions for each action. This is to identify all possible split actions. For example, for a build Improvements action, one can build one of several possible improvements. Similarly paying for harvest can be done in one of many different possible ways. A branch should exist for each such choice that exists within an action. One option is to enumerate this tree in a deterministic way. Another is to sample `n` number of times until all choices are revealed. 
 
 ## Misc commands
 

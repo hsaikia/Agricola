@@ -2,7 +2,7 @@ use std::ops::{Index, IndexMut};
 
 pub const MAX_RESOURCE_TO_CONVERT: u32 = 1000; // Large enough number to simulate infinity
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash)]
 pub enum Resource {
     Food,
     Wood,
@@ -65,14 +65,21 @@ pub fn pay_for_resource(cost: &Resources, store: &mut Resources) {
     }
 }
 
-#[derive(Debug, Clone)]
+pub fn take_resource(res: &Resources, store: &mut Resources) {
+    for it in res.iter().zip(store.iter_mut()) {
+        let (a, b) = it;
+        *b += a;
+    }
+}
+
+#[derive(Debug, Clone, Hash)]
 pub enum ConversionTime {
     Any,
     Harvest,
     Bake,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct ResourceConversion {
     from: Resource,
     to: Resource,

@@ -1,5 +1,6 @@
 use crate::primitives::{
-    new_res, ConversionTime, Resource, ResourceConversion, Resources, MAX_RESOURCE_TO_CONVERT,
+    can_pay_for_resource, new_res, ConversionTime, Resource, ResourceConversion, Resources,
+    MAX_RESOURCE_TO_CONVERT,
 };
 
 #[derive(Clone, Debug)]
@@ -30,6 +31,69 @@ pub const ALL_MAJORS: [MajorImprovement; 10] = [
 ];
 
 impl MajorImprovement {
+    pub fn available_majors_to_build(
+        majors_owned: &[bool; ALL_MAJORS.len()],
+        majors_on_board: &[bool; ALL_MAJORS.len()],
+        resources: &Resources,
+    ) -> Vec<usize> {
+        // If one of the FPs are already built
+        let fp2_built: bool = majors_owned[MajorImprovement::Fireplace2.index()];
+        let fp3_built: bool = majors_owned[MajorImprovement::Fireplace3.index()];
+
+        let mut available = [false; ALL_MAJORS.len()];
+
+        for idx in 0..ALL_MAJORS.len() {
+            if !majors_on_board[idx] {
+                continue;
+            }
+
+            // If FP2 or FP3 is already built
+            if fp2_built || fp3_built {
+                if idx == MajorImprovement::CookingHearth4.index()
+                    || idx == MajorImprovement::CookingHearth5.index()
+                {
+                    available[idx] = true;
+                }
+
+                if idx == MajorImprovement::Fireplace2.index()
+                    || idx == MajorImprovement::Fireplace3.index()
+                {
+                    continue;
+                }
+            }
+            if can_pay_for_resource(&ALL_MAJORS[idx].cost(), resources) {
+                available[idx] = true;
+            }
+        }
+
+        // If CH4 and CH5 are both present remove the expensive one
+        // Or if CH4 is already built remove CH5
+        if (available[MajorImprovement::CookingHearth4.index()]
+            && available[MajorImprovement::CookingHearth5.index()])
+            || majors_owned[MajorImprovement::CookingHearth4.index()]
+        {
+            available[MajorImprovement::CookingHearth5.index()] = false;
+        }
+
+        // If FP2 and FP3 are both present remove the expensive one
+        if available[MajorImprovement::Fireplace2.index()]
+            && available[MajorImprovement::Fireplace3.index()]
+        {
+            available[MajorImprovement::Fireplace3.index()] = false;
+        }
+
+        // Choose random index
+        let mut available_indices = vec![];
+
+        for (i, e) in available.iter().enumerate() {
+            if *e {
+                available_indices.push(i);
+            }
+        }
+
+        available_indices
+    }
+
     // Vec <Resource to use, Amount to use, Food for each resource, Number of times usable at once>
     pub fn conversions_to_food(&self) -> Option<Vec<ResourceConversion>> {
         match self {

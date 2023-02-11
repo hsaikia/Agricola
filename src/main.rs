@@ -14,10 +14,26 @@ mod setup;
 // mod fencing;
 
 fn main() {
-    env::set_var("RUST_BACKTRACE", "1");
-    let num_players: usize = 4;
+    //env::set_var("RUST_BACKTRACE", "1");
+    let args: Vec<String> = env::args().collect();
+
+    // First arg is the binary
+    let num_players: usize = match &args[1].parse::<usize>() {
+        Ok(num) => *num,
+        Err(e) => {
+            println!("Couldn't parse number of players, please enter a number between 1 and 4 inclusive. {:?}", e);
+            return;
+        }
+    };
+
+    let mut human_player = false;
+    if args.len() == 3 {
+        // Make the first player Human
+        human_player = true;
+    }
+
     let debug = true;
-    let mut game = setup::get_init_state(num_players, debug);
+    let mut game = setup::get_init_state(num_players, human_player, debug);
     let start = Instant::now();
     game.play(debug);
     let duration = start.elapsed();

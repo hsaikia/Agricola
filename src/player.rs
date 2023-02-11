@@ -1,11 +1,10 @@
 use crate::farm::{Animal, Field, House, Pasture, PlantedSeed};
 use crate::major_improvements::{MajorImprovement, ALL_MAJORS};
 use crate::primitives::{
-    can_pay_for_resource, new_res, pay_for_resource, print_resources, ConversionTime, Resource,
-    ResourceConversion, Resources,
+    can_pay_for_resource, new_res, pay_for_resource, print_resources, take_resource,
+    ConversionTime, Resource, ResourceConversion, Resources,
 };
 use crate::scoring;
-use rand::Rng;
 use std::cmp;
 
 const MAX_STABLES: u32 = 4;
@@ -37,14 +36,14 @@ lazy_static! {
     ];
 }
 
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub enum PlayerKind {
     Human,
     Machine,
-    DumbMachine, // Random
+    RandomMachine, // Random
 }
 
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub struct Player {
     // Animals in this resources array are the ones that are pets in the house and the ones that are kept in unfenced stables
     pub kind: PlayerKind,
@@ -55,7 +54,7 @@ pub struct Player {
     pub begging_tokens: u32,
     build_room_cost: Resources,
     build_stable_cost: Resources,
-    renovation_cost: Resources,
+    pub renovation_cost: Resources,
     pub major_cards: [bool; ALL_MAJORS.len()],
     conversions: Vec<ResourceConversion>,
     pub house: House,
@@ -336,75 +335,21 @@ impl Player {
         }
     }
 
-    fn available_majors_to_build(&self, majors: &[bool; ALL_MAJORS.len()]) -> Vec<usize> {
-        // If one of the FPs are already built
-        let fp2_built: bool = self.major_cards[MajorImprovement::Fireplace2.index()];
-        let fp3_built: bool = self.major_cards[MajorImprovement::Fireplace3.index()];
-
-        let mut available = [false; ALL_MAJORS.len()];
-
-        for idx in 0..ALL_MAJORS.len() {
-            if !majors[idx] {
-                continue;
-            }
-
-            // If FP2 or FP3 is already built
-            if fp2_built || fp3_built {
-                if idx == MajorImprovement::CookingHearth4.index()
-                    || idx == MajorImprovement::CookingHearth5.index()
-                {
-                    available[idx] = true;
-                }
-
-                if idx == MajorImprovement::Fireplace2.index()
-                    || idx == MajorImprovement::Fireplace3.index()
-                {
-                    continue;
-                }
-            }
-            if can_pay_for_resource(&ALL_MAJORS[idx].cost(), &self.resources) {
-                available[idx] = true;
-            }
-        }
-
-        // If CH4 and CH5 are both present remove the expensive one
-        // Or if CH4 is already built remove CH5
-        if (available[MajorImprovement::CookingHearth4.index()]
-            && available[MajorImprovement::CookingHearth5.index()])
-            || self.major_cards[MajorImprovement::CookingHearth4.index()]
-        {
-            available[MajorImprovement::CookingHearth5.index()] = false;
-        }
-
-        // If FP2 and FP3 are both present remove the expensive one
-        if available[MajorImprovement::Fireplace2.index()]
-            && available[MajorImprovement::Fireplace3.index()]
-        {
-            available[MajorImprovement::Fireplace3.index()] = false;
-        }
-
-        // Choose random index
-        let mut available_indices = vec![];
-
-        for (i, e) in available.iter().enumerate() {
-            if *e {
-                available_indices.push(i);
-            }
-        }
-
-        available_indices
-    }
-
     // TODO - make this generic
     // Currently builds a random major
-    pub fn build_major(&mut self, majors: &mut [bool; ALL_MAJORS.len()]) {
-        let available_indices = self.available_majors_to_build(majors);
-        assert!(!available_indices.is_empty());
+    pub fn build_major(
+        &mut self,
+        major_idx: usize,
+        majors: &mut [bool; ALL_MAJORS.len()],
+        debug: bool,
+    ) {
+        assert!(major_idx <= ALL_MAJORS.len());
+        assert!(majors[major_idx]);
+        let chosen_major: MajorImprovement = ALL_MAJORS[major_idx].clone();
 
-        let idx = rand::thread_rng().gen_range(0..available_indices.len());
-        let chosen_major: MajorImprovement = ALL_MAJORS[available_indices[idx]].clone();
-
-        //println!("Chosen major {:?}", chosen_major);
+        if debug {
+            print!("\nChosen major {:?}", chosen_major);
+        }
 
         // If one of the FPs are already built
         let fp2_built: bool = self.major_cards[MajorImprovement::Fireplace2.index()];
@@ -430,10 +375,10 @@ impl Player {
             }
         }
         // Built
-        self.major_cards[available_indices[idx]] = true;
+        self.major_cards[major_idx] = true;
 
         // Remove from board
-        majors[available_indices[idx]] = false;
+        majors[major_idx] = false;
 
         // Add conversions
         self.conversions.clear();
@@ -709,17 +654,6 @@ impl Player {
         can_pay_for_resource(&self.build_stable_cost, &self.resources)
     }
 
-    pub fn can_build_major(&self, majors: &[bool; ALL_MAJORS.len()]) -> bool {
-        !self.available_majors_to_build(majors).is_empty()
-    }
-
-    pub fn take_res(&mut self, acc_res: &Resources) {
-        for it in acc_res.iter().zip(self.resources.iter_mut()) {
-            let (a, b) = it;
-            *b += a;
-        }
-    }
-
     pub fn add_new_field(&mut self) {
         let field = Field::new();
         self.fields.push(field);
@@ -731,7 +665,7 @@ impl Player {
 
     pub fn reset_for_next_round(&mut self) {
         if let Some(res) = self.promised_resources.pop() {
-            self.take_res(&res);
+            take_resource(&res, &mut self.resources);
         }
         self.adults += self.children;
         self.children = 0;

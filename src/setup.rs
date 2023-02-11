@@ -2,7 +2,7 @@ use crate::game::{ActionSpace, Game, Space};
 use crate::primitives::{new_res, Resource};
 use rand::Rng;
 
-pub fn get_init_state(num_players: usize, debug: bool) -> Game {
+pub fn get_init_state(num_players: usize, human_player: bool, debug: bool) -> Game {
     assert!(num_players > 0);
     assert!(num_players < 5);
 
@@ -54,7 +54,15 @@ pub fn get_init_state(num_players: usize, debug: bool) -> Game {
                 res
             }),
         ),
-        Space::create_new("Meeting Place", ActionSpace::MeetingPlace, None),
+        Space::create_new(
+            "Meeting Place",
+            ActionSpace::MeetingPlace,
+            Some({
+                let mut res = new_res();
+                res[Resource::Food] = 1; // In the base game, a player also gets a food when they use the MeetingPlace
+                res
+            }),
+        ),
         Space::create_new("Farmland", ActionSpace::Farmland, None),
         Space::create_new("Farm Expansion", ActionSpace::FarmExpansion, None),
         Space::create_new("Lessons 1", ActionSpace::Lessons1, None),
@@ -95,5 +103,5 @@ pub fn get_init_state(num_players: usize, debug: bool) -> Game {
         Space::create_new("Farm Redevelopment", ActionSpace::FarmRedevelopment, None),
     ];
 
-    Game::create_new(spaces, first_player_idx, num_players)
+    Game::create_new(spaces, first_player_idx, num_players, human_player)
 }

@@ -1,18 +1,18 @@
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub enum House {
     Wood,
     Clay,
     Stone,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub enum PlantedSeed {
     Empty,
     Grain,
     Vegetable,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub enum Animal {
     Empty,
     Sheep,
@@ -20,7 +20,7 @@ pub enum Animal {
     Cattle,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub struct Field {
     pub seed: PlantedSeed,
     pub amount: u32,
@@ -46,7 +46,7 @@ impl Field {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub struct Pasture {
     pub farmyard_spaces: u32,
     pub stables: u32,
