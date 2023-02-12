@@ -17,6 +17,11 @@ fn main() {
     //env::set_var("RUST_BACKTRACE", "1");
     let args: Vec<String> = env::args().collect();
 
+    if args.len() < 2 {
+        println!("Please enter the number of players.");
+        return;
+    }
+
     // First arg is the binary
     let num_players: usize = match &args[1].parse::<usize>() {
         Ok(num) => *num,

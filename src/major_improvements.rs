@@ -82,7 +82,7 @@ impl MajorImprovement {
             available[MajorImprovement::Fireplace3.index()] = false;
         }
 
-        // Choose random index
+        // Populate indices of all available majors
         let mut available_indices = vec![];
 
         for (i, e) in available.iter().enumerate() {

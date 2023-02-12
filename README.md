@@ -58,7 +58,7 @@ Scores [29, 26, 19, 22]
 Fitness [3, -3, -10, -7]
 ```
 
-### TODO
+## TODO
 
 - Currently a lot of decisions within an action, like major improvement build is random. Implement 'within action decisions' such as best major to build, best resource conversion during harvest or best fencing arrangements using the same MCTS strategy.
 - Implement OCCs.

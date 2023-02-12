@@ -119,19 +119,6 @@ impl Player {
             pasture_spaces += pasture.farmyard_spaces;
         }
 
-        if self.rooms + self.fields.len() as u32 + pasture_spaces + self.unfenced_stables
-            > FARMYARD_SPACES
-        {
-            println!(
-                "\nError! {} Rooms {} fields {} pasture spaces ({} pastures) and {} UF found!",
-                self.rooms,
-                self.fields.len() as u32,
-                pasture_spaces,
-                self.pastures.len(),
-                self.unfenced_stables
-            );
-        }
-
         FARMYARD_SPACES
             - self.rooms
             - self.fields.len() as u32
@@ -167,6 +154,7 @@ impl Player {
         self.kind.clone()
     }
 
+    // TODO : Do this generically
     pub fn harvest(&mut self, debug: bool) {
         let food_required = 2 * self.adults + self.children;
 
@@ -335,8 +323,6 @@ impl Player {
         }
     }
 
-    // TODO - make this generic
-    // Currently builds a random major
     pub fn build_major(
         &mut self,
         major_idx: usize,
@@ -363,11 +349,12 @@ impl Player {
                     self.major_cards[MajorImprovement::Fireplace2.index()] = false;
                     // Add FP2 back to board
                     majors[MajorImprovement::Fireplace2.index()] = true;
-                }
-                if fp3_built {
+                } else if fp3_built {
                     self.major_cards[MajorImprovement::Fireplace3.index()] = false;
                     // Add FP3 back to board
                     majors[MajorImprovement::Fireplace3.index()] = true;
+                } else {
+                    pay_for_resource(&chosen_major.cost(), &mut self.resources);
                 }
             }
             _ => {
@@ -426,6 +413,8 @@ impl Player {
         }
     }
 
+    // Converts as much grain into food as possible
+    // TODO - this might not be the best strategy! Make generic.
     pub fn bake_bread(&mut self) {
         let mut best_conversion = self.resources;
         for conv in &mut self.conversions {
@@ -438,6 +427,8 @@ impl Player {
         self.resources = best_conversion;
     }
 
+    // Sows alternatively between grain and veggies
+    // TODO - this might not be the best strategy! Make generic.
     pub fn sow(&mut self) {
         let mut empty_field_idx: usize = 0;
         let mut grain_fields: u32 = 0;

@@ -46,7 +46,7 @@ pub enum ActionSpace {
 
 #[derive(Clone, Hash)]
 pub struct Space {
-    name: String,
+    name: String, // TODO : remove from here and make get_name into a global static hashmap
     action_space: ActionSpace,
     occupied: bool,
     accumulation_space: bool,
@@ -331,11 +331,6 @@ impl Game {
         }
         // Set the space to occupied
         space.occupied = true;
-        self.worker_placement_complete();
-    }
-
-    fn worker_placement_complete(&mut self) {
-        let player = &mut self.players[self.current_player_idx];
         // Increment people placed by player
         player.increment_people_placed();
         self.people_placed_this_round += 1;
