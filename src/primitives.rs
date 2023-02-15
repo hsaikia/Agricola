@@ -1,5 +1,5 @@
+use std::cmp;
 use std::ops::{Index, IndexMut};
-
 pub const MAX_RESOURCE_TO_CONVERT: u32 = 1000; // Large enough number to simulate infinity
 
 #[derive(Clone, Debug, Hash)]
@@ -17,7 +17,7 @@ pub enum Resource {
 }
 
 const NUM_RESOURCES: usize = 10;
-const RESOURCE_NAMES: [&str; NUM_RESOURCES] = [
+pub const RESOURCE_NAMES: [&str; NUM_RESOURCES] = [
     "Fd", "Wd", "Cl", "St", "Rd", "Gr", "Vg", "Sheep", "Pig", "Cow",
 ];
 pub type Resources = [u32; NUM_RESOURCES];
@@ -136,6 +136,21 @@ impl ResourceConversion {
             MAX_RESOURCE_TO_CONVERT,
             ConversionTime::Any,
         )]
+    }
+
+    pub fn conversion_options(
+        &self,
+        res: &Resources,
+        conv_time: &ConversionTime,
+    ) -> Option<(Resource, u32, u32)> {
+        if self.can_convert(res, conv_time) {
+            return Some((
+                self.from.clone(),
+                self.to_amt,
+                cmp::min(self.times, res[self.from.clone()]),
+            ));
+        }
+        None
     }
 
     pub fn can_convert(&self, res: &Resources, conv_time: &ConversionTime) -> bool {

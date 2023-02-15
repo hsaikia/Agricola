@@ -2,7 +2,7 @@ use crate::farm::{Animal, Field, House, Pasture, PlantedSeed};
 use crate::major_improvements::{MajorImprovement, ALL_MAJORS};
 use crate::primitives::{
     can_pay_for_resource, new_res, pay_for_resource, print_resources, take_resource,
-    ConversionTime, Resource, ResourceConversion, Resources,
+    ConversionTime, Resource, ResourceConversion, Resources, RESOURCE_NAMES,
 };
 use crate::scoring;
 use std::cmp;
@@ -126,19 +126,17 @@ impl Player {
             - self.unfenced_stables
     }
 
-    pub fn harvest_fields(&mut self) -> (u32, u32) {
-        let mut harvested_grain = 0;
-        let mut harvested_veg = 0;
+    pub fn harvest_fields(&mut self) {
         for f in &mut self.fields {
             match f.seed {
                 PlantedSeed::Grain => {
                     //print!("\nGrain harvested!");
-                    harvested_grain += 1;
+                    self.resources[Resource::Grain] += 1;
                     f.amount -= 1;
                 }
                 PlantedSeed::Vegetable => {
                     //print!("\nVegetable harvested!");
-                    harvested_veg += 1;
+                    self.resources[Resource::Vegetable] += 1;
                     f.amount -= 1;
                 }
                 _ => (),
@@ -147,91 +145,140 @@ impl Player {
                 f.seed = PlantedSeed::Empty;
             }
         }
-        (harvested_grain, harvested_veg)
     }
 
     pub fn kind(&self) -> PlayerKind {
         self.kind.clone()
     }
 
-    // TODO : Do this generically
-    pub fn harvest(&mut self, debug: bool) {
-        let food_required = 2 * self.adults + self.children;
-
-        // Harvest grain and veggies
-        let (gr, veg) = self.harvest_fields();
-        self.resources[Resource::Grain] += gr;
-        self.resources[Resource::Vegetable] += veg;
-
-        // Move animals to the resources array if some of them need to be cooked
-        if food_required > self.resources[Resource::Food] {
-            self.add_animals_in_pastures_to_resources();
-        }
-
-        // If food isn't enough, try and convert some resources
-        while food_required > self.resources[Resource::Food] {
-            let mut found = false;
-            for conv in &mut self.conversions {
-                if conv.can_convert(&self.resources, &ConversionTime::Harvest) {
-                    //print!("\nUsing conversion {:?}", conv);
-                    conv.convert_once(&mut self.resources, &ConversionTime::Harvest);
-                    found = true;
-                }
-                if food_required <= self.resources[Resource::Food] {
-                    break;
-                }
-            }
-
-            if !found {
-                break;
-            }
-        }
-
-        // Reset conversions
-        for conv in &mut self.conversions {
-            conv.reset();
-        }
-
-        // Breed animals
-        if self.resources[Resource::Sheep] > 1 {
+    // Call after moving animals from pastures to resources and then move them back
+    fn breed_animals(res: &mut Resources, debug: bool) {
+        if res[Resource::Sheep] > 1 {
             if debug {
                 print!("\nBreeding Sheep!");
             }
-            self.resources[Resource::Sheep] += 1;
+            res[Resource::Sheep] += 1;
         }
 
-        if self.resources[Resource::Pigs] > 1 {
+        if res[Resource::Pigs] > 1 {
             if debug {
                 print!("\nBreeding Pigs!");
             }
-            self.resources[Resource::Pigs] += 1;
+            res[Resource::Pigs] += 1;
         }
 
-        if self.resources[Resource::Cattle] > 1 {
+        if res[Resource::Cattle] > 1 {
             if debug {
                 print!("\nBreeding Cattle!");
             }
-            self.resources[Resource::Cattle] += 1;
+            res[Resource::Cattle] += 1;
+        }
+    }
+
+    fn optimize_converting_resources_to_food(&mut self, debug: bool, conv_time: &ConversionTime) {
+        let mut max_res_to_convert_map = new_res();
+        let mut res_value_map = new_res();
+        for conv in &self.conversions {
+            if let Some(ret) = conv.conversion_options(&self.resources, conv_time) {
+                max_res_to_convert_map[ret.0.clone()] = ret.2;
+                res_value_map[ret.0.clone()] = cmp::max(res_value_map[ret.0.clone()], ret.1);
+            }
         }
 
-        // Place animals back in pastures
-        self.reorg_animals(true);
+        // Converts resources to food, one at a time, causing least changes to total score
+        let food_required = 2 * self.adults + self.children;
+        while food_required > self.resources[Resource::Food] {
+            let mut res_present = false;
+            let mut best_score: i32 = -1000000;
+            let mut best_resource_idx = 0;
 
+            for i in 0..max_res_to_convert_map.len() {
+                if max_res_to_convert_map[i] > 0 {
+                    res_present = true;
+                    // Test
+                    let mut tmp_player = self.clone();
+                    tmp_player.resources[Resource::Food] += res_value_map[i];
+                    tmp_player.resources[i] -= 1;
+                    tmp_player.breed_and_reorg_animals(false);
+                    let score = scoring::score_resources(&tmp_player, false);
+                    if score > best_score {
+                        best_score = score;
+                        best_resource_idx = i;
+                    }
+                }
+            }
+
+            // If no conversion possible, break
+            if !res_present {
+                break;
+            }
+
+            // Convert best resource
+            if debug {
+                print!(
+                    "\nConverting 1 {} to {} Food (Best Score {}).",
+                    RESOURCE_NAMES[best_resource_idx], res_value_map[best_resource_idx], best_score
+                );
+            }
+            self.resources[best_resource_idx] -= 1;
+            max_res_to_convert_map[best_resource_idx] -= 1;
+            self.resources[Resource::Food] += res_value_map[best_resource_idx];
+        }
+    }
+
+    pub fn harvest(&mut self, debug: bool) {
+        // Harvest grain and veggies
+        self.harvest_fields();
+
+        // Move all animals to the resources array
+        self.add_animals_in_pastures_to_resources();
+
+        // Convert resources to food if required
+        self.optimize_converting_resources_to_food(debug, &ConversionTime::Harvest);
+
+        // Breed animals and reorg them
+        self.breed_and_reorg_animals(debug);
+
+        // Pay for harvest
+        let food_required = 2 * self.adults + self.children;
         let food_provided = cmp::min(food_required, self.resources[Resource::Food]);
-        self.resources[Resource::Food] -= food_provided;
+
         if debug && food_required > food_provided {
             print!(
                 "\nBegging Tokens as {} food is missing :( ",
                 food_required - food_provided
             );
         }
+
+        self.resources[Resource::Food] -= food_provided;
         self.begging_tokens += food_required - food_provided;
+    }
+
+    pub fn breed_and_reorg_animals(&mut self, debug: bool) {
+        // Breed animals
+        Self::breed_animals(&mut self.resources, debug);
+
+        // Place animals back in pastures
+        self.reorg_animals(true);
     }
 
     fn num_free_animals(&self) -> u32 {
         self.resources[Resource::Sheep]
             + self.resources[Resource::Pigs]
             + self.resources[Resource::Cattle]
+    }
+
+    pub fn animals_as_resources(&self) -> Resources {
+        let mut res = self.resources;
+        for p in &self.pastures {
+            match p.animal {
+                Animal::Sheep => res[Resource::Sheep] += p.amount,
+                Animal::Pigs => res[Resource::Pigs] += p.amount,
+                Animal::Cattle => res[Resource::Cattle] += p.amount,
+                _ => (),
+            }
+        }
+        res
     }
 
     fn add_animals_in_pastures_to_resources(&mut self) {
@@ -684,7 +731,7 @@ impl Player {
             "Player ({}/{}) SCORE {} has ",
             self.people_placed,
             self.adults,
-            scoring::score(self)
+            scoring::score(self, false)
         );
         if self.children > 0 {
             print!("[{} Children]", self.children);

@@ -21,6 +21,8 @@ MCTS, on the other hand, makes no such assumptions. It is a purely knowledge-agn
 
 Agricola is a complex game with several actions within actions - which are known as split actions. MCTS is one of the few techniques that works with split action games as well.
 
+Agricola is also an 'imperfect information' game, where certain information about the future board state as well as player hands (Occupation and Minor Improvement cards) are hidden from other players. While forward simulating playouts for such games from the perspective of player A, care must be taken to sample hidden actions from the entire hidden state space for all other players apart from A, rather than only from their own possible hidden actions. This ensures that player A does not 'learn' about the strategies that follow after other players play a hidden card from their hand, way before they actually play it.
+
 ## How to Run
 
 To run the release version (assuming you have Rust installed), from the parent directory run 
@@ -84,4 +86,3 @@ LOC
 ```
 git ls-files | grep '\.rs' | xargs wc -l
 ```
-

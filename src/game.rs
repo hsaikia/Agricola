@@ -482,7 +482,7 @@ impl Game {
     pub fn scores(&self) -> Vec<i32> {
         let mut scores: Vec<i32> = Vec::new();
         for p in &self.players {
-            scores.push(scoring::score(p));
+            scores.push(scoring::score(p, false));
         }
         scores
     }

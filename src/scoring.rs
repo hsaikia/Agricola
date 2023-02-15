@@ -1,4 +1,4 @@
-use crate::farm::{Animal, House, PlantedSeed};
+use crate::farm::{House, PlantedSeed};
 use crate::major_improvements::{MajorImprovement, ALL_MAJORS};
 use crate::player::Player;
 use crate::primitives::Resource;
@@ -19,7 +19,7 @@ fn calc_score(num: usize, scores: &[i32]) -> i32 {
     }
 }
 
-fn score_plants(player: &Player) -> i32 {
+fn score_plants(player: &Player, debug: bool) -> i32 {
     let mut num_grain: usize = 0;
     let mut num_veg: usize = 0;
     for field in &player.fields {
@@ -31,28 +31,39 @@ fn score_plants(player: &Player) -> i32 {
     }
     num_grain += player.resources[Resource::Grain] as usize;
     num_veg += player.resources[Resource::Vegetable] as usize;
+    let gr_score = calc_score(num_grain, &GRAIN_SCORE);
+    let veg_score = calc_score(num_veg, &VEGETABLE_SCORE);
 
-    calc_score(num_grain, &GRAIN_SCORE) + calc_score(num_veg, &VEGETABLE_SCORE)
-}
-
-fn score_animals(player: &Player) -> i32 {
-    // All animals kept as pets and in unfenced stables
-    let mut num_sheep = player.resources[Resource::Sheep];
-    let mut num_pigs = player.resources[Resource::Pigs];
-    let mut num_cattle = player.resources[Resource::Cattle];
-
-    for pasture in &player.pastures {
-        match pasture.animal {
-            Animal::Sheep => num_sheep += pasture.amount,
-            Animal::Pigs => num_pigs += pasture.amount,
-            Animal::Cattle => num_cattle += pasture.amount,
-            _ => (),
-        }
+    if debug {
+        print!(
+            "\nScoring {} Grain {} and {} Veggies {}.",
+            num_grain, gr_score, num_veg, veg_score
+        );
     }
 
-    calc_score(num_sheep as usize, &SHEEP_SCORE)
-        + calc_score(num_pigs as usize, &PIGS_SCORE)
-        + calc_score(num_cattle as usize, &CATTLE_SCORE)
+    gr_score + veg_score
+}
+
+fn score_animals(player: &Player, debug: bool) -> i32 {
+    // All animals kept as pets and in unfenced stables
+    let res = player.animals_as_resources();
+    let sh_score = calc_score(res[Resource::Sheep] as usize, &SHEEP_SCORE);
+    let pig_score = calc_score(res[Resource::Pigs] as usize, &PIGS_SCORE);
+    let cow_score = calc_score(res[Resource::Cattle] as usize, &CATTLE_SCORE);
+
+    if debug {
+        print!(
+            "\nScoring {} Sheep {}. {} Pigs {}. {} Cows {}.",
+            res[Resource::Sheep],
+            sh_score,
+            res[Resource::Pigs],
+            pig_score,
+            res[Resource::Cattle],
+            cow_score
+        );
+    }
+
+    sh_score + pig_score + cow_score
 }
 
 fn score_fields(player: &Player) -> i32 {
@@ -70,7 +81,11 @@ fn score_pastures(player: &Player) -> i32 {
     ret
 }
 
-fn score_house_family_empty_spaces_begging(player: &Player) -> i32 {
+fn score_begging_tokens(player: &Player) -> i32 {
+    -3 * player.begging_tokens as i32
+}
+
+fn score_house_family_empty_spaces(player: &Player) -> i32 {
     let mut ret: i32 = 0;
 
     // House
@@ -86,25 +101,11 @@ fn score_house_family_empty_spaces_begging(player: &Player) -> i32 {
     // Empty spaces
     ret -= player.empty_farmyard_spaces() as i32;
 
-    // Begging Tokens
-    ret -= 3 * player.begging_tokens as i32;
     ret
 }
 
-pub fn score(player: &Player) -> i32 {
+fn score_cards(player: &Player) -> i32 {
     let mut ret: i32 = 0;
-
-    // Fields
-    ret += score_fields(player);
-    // Pastures
-    ret += score_pastures(player);
-    // Grain and Veggies
-    ret += score_plants(player);
-    // Animals
-    ret += score_animals(player);
-    // House, Family and Empty Spaces
-    ret += score_house_family_empty_spaces_begging(player);
-
     // Score Majors
     for (i, e) in player.major_cards.iter().enumerate() {
         if !e {
@@ -142,8 +143,34 @@ pub fn score(player: &Player) -> i32 {
             _ => (),
         }
     }
+    ret
+}
 
+pub fn score_resources(player: &Player, debug: bool) -> i32 {
+    let mut ret: i32 = 0;
+    // Grain and Veggies
+    ret += score_plants(player, debug);
+    // Animals
+    ret += score_animals(player, debug);
+    // Score cards
+    ret += score_cards(player);
+
+    ret
+}
+
+pub fn score(player: &Player, debug: bool) -> i32 {
+    let mut ret: i32 = 0;
+
+    // Fields
+    ret += score_fields(player);
+    // Pastures
+    ret += score_pastures(player);
+    // House, Family and Empty Spaces
+    ret += score_house_family_empty_spaces(player);
+    // All resources
+    ret += score_resources(player, debug);
+    // Begging Tokens
+    ret += score_begging_tokens(player);
     // TODO Score minors/occs
-
     ret
 }
