@@ -136,12 +136,20 @@ impl Game {
                             self.apply_action(&actions[action_idx], debug);
                         }
                         PlayerKind::Human => {
-                            println!("\n\nAvailable actions {:?}", actions);
-                            let stdin = io::stdin();
+                            print!("\n\nAvailable actions : ");
+                            for (i, e) in actions.iter().enumerate() {
+                                print!(", {}:{}", i, self.spaces[e[0]].name);
+                                if e.len() > 1 {
+                                    print!("{:?}", e[1])
+                                }
+                            }
+
                             print!(
-                                "Enter an action index between 0 and {} inclusive : ",
+                                "\nEnter an action index between 0 and {} inclusive : ",
                                 actions.len()
                             );
+
+                            let stdin = io::stdin();
                             let mut user_input = String::new();
                             let _res = stdin.read_line(&mut user_input);
 
@@ -181,7 +189,7 @@ impl Game {
                                     // Play the game out until the end
                                     tmp_game.play(false);
                                     // Sum resultant values
-                                    sum += tmp_game.win_loss()[self.current_player_idx];
+                                    sum += tmp_game.fitness()[self.current_player_idx];
                                 }
                                 let avg = sum as f32 / num_games as f32;
 
@@ -390,6 +398,14 @@ impl Game {
                     if !player.can_renovate() {
                         continue;
                     }
+                    // Check if after renovating there are enough resources left to play a minor
+                    let mut res = player.resources; // Copy
+                    pay_for_resource(&player.renovation_cost, &mut res);
+                    additional_subsequent_choices = MajorImprovement::available_majors_to_build(
+                        &player.major_cards,
+                        &self.major_improvements,
+                        &res,
+                    );
                 }
                 ActionSpace::Cultivation => {
                     if !player.can_add_new_field() && !player.can_sow() {
@@ -400,14 +416,6 @@ impl Game {
                     if !player.can_renovate() {
                         continue;
                     }
-                    // Check if after renovating there are enough resources left to play a minor
-                    let mut res = player.resources; // Copy
-                    pay_for_resource(&player.renovation_cost, &mut res);
-                    additional_subsequent_choices = MajorImprovement::available_majors_to_build(
-                        &player.major_cards,
-                        &self.major_improvements,
-                        &res,
-                    );
                 }
                 ActionSpace::UrgentWishForChildren => {
                     if !player.can_grow_family_without_room() {
@@ -622,9 +630,9 @@ impl Game {
         for i in 0..self.next_visible_idx {
             let space = &self.spaces[i];
             if space.occupied {
-                print!("\n[X] {}.{} is occupied", i, &space.name);
+                print!("\n[X] {} is occupied", &space.name);
             } else {
-                print!("\n[-] {}.{} ", i, &space.name);
+                print!("\n[-] {} ", &space.name);
                 print_resources(&space.resource);
             }
         }

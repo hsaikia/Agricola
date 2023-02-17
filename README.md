@@ -62,11 +62,12 @@ Fitness [3, -3, -10, -7]
 
 ## TODO
 
-- Currently a lot of decisions within an action, like major improvement build is random. Implement 'within action decisions' such as best major to build, best resource conversion during harvest or best fencing arrangements using the same MCTS strategy.
+- Best fencing arrangements instead of same structure.
+- Best sowing strategy according to score.
+- Best farm expansion strategy using MCTS.
 - Implement OCCs.
 - Implement Minors.
 - Implement pure MCTS.
-- Implement generic actions for fencing, farm expansion etc.
 
 MCTS Strategy
 
