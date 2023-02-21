@@ -36,42 +36,34 @@ where you can specify the number of players and whether the first player is a hu
 
 ## Results
 
-Results from a game played by 4 Random AI agents. The Random AI calculates a winrate from 5000 random playouts from each action, and picks the action with the best winrate.
+Results from a game played by 4 MCTS AI agents. A total of 10000 simulations are performed for each move.
 
 ```
-0.Player (3/3) SCORE 29 has [4 Wd][5 Gr][2 Room Wood House][Pastures [2 + S => 4 Cow(s)][2 + S => 3 Pig(s)][1 + S => 1 Sheep]][Fields [1G][1G][0][0][1G]][WL]
-1.Player (3/3) SCORE 26 has [1 Children][7 Cl][1 St][1 Rd][5 Gr][3 Vg][1 Sheep][2 Room Stone House][Pastures [2 + S => 3 Pig(s)]][Fields [0][0][0]][1 UF Stables][CH4][PY]
-2.Player (2/2) SCORE 18 has [7 Wd][2 Rd][1 Gr][3 Vg][2 Room Wood House][Pastures [2 => 4 Sheep][2 => 1 Cow(s)][1][1]][Fields [0][0]][FP2][JY][X]
-3.Player (2/2) SCORE 33 has [1 Cl][10 Rd][2 Gr][2 Vg][2 Room Clay House][Pastures [2 => 4 Pig(s)][2 => 1 Cow(s)][1 => 1 Sheep][1 => 1 Pig(s)]][Fields [0][1G][0][1G][2G][1V]][CO][BMW][S]
-Time elapsed: 222.746135375s
-Scores [29, 26, 18, 33]
-Fitness [-4, -7, -15, 4]
-```
-
-From only 100 random playouts
-
-```
-0.Player (3/3) SCORE 29 has [1 Children][1 St][1 Rd][9 Gr][4 Vg][1 Sheep][2 Room Wood House][Pastures [2 => 4 Sheep][2 => 3 Pig(s)][1]][Fields [1G][0][0][1G][0][0]][FP2][S]
-1.Player (2/2) SCORE 26 has [8 Wd][1 Gr][2 Vg][2 Room Clay House][Pastures [2 + S => 3 Pig(s)][2 + S][1 + S][1 + S]][Fields [1V][0][1G][2G]][JY][X]
-2.Player (2/2) SCORE 19 has [7 Cl][1 St][2 Gr][4 Vg][1 Sheep][2 Room Stone House][Pastures [1 => 2 Cow(s)]][Fields [0][0][0]][CH4][CO][PY]
-3.Player (2/2) SCORE 22 has [1 Fd][1 St][5 Rd][1 Gr][2 Vg][2 Sheep][2 Room Clay House][Pastures [2 + S => 3 Cow(s)][2 + S => 3 Pig(s)]][Fields [1V][2G]][1 UF Stables][FP3][BMW]
-Time elapsed: 4.477189375s
-Scores [29, 26, 19, 22]
-Fitness [3, -3, -10, -7]
+0.Player (2/2) SCORE 22 has [11 Wd][7 Cl][1 Rd][1 Gr][1 Vg][2 Room Clay House][Pastures [2 => 4 Sheep][2 => 1 Cow(s)][1 => 1 Pig(s)][1 => 2 Sheep]][CH4][JY][PY]
+1.Player (3/3) SCORE 38 has [1 Children][1 Cl][5 Rd][3 Vg][2 Room Clay House][Pastures [2 => 4 Pig(s)][2 => 4 Sheep][1 => 1 Cow(s)][1 => 1 Pig(s)]][Fields [0][0][0][1V][0][2G]][FP3][BMW][S]
+2.Player (2/2) SCORE 27 has [5 Gr][2 Vg][1 Pig][2 Room Wood House][Pastures [2 + S => 8 Sheep][2 => 4 Cow(s)]][Fields [1G][1V][0][2G][0][1V]][FP2][X]
+3.Player (2/2) SCORE 26 has [6 Fd][1 Cl][1 Rd][4 Gr][3 Vg][1 Sheep][2 Room Clay House][Pastures [2 => 4 Sheep][2 => 1 Pig(s)][1]][Fields [0][1G][0][1G][0]][WL][CO]
+Time elapsed: 432.691308125s
+Scores [22, 38, 27, 26]
+Fitness [-16, 11, -11, -12]
 ```
 
 ## TODO
 
 - Best fencing arrangements instead of same structure.
 - Best sowing strategy according to score.
-- Best farm expansion strategy using MCTS.
 - Implement OCCs.
 - Implement Minors.
-- Implement pure MCTS.
 
-MCTS Strategy
+### MCTS Strategy
 
 - Randomly sample `n` immediate actions for each action. This is to identify all possible split actions. For example, for a build Improvements action, one can build one of several possible improvements. Similarly paying for harvest can be done in one of many different possible ways. A branch should exist for each such choice that exists within an action. One option is to enumerate this tree in a deterministic way. Another is to sample `n` number of times until all choices are revealed. 
+
+- From [this article](https://stackoverflow.com/questions/36664993/mcts-uct-with-a-scoring-system) the Upper Confidence Bound for choosing a move in the MCTS strategy can be modified to use scores rather than win-rate. 
+
+The win-rate formula picks a move with the following probability : w_i / n_i + sqrt(2 * N_i / n_i). 
+
+The score/fitness probability can be given as (x_i - a_i) / (b_i - a_i) + sqrt(2 * N_i / n_i) so that the win-rate is again normalized.
 
 ## Misc commands
 

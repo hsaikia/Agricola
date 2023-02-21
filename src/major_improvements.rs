@@ -35,7 +35,7 @@ impl MajorImprovement {
         majors_owned: &[bool; ALL_MAJORS.len()],
         majors_on_board: &[bool; ALL_MAJORS.len()],
         resources: &Resources,
-    ) -> Vec<usize> {
+    ) -> Vec<Vec<usize>> {
         // If one of the FPs are already built
         let fp2_built: bool = majors_owned[MajorImprovement::Fireplace2.index()];
         let fp3_built: bool = majors_owned[MajorImprovement::Fireplace3.index()];
@@ -87,7 +87,7 @@ impl MajorImprovement {
 
         for (i, e) in available.iter().enumerate() {
             if *e {
-                available_indices.push(i);
+                available_indices.push(vec![i]);
             }
         }
 

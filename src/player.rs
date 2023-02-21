@@ -41,6 +41,7 @@ pub enum PlayerKind {
     Human,
     Machine,
     RandomMachine, // Random
+    MCTSMachine,
 }
 
 #[derive(Clone, Hash)]
@@ -610,6 +611,8 @@ impl Player {
                 self.house = House::Clay;
                 self.build_room_cost[Resource::Wood] = 0;
                 self.build_room_cost[Resource::Clay] = 5;
+                self.renovation_cost[Resource::Stone] = self.rooms;
+                self.renovation_cost[Resource::Clay] = 0;
             }
             House::Clay => {
                 self.house = House::Stone;
@@ -620,46 +623,6 @@ impl Player {
         }
     }
 
-    pub fn build_rooms(&mut self) {
-        assert!(self.can_build_rooms());
-        // TODO - this function should return a Choices array
-        // But we follow some convention for now
-        // Build as many rooms as possible
-        while self.can_build_rooms() {
-            pay_for_resource(&self.build_room_cost, &mut self.resources);
-            self.rooms += 1;
-
-            match self.house {
-                House::Wood => self.renovation_cost[Resource::Clay] += 1,
-                House::Clay => self.renovation_cost[Resource::Stone] += 1,
-                _ => (),
-            }
-        }
-    }
-
-    pub fn build_stables(&mut self) {
-        assert!(self.num_stables() < MAX_STABLES);
-        assert!(self.can_build_stables());
-        // TODO - this function should return a Choices array
-        // But we follow some convention for now
-        // Build as many stables as possible
-        while self.can_build_stables() {
-            pay_for_resource(&self.build_stable_cost, &mut self.resources);
-            // Add to pasture if possible, then unfenced
-            let mut found: bool = false;
-            for pasture in &mut self.pastures {
-                if pasture.stables == 0 {
-                    pasture.stables = 1;
-                    found = true;
-                    break;
-                }
-            }
-            if !found {
-                self.unfenced_stables += 1;
-            }
-        }
-    }
-
     pub fn can_renovate(&self) -> bool {
         if let House::Stone = self.house {
             return false;
@@ -667,14 +630,83 @@ impl Player {
         can_pay_for_resource(&self.renovation_cost, &self.resources)
     }
 
-    pub fn can_build_rooms(&self) -> bool {
+    pub fn all_possible_room_stable_builds(&self) -> Vec<Vec<usize>> {
+        let mut ret = Vec::new();
+        for num_rooms in 0..FARMYARD_SPACES {
+            for num_stables in 0..MAX_STABLES {
+                if num_rooms == 0 && num_stables == 0 {
+                    continue;
+                }
+
+                let mut tmp_player = self.clone();
+                let mut rooms_failed = false;
+                let mut stables_failed = false;
+                for _ in 0..num_rooms {
+                    if tmp_player.can_build_room() {
+                        tmp_player.build_room();
+                    } else {
+                        rooms_failed = true;
+                    }
+                }
+                for _ in 0..num_stables {
+                    if tmp_player.can_build_stable() {
+                        tmp_player.build_stable();
+                    } else {
+                        stables_failed = true;
+                    }
+                }
+
+                if rooms_failed && stables_failed {
+                    return ret;
+                }
+                if !rooms_failed && !stables_failed {
+                    ret.push(vec![num_rooms as usize, num_stables as usize]);
+                }
+            }
+        }
+        ret
+    }
+
+    // Builds a single room
+    pub fn build_room(&mut self) {
+        assert!(self.can_build_room());
+        pay_for_resource(&self.build_room_cost, &mut self.resources);
+        self.rooms += 1;
+
+        match self.house {
+            House::Wood => self.renovation_cost[Resource::Clay] += 1,
+            House::Clay => self.renovation_cost[Resource::Stone] += 1,
+            _ => (),
+        }
+    }
+
+    pub fn can_build_room(&self) -> bool {
         if self.empty_farmyard_spaces() == 0 {
             return false;
         }
         can_pay_for_resource(&self.build_room_cost, &self.resources)
     }
 
-    pub fn can_build_stables(&self) -> bool {
+    // Builds a single stable
+    pub fn build_stable(&mut self) {
+        assert!(self.num_stables() < MAX_STABLES);
+        assert!(self.can_build_stable());
+        pay_for_resource(&self.build_stable_cost, &mut self.resources);
+        // Add to pasture if possible, then unfenced
+        let mut found: bool = false;
+        for pasture in &mut self.pastures {
+            if pasture.stables == 0 {
+                pasture.stables = 1;
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            self.unfenced_stables += 1;
+        }
+    }
+
+    pub fn can_build_stable(&self) -> bool {
         if self.num_stables() >= MAX_STABLES {
             return false;
         }
