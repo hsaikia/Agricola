@@ -36,16 +36,14 @@ where you can specify the number of players and whether the first player is a hu
 
 ## Results
 
-Results from a game played by 4 MCTS AI agents. A total of 10000 simulations are performed for each move.
+Results from a game played by 2 MCTS AI agents. A total of 10000 simulations are performed for each move.
 
 ```
-0.Player (2/2) SCORE 22 has [11 Wd][7 Cl][1 Rd][1 Gr][1 Vg][2 Room Clay House][Pastures [2 => 4 Sheep][2 => 1 Cow(s)][1 => 1 Pig(s)][1 => 2 Sheep]][CH4][JY][PY]
-1.Player (3/3) SCORE 38 has [1 Children][1 Cl][5 Rd][3 Vg][2 Room Clay House][Pastures [2 => 4 Pig(s)][2 => 4 Sheep][1 => 1 Cow(s)][1 => 1 Pig(s)]][Fields [0][0][0][1V][0][2G]][FP3][BMW][S]
-2.Player (2/2) SCORE 27 has [5 Gr][2 Vg][1 Pig][2 Room Wood House][Pastures [2 + S => 8 Sheep][2 => 4 Cow(s)]][Fields [1G][1V][0][2G][0][1V]][FP2][X]
-3.Player (2/2) SCORE 26 has [6 Fd][1 Cl][1 Rd][4 Gr][3 Vg][1 Sheep][2 Room Clay House][Pastures [2 => 4 Sheep][2 => 1 Pig(s)][1]][Fields [0][1G][0][1G][0]][WL][CO]
-Time elapsed: 432.691308125s
-Scores [22, 38, 27, 26]
-Fitness [-16, 11, -11, -12]
+0.👤👤👤/ (48) | [👶][🪵🪵🪵🪵🪵🪵🪵🪵🪵🪵🪵🪵🪵🪵🪵🪵🪵🪵🪵][🧱🧱🧱🧱🧱🧱🧱🧱🧱🧱🧱🧱🧱🧱🧱][🌾][🥦🥦][🐄][🏰🏰][⭕⭕ ⛺ => 🐖🐖🐖🐖🐖🐖][⭕⭕ ⛺ => 🐑🐑🐑🐑🐑🐑][⭕ ⛺ => 🐄🐄🐄🐄][⭕][🟩][🟩][🟩][🟩][🟩][FP2][JY][PY][S]
+1.👤👤/ (37) | [🪨][🌾🌾][🥦🥦🥦🥦][🐖][🏠🏠][⭕⭕ ⛺ => 🐑🐑🐑🐑🐑🐑🐑][⭕⭕ ⛺ => 🐄🐄🐄🐄🐄][⭕ ⛺ => 🐖🐖🐖🐖][⭕][🌾][🟩][🌾][🌾🌾][🟩][🥦][🌾🌾][CH4][X]
+Time elapsed: 155.402726291s
+Scores [48, 37]
+Fitness [11, -11]
 ```
 
 ## TODO

@@ -5,11 +5,27 @@ pub enum House {
     Stone,
 }
 
+pub fn house_emoji(house: &House) -> &str {
+    match house {
+        House::Wood => "\u{1f6d6}",
+        House::Clay => "\u{1f3e0}",
+        House::Stone => "\u{1f3f0}",
+    }
+}
+
 #[derive(Clone, Hash)]
 pub enum PlantedSeed {
     Empty,
     Grain,
     Vegetable,
+}
+
+fn seed_emoji(seed: &PlantedSeed) -> &str {
+    match seed {
+        PlantedSeed::Grain => "\u{1f33e}",
+        PlantedSeed::Vegetable => "\u{1f966}",
+        _ => "",
+    }
 }
 
 #[derive(Clone, Hash)]
@@ -18,6 +34,15 @@ pub enum Animal {
     Sheep,
     Pigs,
     Cattle,
+}
+
+fn animal_emoji(animal: &Animal) -> &str {
+    match animal {
+        Animal::Sheep => "\u{1f411}",
+        Animal::Pigs => "\u{1f416}",
+        Animal::Cattle => "\u{1f404}",
+        _ => "",
+    }
 }
 
 #[derive(Clone, Hash)]
@@ -38,10 +63,10 @@ impl Field {
     }
 
     pub fn display(&self) {
-        match self.seed {
-            PlantedSeed::Empty => print!("[0]"),
-            PlantedSeed::Grain => print!("[{}G]", self.amount),
-            PlantedSeed::Vegetable => print!("[{}V]", self.amount),
+        if self.amount > 0 {
+            print!("[{}]", seed_emoji(&self.seed).repeat(self.amount as usize));
+        } else {
+            print!("[\u{1f7e9}]");
         }
     }
 }
@@ -87,20 +112,18 @@ impl Pasture {
 
     pub fn display(&self) {
         print!("[");
-        print!("{}", self.farmyard_spaces);
+        print!("{}", "\u{2b55}".repeat(self.farmyard_spaces as usize));
         if self.stables > 0 {
-            print!(" + ");
+            print!(" ");
             for _ in 0..self.stables {
-                print!("S");
+                print!("\u{26fa}");
             }
         }
         if self.amount > 0 {
-            match self.animal {
-                Animal::Sheep => print!(" => {} Sheep", self.amount),
-                Animal::Pigs => print!(" => {} Pig(s)", self.amount),
-                Animal::Cattle => print!(" => {} Cow(s)", self.amount),
-                _ => (),
-            }
+            print!(
+                " => {}",
+                animal_emoji(&self.animal).repeat(self.amount as usize)
+            );
         }
         print!("]");
     }

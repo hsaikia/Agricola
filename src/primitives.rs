@@ -18,7 +18,16 @@ pub enum Resource {
 
 const NUM_RESOURCES: usize = 10;
 pub const RESOURCE_NAMES: [&str; NUM_RESOURCES] = [
-    "Fd", "Wd", "Cl", "St", "Rd", "Gr", "Vg", "Sheep", "Pig", "Cow",
+    "\u{1f372}",
+    "\u{1fab5}",
+    "\u{1f9f1}",
+    "\u{1faa8}",
+    "\u{1f532}",
+    "\u{1f33e}",
+    "\u{1f966}",
+    "\u{1f411}",
+    "\u{1f416}",
+    "\u{1f404}",
 ];
 pub type Resources = [u32; NUM_RESOURCES];
 
@@ -42,7 +51,8 @@ impl IndexMut<Resource> for Resources {
 pub fn print_resources(res: &Resources) {
     for i in 0..NUM_RESOURCES {
         if res[i] > 0 {
-            print!("[{} {}]", res[i], RESOURCE_NAMES[i]);
+            //print!("[{} {}]", res[i], RESOURCE_NAMES[i]);
+            print!("[{}]", RESOURCE_NAMES[i].repeat(res[i] as usize));
         }
     }
 }

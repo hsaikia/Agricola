@@ -1,4 +1,4 @@
-use crate::farm::{Animal, Field, House, Pasture, PlantedSeed};
+use crate::farm::{house_emoji, Animal, Field, House, Pasture, PlantedSeed};
 use crate::major_improvements::{MajorImprovement, ALL_MAJORS};
 use crate::primitives::{
     can_pay_for_resource, new_res, pay_for_resource, print_resources, take_resource,
@@ -760,45 +760,35 @@ impl Player {
 
     pub fn display(&self) {
         print!(
-            "Player ({}/{}) SCORE {} has ",
-            self.people_placed,
-            self.adults,
+            "{}/{} ({}) | ",
+            "\u{1f464}".repeat(self.people_placed as usize),
+            "\u{1f464}".repeat((self.adults - self.people_placed) as usize),
             scoring::score(self, false)
         );
         if self.children > 0 {
-            print!("[{} Children]", self.children);
+            print!("[{}]", "\u{1f476}".repeat(self.children as usize));
         }
         if self.begging_tokens > 0 {
-            print!("[{} :(]", self.begging_tokens);
+            print!("[{}]", "\u{1f37d}".repeat(self.begging_tokens as usize));
         }
         print_resources(&self.resources);
 
-        print!("[{} Room ", self.rooms);
-        match self.house {
-            House::Wood => print!("Wood"),
-            House::Clay => print!("Clay"),
-            House::Stone => print!("Stone"),
-        }
-        print!(" House]");
+        print!("[{}]", house_emoji(&self.house).repeat(self.rooms as usize));
 
         if !self.pastures.is_empty() {
-            print!("[Pastures ");
             for p in &self.pastures {
                 p.display();
             }
-            print!("]");
         }
 
         if !self.fields.is_empty() {
-            print!("[Fields ");
             for f in &self.fields {
                 f.display();
             }
-            print!("]");
         }
-        let ns: u32 = self.unfenced_stables;
+        let ns: usize = self.unfenced_stables as usize;
         if ns > 0 {
-            print!("[{} UF Stables]", ns);
+            print!("[{}]", "\u{26fa}".repeat(ns));
         }
 
         for (i, e) in self.major_cards.iter().enumerate() {
