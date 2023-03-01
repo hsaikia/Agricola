@@ -36,18 +36,18 @@ where you can specify the number of players and whether the first player is a hu
 
 ## Results
 
-Results from a game played by 2 MCTS AI agents. A total of 10000 simulations are performed for each move.
+Results from a game played by 2 MCTS AI agents. A total of 20000 simulations are performed for each move.
 
 ```
-0.👤👤👤/ (48) | [👶][🪵🪵🪵🪵🪵🪵🪵🪵🪵🪵🪵🪵🪵🪵🪵🪵🪵🪵🪵][🧱🧱🧱🧱🧱🧱🧱🧱🧱🧱🧱🧱🧱🧱🧱][🌾][🥦🥦][🐄][🏰🏰][⭕⭕ ⛺ => 🐖🐖🐖🐖🐖🐖][⭕⭕ ⛺ => 🐑🐑🐑🐑🐑🐑][⭕ ⛺ => 🐄🐄🐄🐄][⭕][🟩][🟩][🟩][🟩][🟩][FP2][JY][PY][S]
-1.👤👤/ (37) | [🪨][🌾🌾][🥦🥦🥦🥦][🐖][🏠🏠][⭕⭕ ⛺ => 🐑🐑🐑🐑🐑🐑🐑][⭕⭕ ⛺ => 🐄🐄🐄🐄🐄][⭕ ⛺ => 🐖🐖🐖🐖][⭕][🌾][🟩][🌾][🌾🌾][🟩][🥦][🌾🌾][CH4][X]
-Time elapsed: 155.402726291s
-Scores [48, 37]
-Fitness [11, -11]
+0.👤👤👤/ (45) | [🍲][🪵][🧱][🪨][🍄🍄🍄🍄🍄][🌾🌾🌾][🥦🥦🥦][🏠🏠🏠][⭕⭕ ⛺ => 🐖🐖🐖🐖🐖🐖🐖][⭕⭕ ⛺ => 🐑🐑🐑🐑🐑🐑🐑][⭕ ⛺ => 🐄🐄🐄🐄][🟩][🥦][🥦][🟩][🟩][🌾][🌾🌾][CH4][BMW]
+1.👤👤👤/ (45) | [👶][🪵🪵🪵🪵🪵🪵🪵🪵🪵🪵🪵🪵🪵][🧱][🍄][🌾][🥦🥦][🏠🏠][⭕⭕ ⛺ => 🐑🐑🐑🐑🐑🐑][⭕⭕ ⛺ => 🐄🐄🐄][⭕ ⛺ => 🐖🐖🐖][⭕][🟩][🥦][🌾🌾][🟩][🌾][CH5][WL][JY][X][S]
+Time elapsed: 403.318707583s
+Scores [45, 45]
 ```
 
 ## TODO
 
+- Improve harvest algorithm - currently tends to consume the raw grain which could be sowed or baked next turn.
 - Best fencing arrangements instead of same structure.
 - Best sowing strategy according to score.
 - Implement OCCs.
@@ -59,9 +59,9 @@ Fitness [11, -11]
 
 - From [this article](https://stackoverflow.com/questions/36664993/mcts-uct-with-a-scoring-system) the Upper Confidence Bound for choosing a move in the MCTS strategy can be modified to use scores rather than win-rate. 
 
-The win-rate formula picks a move with the following probability : w_i / n_i + sqrt(2 * N_i / n_i). 
+The win-rate formula picks a move with the following probability : `w_i / n_i + sqrt(2 * N_i / n_i)`. 
 
-The score/fitness probability can be given as (x_i - a_i) / (b_i - a_i) + sqrt(2 * N_i / n_i) so that the win-rate is again normalized.
+The score/fitness probability can be given as `(x_i - a_i) / (b_i - a_i) + sqrt(2 * N_i / n_i)` so that the win-rate is again normalized.
 
 ## Misc commands
 

@@ -10,7 +10,8 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::io;
 
-const NUM_GAMES_TO_SIMULATE: usize = 10000;
+const NUM_GAMES_TO_SIMULATE: usize = 30000;
+const MCTS_EXPLORATION_PARAM: f32 = 2.0;
 
 #[derive(Clone, Hash)]
 pub enum ActionSpace {
@@ -145,7 +146,7 @@ impl GameState {
             // UCT constant is 2
             assert!(total > 0);
             let p = (fitness - min_fitness) / (max_fitness - min_fitness)
-                + f32::sqrt(2.0 * total as f32 / n as f32);
+                + f32::sqrt(MCTS_EXPLORATION_PARAM * total as f32 / n as f32);
 
             if p > highest_uct {
                 highest_uct = p;

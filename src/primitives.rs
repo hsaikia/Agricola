@@ -22,7 +22,7 @@ pub const RESOURCE_NAMES: [&str; NUM_RESOURCES] = [
     "\u{1fab5}",
     "\u{1f9f1}",
     "\u{1faa8}",
-    "\u{1f532}",
+    "\u{1f344}",
     "\u{1f33e}",
     "\u{1f966}",
     "\u{1f411}",
