@@ -1,6 +1,5 @@
 use std::cmp;
 use std::ops::{Index, IndexMut};
-pub const MAX_RESOURCE_TO_CONVERT: u32 = 1000; // Large enough number to simulate infinity
 
 #[derive(Clone, Debug, Hash)]
 pub enum Resource {
@@ -49,11 +48,9 @@ impl IndexMut<Resource> for Resources {
 }
 
 pub fn print_resources(res: &Resources) {
-    for i in 0..NUM_RESOURCES {
-        if res[i] > 0 {
-            //print!("[{} {}]", res[i], RESOURCE_NAMES[i]);
-            print!("[{}]", RESOURCE_NAMES[i].repeat(res[i] as usize));
-        }
+    let available = res.iter().enumerate().filter(|&(_, x)| x > &0);
+    for (i, n) in available {
+        print!("[{}]", RESOURCE_NAMES[i].repeat(*n as usize));
     }
 }
 
@@ -121,20 +118,8 @@ impl ResourceConversion {
 
     pub fn default_conversions() -> Vec<Self> {
         vec![
-            Self::food_conversion(
-                Resource::Grain,
-                1,
-                1,
-                MAX_RESOURCE_TO_CONVERT,
-                ConversionTime::Any,
-            ),
-            Self::food_conversion(
-                Resource::Vegetable,
-                1,
-                1,
-                MAX_RESOURCE_TO_CONVERT,
-                ConversionTime::Any,
-            ),
+            Self::food_conversion(Resource::Grain, 1, 1, u32::MAX, ConversionTime::Any),
+            Self::food_conversion(Resource::Vegetable, 1, 1, u32::MAX, ConversionTime::Any),
         ]
     }
 
@@ -143,7 +128,7 @@ impl ResourceConversion {
             Resource::Grain,
             1,
             1,
-            MAX_RESOURCE_TO_CONVERT,
+            u32::MAX,
             ConversionTime::Any,
         )]
     }
@@ -172,7 +157,7 @@ impl ResourceConversion {
             }
             ConversionTime::Bake => match self.conv_time {
                 ConversionTime::Harvest | ConversionTime::Any => return false,
-                _ => (),
+                ConversionTime::Bake => (),
             },
         }
         self.used < self.times && res[self.from.clone()] >= self.from_amt
@@ -180,13 +165,12 @@ impl ResourceConversion {
 
     pub fn convert_all(&mut self, res: &mut Resources, conv_time: &ConversionTime) {
         while self.can_convert(res, conv_time) {
-            self.convert_once(res, conv_time)
+            self.convert_once(res, conv_time);
         }
     }
 
     pub fn convert_once(&mut self, res: &mut Resources, conv_time: &ConversionTime) {
         if self.can_convert(res, conv_time) {
-            //print!("\nConverting a {:?} to {} Food.", &self.from, self.to_amt);
             res[self.from.clone()] -= self.from_amt;
             res[self.to.clone()] += self.to_amt;
             self.used += 1;

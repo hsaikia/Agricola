@@ -24,7 +24,7 @@ fn seed_emoji(seed: &PlantedSeed) -> &str {
     match seed {
         PlantedSeed::Grain => "\u{1f33e}",
         PlantedSeed::Vegetable => "\u{1f966}",
-        _ => "",
+        PlantedSeed::Empty => "\u{1f7e9}",
     }
 }
 
@@ -41,7 +41,7 @@ fn animal_emoji(animal: &Animal) -> &str {
         Animal::Sheep => "\u{1f411}",
         Animal::Pigs => "\u{1f416}",
         Animal::Cattle => "\u{1f404}",
-        _ => "",
+        Animal::Empty => "",
     }
 }
 
@@ -63,11 +63,12 @@ impl Field {
     }
 
     pub fn display(&self) {
-        if self.amount > 0 {
-            print!("[{}]", seed_emoji(&self.seed).repeat(self.amount as usize));
+        let reps: usize = if self.amount > 0 {
+            self.amount as usize
         } else {
-            print!("[\u{1f7e9}]");
-        }
+            1
+        };
+        print!("[{}]", seed_emoji(&self.seed).repeat(reps));
     }
 }
 

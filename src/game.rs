@@ -1,5 +1,5 @@
 use crate::major_improvements::{MajorImprovement, ALL_MAJORS};
-use crate::player::{Player, PlayerKind};
+use crate::player::{Kind, Player};
 use crate::primitives::{
     new_res, pay_for_resource, print_resources, take_resource, Resource, Resources,
 };
@@ -135,17 +135,19 @@ impl GameState {
         }
     }
 
+    #[allow(clippy::cast_precision_loss)]
     fn add_fitness(&mut self, fitness: &Vec<i32>) {
         assert!(fitness.len() == self.average_fitness.len());
-        for (i, f) in fitness.iter().enumerate() {
-            self.average_fitness[i] = (self.average_fitness[i] * self.total_games as f32
-                + *f as f32)
-                / (self.total_games + 1) as f32;
+
+        for it in fitness.iter().zip(self.average_fitness.iter_mut()) {
+            let (a, b) = it;
+            *b = (*b * self.total_games as f32 + *a as f32) / (self.total_games + 1) as f32;
         }
         self.total_games += 1;
     }
 
     // Returns index of the node to traverse
+    #[allow(clippy::cast_precision_loss)]
     fn choose_uct(
         player_to_play: usize,
         nodes: &Vec<u64>,
@@ -208,6 +210,7 @@ impl Game {
         first_player_idx: usize,
         num_players: usize,
         human_player: bool,
+        default_ai_id: usize,
     ) -> Game {
         let mut state = Game {
             spaces: p_spaces,
@@ -218,7 +221,7 @@ impl Game {
             next_visible_idx: 16,
             people_placed_this_round: 0,
         };
-        state.init_players(first_player_idx, num_players, human_player);
+        state.init_players(first_player_idx, num_players, human_player, default_ai_id);
         state
     }
 
@@ -228,198 +231,240 @@ impl Game {
         s.finish()
     }
 
-    pub fn play(&mut self, debug: bool) {
-        loop {
-            let maybe_actions = self.get_all_available_actions(debug);
-            if debug {
-                self.display();
+    fn play_random(&mut self, debug: bool) -> bool {
+        let maybe_actions = self.get_all_available_actions(debug);
+        if debug {
+            self.display();
+        }
+        if let Some(actions) = maybe_actions {
+            // Chose a random action
+            let action_idx = rand::thread_rng().gen_range(0..actions.len());
+            self.apply_action(&actions[action_idx], debug);
+            return true;
+        }
+        false
+    }
+
+    fn play_human(&mut self, debug: bool) -> bool {
+        let maybe_actions = self.get_all_available_actions(debug);
+        if debug {
+            self.display();
+        }
+        if let Some(actions) = maybe_actions {
+            print!("\n\nAvailable actions : ");
+            for (i, e) in actions.iter().enumerate() {
+                print!(
+                    ", {}:{}",
+                    i, &ACTION_SPACE_NAMES[&self.spaces[e[0]].action_space]
+                );
+                if e.len() > 1 {
+                    print!("{e:?}");
+                }
             }
-            match maybe_actions {
-                Some(actions) => {
-                    match self.player_kind() {
-                        PlayerKind::RandomMachine => {
-                            // Chose a random action
-                            let action_idx = rand::thread_rng().gen_range(0..actions.len());
-                            self.apply_action(&actions[action_idx], debug);
+
+            print!(
+                "\nEnter an action index between 0 and {} inclusive : ",
+                actions.len() - 1
+            );
+
+            let stdin = io::stdin();
+            let mut user_input = String::new();
+            let _res = stdin.read_line(&mut user_input);
+
+            match user_input.trim().parse::<usize>() {
+                Ok(input_int) => {
+                    println!("Your input [{input_int}]");
+
+                    if input_int >= actions.len() {
+                        println!("Invalid action .. quitting");
+                        return false;
+                    }
+
+                    self.apply_action(&actions[input_int], debug);
+                }
+                Err(_e) => return self.play_human(debug), // parsing failed - try again
+            }
+
+            return true;
+        }
+        false
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    fn play_machine_uniform(&mut self, debug: bool) -> bool {
+        let maybe_actions = self.get_all_available_actions(debug);
+        if debug {
+            self.display();
+        }
+        if let Some(actions) = maybe_actions {
+            // 1. Simulate n games from each action with each player replaced by a random move AI.
+            // 2. Compute the average score for each action from the n playouts.
+            // 3. Select the move that gives rise to the maximum average score.
+            let mut best_action_idx: usize = 0;
+            let mut best_average: f32 = f32::NEG_INFINITY;
+
+            let num_games_per_action: usize = NUM_GAMES_TO_SIMULATE / actions.len();
+
+            println!();
+            // Play n simulated games for each action
+            for (i, action) in actions.iter().enumerate() {
+                let mut sum = 0;
+                for _ in 0..num_games_per_action {
+                    // Clone the current game state
+                    let mut tmp_game = self.clone();
+                    // Play the current action
+                    tmp_game.apply_action(action, false);
+                    // Replace all players with a random move AI
+                    tmp_game.replace_all_players_with_random_bots();
+                    // Play the game out until the end
+                    tmp_game.play(false);
+                    // Sum resultant values
+                    sum += tmp_game.fitness()[self.current_player_idx];
+                }
+                let avg = sum as f32 / num_games_per_action as f32;
+
+                print!(
+                    "\nAvg score from {} simulated playouts for Action {}{:?} is {}.",
+                    num_games_per_action,
+                    &ACTION_SPACE_NAMES[&self.spaces[action[0]].action_space],
+                    action,
+                    avg
+                );
+
+                if avg > best_average {
+                    best_average = avg;
+                    best_action_idx = i;
+                }
+            }
+            self.apply_action(&actions[best_action_idx], debug);
+            return true;
+        }
+        false
+    }
+
+    fn play_machine_mcts(&mut self, debug: bool) -> bool {
+        let maybe_actions = self.get_all_available_actions(debug);
+        if debug {
+            self.display();
+        }
+        if let Some(actions) = maybe_actions {
+            let mut action_hashes: Vec<u64> = vec![];
+            // Add the child node hashes
+            for action in &actions {
+                let mut tmp_game = self.clone();
+                tmp_game.apply_action(action, false);
+                action_hashes.push(tmp_game.get_hash());
+            }
+
+            // Initialize cache
+            let mut mcts_cache: HashMap<u64, GameState> = HashMap::new();
+
+            for _g in 0..NUM_GAMES_TO_SIMULATE {
+                let sample_idx =
+                    GameState::choose_uct(self.current_player_idx, &action_hashes, &mcts_cache);
+                let mut tmp_game = self.clone();
+                tmp_game.apply_action(&actions[sample_idx], false);
+
+                //print!("\nGame {}", g);
+                let mut expand_node_hash = tmp_game.get_hash();
+                let mut path: Vec<u64> = vec![expand_node_hash];
+
+                // Expand along the tree
+                while mcts_cache.contains_key(&expand_node_hash) {
+                    // In Agricola - since the future board state changes randomly
+                    // get_all_available_actions can return different actions for the same current game state.
+                    let maybe_sub_actions = tmp_game.get_all_available_actions(false);
+                    if let Some(sub_actions) = maybe_sub_actions {
+                        // Generate all child hashes
+                        let mut sub_action_hashes: Vec<u64> = vec![];
+                        for sub_action in &sub_actions {
+                            let mut tmp_game2 = tmp_game.clone();
+                            tmp_game2.apply_action(sub_action, false);
+                            sub_action_hashes.push(tmp_game2.get_hash());
                         }
-                        PlayerKind::Human => {
-                            print!("\n\nAvailable actions : ");
-                            for (i, e) in actions.iter().enumerate() {
-                                print!(
-                                    ", {}:{}",
-                                    i, &ACTION_SPACE_NAMES[&self.spaces[e[0]].action_space]
-                                );
-                                if e.len() > 1 {
-                                    print!("{:?}", e)
-                                }
-                            }
-
-                            print!(
-                                "\nEnter an action index between 0 and {} inclusive : ",
-                                actions.len() - 1
-                            );
-
-                            let stdin = io::stdin();
-                            let mut user_input = String::new();
-                            let _res = stdin.read_line(&mut user_input);
-
-                            match user_input.trim().parse::<usize>() {
-                                Ok(input_int) => {
-                                    println!("Your input [{}]", input_int);
-
-                                    if input_int >= actions.len() {
-                                        println!("Invalid action.. quitting");
-                                        break;
-                                    }
-
-                                    self.apply_action(&actions[input_int], debug);
-                                }
-                                Err(_e) => continue,
-                            }
-                        }
-                        PlayerKind::Machine => {
-                            // 1. Simulate n games from each action with each player replaced by a random move AI.
-                            // 2. Compute the average score for each action from the n playouts.
-                            // 3. Select the move that gives rise to the maximum average score.
-                            let mut best_action_idx: usize = 0;
-                            let mut best_average: f32 = f32::NEG_INFINITY;
-
-                            let num_games_per_action: usize = NUM_GAMES_TO_SIMULATE / actions.len();
-
-                            println!();
-                            // Play n simulated games for each action
-                            for (i, action) in actions.iter().enumerate() {
-                                let mut sum = 0;
-                                for _ in 0..num_games_per_action {
-                                    // Clone the current game state
-                                    let mut tmp_game = self.clone();
-                                    // Play the current action
-                                    tmp_game.apply_action(action, false);
-                                    // Replace all players with a random move AI
-                                    tmp_game.replace_all_players_with_random_bots();
-                                    // Play the game out until the end
-                                    tmp_game.play(false);
-                                    // Sum resultant values
-                                    sum += tmp_game.fitness()[self.current_player_idx];
-                                }
-                                let avg = sum as f32 / num_games_per_action as f32;
-
-                                print!(
-                                    "\nAvg score from {} simulated playouts for Action {}{:?} is {}.",
-                                    num_games_per_action, &ACTION_SPACE_NAMES[&self.spaces[action[0]].action_space], action, avg
-                                );
-
-                                if avg > best_average {
-                                    best_average = avg;
-                                    best_action_idx = i;
-                                }
-                            }
-                            self.apply_action(&actions[best_action_idx], debug);
-                        }
-                        PlayerKind::MCTSMachine => {
-                            let mut action_hashes: Vec<u64> = vec![];
-                            // Add the child node hashes
-                            for action in &actions {
-                                let mut tmp_game = self.clone();
-                                tmp_game.apply_action(action, false);
-                                action_hashes.push(tmp_game.get_hash());
-                            }
-
-                            // Initialize cache
-                            let mut mcts_cache: HashMap<u64, GameState> = HashMap::new();
-
-                            for _g in 0..NUM_GAMES_TO_SIMULATE {
-                                let sample_idx = GameState::choose_uct(
-                                    self.current_player_idx,
-                                    &action_hashes,
-                                    &mcts_cache,
-                                );
-                                let mut tmp_game = self.clone();
-                                tmp_game.apply_action(&actions[sample_idx], false);
-
-                                //print!("\nGame {}", g);
-                                let mut expand_node_hash = tmp_game.get_hash();
-                                let mut path: Vec<u64> = vec![expand_node_hash];
-
-                                // Expand along the tree
-                                while mcts_cache.contains_key(&expand_node_hash) {
-                                    // In Agricola - since the future board state changes randomly
-                                    // get_all_available_actions can return different actions for the same current game state.
-                                    let maybe_sub_actions =
-                                        tmp_game.get_all_available_actions(false);
-                                    if let Some(sub_actions) = maybe_sub_actions {
-                                        // Generate all child hashes
-                                        let mut sub_action_hashes: Vec<u64> = vec![];
-                                        for sub_action in &sub_actions {
-                                            let mut tmp_game2 = tmp_game.clone();
-                                            tmp_game2.apply_action(sub_action, false);
-                                            sub_action_hashes.push(tmp_game2.get_hash());
-                                        }
-                                        let chosen_idx = GameState::choose_uct(
-                                            tmp_game.current_player_idx,
-                                            &sub_action_hashes,
-                                            &mcts_cache,
-                                        );
-                                        tmp_game.apply_action(&sub_actions[chosen_idx], false);
-                                        expand_node_hash = tmp_game.get_hash();
-                                        path.push(tmp_game.get_hash());
-                                    } else {
-                                        break;
-                                    }
-                                }
-                                // Add node to cache
-
-                                if let std::collections::hash_map::Entry::Vacant(e) =
-                                    mcts_cache.entry(expand_node_hash)
-                                {
-                                    e.insert(GameState::new(tmp_game.players.len()));
-                                }
-
-                                // Perform playout
-                                // Replace all players with a random move AI
-                                tmp_game.replace_all_players_with_random_bots();
-                                // Play the game out until the end
-                                tmp_game.play(false);
-                                // Calculate result and backpropagate to the root
-                                let res = tmp_game.fitness();
-                                for node in &path {
-                                    let mut state = mcts_cache[node].clone();
-                                    state.add_fitness(&res);
-                                    mcts_cache.insert(*node, state);
-                                }
-                            }
-
-                            print!("\nCache has {} entries", mcts_cache.len());
-
-                            // Choose the best move again according to UCT
-                            let mut best_action_idx: usize = 0;
-                            let mut best_fitness: f32 = f32::NEG_INFINITY;
-
-                            let mut total_games = 0;
-                            for (i, action) in actions.iter().enumerate() {
-                                let mut tmp_game = self.clone();
-                                tmp_game.apply_action(action, false);
-                                let action_hash = tmp_game.get_hash();
-
-                                let games: u32 = mcts_cache[&action_hash].total_games;
-                                total_games += games;
-                                let fitness: f32 = mcts_cache[&action_hash].average_fitness
-                                    [self.current_player_idx];
-                                if fitness > best_fitness {
-                                    best_fitness = fitness;
-                                    best_action_idx = i;
-                                }
-                                print!(
-                                    "\nFitness from {} simulated playouts for Action {}{:?} is {:.2}.",
-                                    games, &ACTION_SPACE_NAMES[&self.spaces[action[0]].action_space], action, fitness
-                                );
-                            }
-                            print!("\nTotal Games simulated {}.", total_games);
-                            self.apply_action(&actions[best_action_idx], debug);
-                        }
+                        let chosen_idx = GameState::choose_uct(
+                            tmp_game.current_player_idx,
+                            &sub_action_hashes,
+                            &mcts_cache,
+                        );
+                        tmp_game.apply_action(&sub_actions[chosen_idx], false);
+                        expand_node_hash = tmp_game.get_hash();
+                        path.push(tmp_game.get_hash());
+                    } else {
+                        break;
                     }
                 }
-                None => break,
+                // Add node to cache
+
+                if let std::collections::hash_map::Entry::Vacant(e) =
+                    mcts_cache.entry(expand_node_hash)
+                {
+                    e.insert(GameState::new(tmp_game.players.len()));
+                }
+
+                // Perform playout
+                // Replace all players with a random move AI
+                tmp_game.replace_all_players_with_random_bots();
+                // Play the game out until the end
+                tmp_game.play(false);
+                // Calculate result and backpropagate to the root
+                let res = tmp_game.fitness();
+                for node in &path {
+                    let mut state = mcts_cache[node].clone();
+                    state.add_fitness(&res);
+                    mcts_cache.insert(*node, state);
+                }
+            }
+
+            print!("\nCache has {} entries", mcts_cache.len());
+
+            // Choose the best move again according to UCT
+            let mut best_action_idx: usize = 0;
+            let mut best_fitness: f32 = f32::NEG_INFINITY;
+
+            let mut total_games = 0;
+            for (i, action) in actions.iter().enumerate() {
+                let mut tmp_game = self.clone();
+                tmp_game.apply_action(action, false);
+                let action_hash = tmp_game.get_hash();
+
+                let games: u32 = mcts_cache[&action_hash].total_games;
+                total_games += games;
+                let fitness: f32 =
+                    mcts_cache[&action_hash].average_fitness[self.current_player_idx];
+                if fitness > best_fitness {
+                    best_fitness = fitness;
+                    best_action_idx = i;
+                }
+                print!(
+                    "\nFitness from {} simulated playouts for Action {}{:?} is {:.2}.",
+                    games,
+                    &ACTION_SPACE_NAMES[&self.spaces[action[0]].action_space],
+                    action,
+                    fitness
+                );
+            }
+            print!("\nTotal Games simulated {total_games}.");
+            self.apply_action(&actions[best_action_idx], debug);
+            return true;
+        }
+        false
+    }
+
+    fn play_move(&mut self, debug: bool) -> bool {
+        match self.player_kind() {
+            Kind::RandomMachine => self.play_random(debug),
+            Kind::Human => self.play_human(debug),
+            Kind::UniformMachine => self.play_machine_uniform(debug),
+            Kind::MCTSMachine => self.play_machine_mcts(debug),
+        }
+    }
+
+    pub fn play(&mut self, debug: bool) {
+        loop {
+            let status = self.play_move(debug);
+            if !status {
+                break;
             }
         }
     }
@@ -473,8 +518,8 @@ impl Game {
         let space = &mut self.spaces[action_idx];
         if debug {
             print!(
-                "\nCurrent Player {} chooses action {} {:?}.",
-                self.current_player_idx, &ACTION_SPACE_NAMES[&space.action_space], action_vec
+                "\nCurrent Player {} chooses action {} {action_vec:?}.",
+                self.current_player_idx, &ACTION_SPACE_NAMES[&space.action_space]
             );
         }
 
@@ -492,7 +537,7 @@ impl Game {
         match space.action_space {
             // If animal accumulation space, re-org animals in the farm
             ActionSpace::SheepMarket | ActionSpace::PigMarket | ActionSpace::CattleMarket => {
-                player.reorg_animals(false)
+                player.reorg_animals(false);
             }
             // TODO also implement playing minor improvement here
             ActionSpace::MeetingPlace => self.starting_player_idx = self.current_player_idx,
@@ -562,7 +607,7 @@ impl Game {
 
     fn available_place_worker_actions(&self, _debug: bool) -> Vec<Vec<usize>> {
         let player = &self.players[self.current_player_idx];
-        let mut ret: Vec<Vec<usize>> = Vec::new();
+        let mut actions: Vec<Vec<usize>> = Vec::new();
         for i in 0..self.next_visible_idx {
             let mut additional_subsequent_choices: Vec<Vec<usize>> = Vec::new();
             let space = &self.spaces[i];
@@ -575,8 +620,7 @@ impl Game {
                         continue;
                     }
                 }
-                ActionSpace::Lessons1 => continue, // TODO Not implemented - action not available
-                ActionSpace::Lessons2 => continue, // TODO Not implemented - action not available
+                ActionSpace::Lessons1 | ActionSpace::Lessons2 => continue, // TODO Not implemented - action not available
                 ActionSpace::FarmExpansion => {
                     if !player.can_build_room() && !player.can_build_stable() {
                         continue;
@@ -643,26 +687,26 @@ impl Game {
                 _ => (),
             }
 
-            if !additional_subsequent_choices.is_empty() {
+            if additional_subsequent_choices.is_empty() {
+                actions.push(vec![i]);
+            } else {
                 for choices in additional_subsequent_choices {
                     let mut all_choices = vec![i];
                     all_choices.extend(choices);
-                    ret.push(all_choices);
+                    actions.push(all_choices);
                 }
-            } else {
-                ret.push(vec![i]);
             }
         }
-        ret
+        actions
     }
 
-    fn player_kind(&self) -> PlayerKind {
+    fn player_kind(&self) -> Kind {
         self.players[self.current_player_idx].kind()
     }
 
     fn replace_all_players_with_random_bots(&mut self) {
         for p in &mut self.players {
-            p.kind = PlayerKind::RandomMachine;
+            p.kind = Kind::RandomMachine;
         }
     }
 
@@ -675,8 +719,10 @@ impl Game {
 
         let mut fitness = scores.clone();
         let mut sorted_scores = scores;
-        // sort in decreasing order
-        sorted_scores.sort_by_key(|k| 1000000 - k);
+
+        // Sort in decreasing order
+        sorted_scores.sort_by_key(|k| -k);
+
         // Fitness of winner is defined by the margin of victory = so difference from own score and second best score
         // Fitness of losers are defined by the margin of defeat = so difference from own score and best score
         for f in &mut fitness {
@@ -705,7 +751,7 @@ impl Game {
     fn harvest(&mut self, debug: bool) {
         for (pi, p) in self.players.iter_mut().enumerate() {
             if debug {
-                print!("\nPlayer {} paying for harvest..", pi);
+                print!("\nPlayer {pi} paying for harvest..");
             }
             p.harvest(debug);
         }
@@ -722,11 +768,10 @@ impl Game {
         // 27 .. 28
         // 29
 
-        if self.next_visible_idx == 16 || self.next_visible_idx == 17 || self.next_visible_idx == 18
-        {
+        if [16, 17, 18].contains(&self.next_visible_idx) {
             let random_idx = rand::thread_rng().gen_range(self.next_visible_idx..20);
             self.spaces.swap(random_idx, self.next_visible_idx);
-        } else if self.next_visible_idx == 20 || self.next_visible_idx == 21 {
+        } else if [20, 21].contains(&self.next_visible_idx) {
             let random_idx = rand::thread_rng().gen_range(self.next_visible_idx..23);
             self.spaces.swap(random_idx, self.next_visible_idx);
         } else if self.next_visible_idx == 23 {
@@ -789,10 +834,7 @@ impl Game {
                 ActionSpace::ReedBank => {
                     res[Resource::Reed] += 1;
                 }
-                ActionSpace::TravelingPlayers => {
-                    res[Resource::Food] += 1;
-                }
-                ActionSpace::Fishing => {
+                ActionSpace::TravelingPlayers | ActionSpace::Fishing => {
                     res[Resource::Food] += 1;
                 }
                 ActionSpace::SheepMarket => {
@@ -804,10 +846,7 @@ impl Game {
                 ActionSpace::CattleMarket => {
                     res[Resource::Cattle] += 1;
                 }
-                ActionSpace::WesternQuarry => {
-                    res[Resource::Stone] += 1;
-                }
-                ActionSpace::EasternQuarry => {
+                ActionSpace::WesternQuarry | ActionSpace::EasternQuarry => {
                     res[Resource::Stone] += 1;
                 }
                 _ => (),
@@ -815,15 +854,24 @@ impl Game {
         }
     }
 
-    fn init_players(&mut self, first_idx: usize, num: usize, human_player: bool) {
+    fn init_players(
+        &mut self,
+        first_idx: usize,
+        num: usize,
+        human_player: bool,
+        default_ai_id: usize,
+    ) {
         for i in 0..num {
             let food = if i == first_idx { 2 } else { 3 };
             let player_kind = if human_player && i == 0 {
-                PlayerKind::Human
+                Kind::Human
             } else {
-                //PlayerKind::Machine
-                PlayerKind::MCTSMachine
-                //PlayerKind::RandomMachine
+                match default_ai_id {
+                    0 => Kind::RandomMachine,
+                    1 => Kind::UniformMachine,
+                    2 => Kind::MCTSMachine,
+                    _ => return,
+                }
             };
             let player = Player::create_new(food, player_kind);
             self.players.push(player);
@@ -856,7 +904,7 @@ impl Game {
         println!("\n\n-- Players --");
         for i in 0..self.players.len() {
             let p = &self.players[i];
-            print!("\nFarm {} ", i);
+            print!("\nFarm {i} ");
             if i == self.current_player_idx {
                 print!("[Turn]");
             }

@@ -37,9 +37,9 @@ lazy_static! {
 }
 
 #[derive(Clone, Hash)]
-pub enum PlayerKind {
+pub enum Kind {
     Human,
-    Machine,
+    UniformMachine,
     RandomMachine, // Random
     MCTSMachine,
 }
@@ -47,7 +47,7 @@ pub enum PlayerKind {
 #[derive(Clone, Hash)]
 pub struct Player {
     // Animals in this resources array are the ones that are pets in the house and the ones that are kept in unfenced stables
-    pub kind: PlayerKind,
+    pub kind: Kind,
     pub resources: Resources,
     people_placed: u32,
     adults: u32,
@@ -68,7 +68,7 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn create_new(food: u32, p_kind: PlayerKind) -> Self {
+    pub fn create_new(food: u32, p_kind: Kind) -> Self {
         let mut res = new_res();
         res[Resource::Food] = food;
 
@@ -114,6 +114,7 @@ impl Player {
         ret
     }
 
+    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
     pub fn empty_farmyard_spaces(&self) -> u32 {
         let mut pasture_spaces: u32 = 0;
         for pasture in &self.pastures {
@@ -140,7 +141,7 @@ impl Player {
                     self.resources[Resource::Vegetable] += 1;
                     f.amount -= 1;
                 }
-                _ => (),
+                PlantedSeed::Empty => (),
             }
             if f.amount == 0 {
                 f.seed = PlantedSeed::Empty;
@@ -148,7 +149,7 @@ impl Player {
         }
     }
 
-    pub fn kind(&self) -> PlayerKind {
+    pub fn kind(&self) -> Kind {
         self.kind.clone()
     }
 
@@ -190,7 +191,7 @@ impl Player {
         let food_required = 2 * self.adults + self.children;
         while food_required > self.resources[Resource::Food] {
             let mut res_present = false;
-            let mut best_score: i32 = -1000000;
+            let mut best_score: i32 = i32::MIN;
             let mut best_resource_idx = 0;
 
             for i in 0..max_res_to_convert_map.len() {
@@ -217,8 +218,8 @@ impl Player {
             // Convert best resource
             if debug {
                 print!(
-                    "\nConverting 1 {} to {} Food (Best Score {}).",
-                    RESOURCE_NAMES[best_resource_idx], res_value_map[best_resource_idx], best_score
+                    "\nConverting 1 {} to {} Food (Best Score {best_score}).",
+                    RESOURCE_NAMES[best_resource_idx], res_value_map[best_resource_idx]
                 );
             }
             self.resources[best_resource_idx] -= 1;
@@ -276,7 +277,7 @@ impl Player {
                 Animal::Sheep => res[Resource::Sheep] += p.amount,
                 Animal::Pigs => res[Resource::Pigs] += p.amount,
                 Animal::Cattle => res[Resource::Cattle] += p.amount,
-                _ => (),
+                Animal::Empty => (),
             }
         }
         res
@@ -288,7 +289,7 @@ impl Player {
                 Animal::Sheep => self.resources[Resource::Sheep] += p.amount,
                 Animal::Pigs => self.resources[Resource::Pigs] += p.amount,
                 Animal::Cattle => self.resources[Resource::Cattle] += p.amount,
-                _ => (),
+                Animal::Empty => (),
             }
             p.amount = 0;
             p.animal = Animal::Empty;
@@ -382,7 +383,7 @@ impl Player {
         let chosen_major: MajorImprovement = ALL_MAJORS[major_idx].clone();
 
         if debug {
-            print!("\nChosen major {:?}", chosen_major);
+            print!("\nChosen major {chosen_major:?}");
         }
 
         // If one of the FPs are already built
@@ -451,10 +452,7 @@ impl Player {
                     self.promised_resources[i][Resource::Food] += 1;
                 }
             }
-            MajorImprovement::ClayOven => {
-                self.bake_bread();
-            }
-            MajorImprovement::StoneOven => {
+            MajorImprovement::ClayOven | MajorImprovement::StoneOven => {
                 self.bake_bread();
             }
             _ => (),
@@ -619,7 +617,7 @@ impl Player {
                 self.build_room_cost[Resource::Clay] = 0;
                 self.build_room_cost[Resource::Stone] = 5;
             }
-            _ => (),
+            House::Stone => (),
         }
     }
 
@@ -676,7 +674,7 @@ impl Player {
         match self.house {
             House::Wood => self.renovation_cost[Resource::Clay] += 1,
             House::Clay => self.renovation_cost[Resource::Stone] += 1,
-            _ => (),
+            House::Stone => (),
         }
     }
 

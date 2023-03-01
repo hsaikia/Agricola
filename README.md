@@ -103,6 +103,11 @@ cargo install cargo-modules
 cargo modules generate tree --with-fns
 ```
 
+Run the linter
+```
+cargo clippy -- -W clippy::pedantic
+```
+
 LOC
 
 ```

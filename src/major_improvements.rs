@@ -1,6 +1,5 @@
 use crate::primitives::{
     can_pay_for_resource, new_res, ConversionTime, Resource, ResourceConversion, Resources,
-    MAX_RESOURCE_TO_CONVERT,
 };
 
 #[derive(Clone, Debug)]
@@ -102,28 +101,28 @@ impl MajorImprovement {
                     Resource::Sheep,
                     1,
                     2,
-                    MAX_RESOURCE_TO_CONVERT,
+                    u32::MAX,
                     ConversionTime::Any,
                 ),
                 ResourceConversion::food_conversion(
                     Resource::Pigs,
                     1,
                     2,
-                    MAX_RESOURCE_TO_CONVERT,
+                    u32::MAX,
                     ConversionTime::Any,
                 ),
                 ResourceConversion::food_conversion(
                     Resource::Vegetable,
                     1,
                     2,
-                    MAX_RESOURCE_TO_CONVERT,
+                    u32::MAX,
                     ConversionTime::Any,
                 ),
                 ResourceConversion::food_conversion(
                     Resource::Cattle,
                     1,
                     3,
-                    MAX_RESOURCE_TO_CONVERT,
+                    u32::MAX,
                     ConversionTime::Any,
                 ),
                 ResourceConversion::food_conversion(Resource::Grain, 1, 2, 1, ConversionTime::Bake),
@@ -133,28 +132,28 @@ impl MajorImprovement {
                     Resource::Sheep,
                     1,
                     2,
-                    MAX_RESOURCE_TO_CONVERT,
+                    u32::MAX,
                     ConversionTime::Any,
                 ),
                 ResourceConversion::food_conversion(
                     Resource::Pigs,
                     1,
                     3,
-                    MAX_RESOURCE_TO_CONVERT,
+                    u32::MAX,
                     ConversionTime::Any,
                 ),
                 ResourceConversion::food_conversion(
                     Resource::Vegetable,
                     1,
                     3,
-                    MAX_RESOURCE_TO_CONVERT,
+                    u32::MAX,
                     ConversionTime::Any,
                 ),
                 ResourceConversion::food_conversion(
                     Resource::Cattle,
                     1,
                     4,
-                    MAX_RESOURCE_TO_CONVERT,
+                    u32::MAX,
                     ConversionTime::Any,
                 ),
                 ResourceConversion::food_conversion(Resource::Grain, 1, 3, 1, ConversionTime::Bake),
@@ -194,22 +193,16 @@ impl MajorImprovement {
                 1,
                 ConversionTime::Harvest,
             )]),
-            _ => None,
+            Self::Well => None,
         }
     }
 
     pub fn points(&self) -> u32 {
         match self {
-            Self::Fireplace2 => 1,
-            Self::Fireplace3 => 1,
-            Self::CookingHearth4 => 1,
-            Self::CookingHearth5 => 1,
-            Self::Well => 4,
-            Self::ClayOven => 2,
+            Self::Fireplace2 | Self::Fireplace3 | Self::CookingHearth4 | Self::CookingHearth5 => 1,
+            Self::ClayOven | Self::Joinery | Self::Pottery | Self::BasketmakersWorkshop => 2,
             Self::StoneOven => 3,
-            Self::Joinery => 2,
-            Self::Pottery => 2,
-            Self::BasketmakersWorkshop => 2,
+            Self::Well => 4,
         }
     }
 

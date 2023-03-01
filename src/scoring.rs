@@ -26,7 +26,7 @@ fn score_plants(player: &Player, debug: bool) -> i32 {
         match field.seed {
             PlantedSeed::Grain => num_grain += field.amount as usize,
             PlantedSeed::Vegetable => num_veg += field.amount as usize,
-            _ => (),
+            PlantedSeed::Empty => (),
         }
     }
     num_grain += player.resources[Resource::Grain] as usize;
@@ -70,6 +70,7 @@ fn score_fields(player: &Player) -> i32 {
     calc_score(player.fields.len(), &FIELD_SCORE)
 }
 
+#[allow(clippy::cast_possible_wrap)]
 fn score_pastures(player: &Player) -> i32 {
     let mut ret: i32 = 0;
     // Number of Pastures
@@ -81,10 +82,12 @@ fn score_pastures(player: &Player) -> i32 {
     ret
 }
 
+#[allow(clippy::cast_possible_wrap)]
 fn score_begging_tokens(player: &Player) -> i32 {
     -3 * player.begging_tokens as i32
 }
 
+#[allow(clippy::cast_possible_wrap)]
 fn score_house_family_empty_spaces(player: &Player) -> i32 {
     let mut ret: i32 = 0;
 
@@ -92,7 +95,7 @@ fn score_house_family_empty_spaces(player: &Player) -> i32 {
     match player.house {
         House::Clay => ret += player.rooms as i32,
         House::Stone => ret += 2 * player.rooms as i32,
-        _ => (),
+        House::Wood => (),
     }
 
     // Family members
@@ -104,6 +107,7 @@ fn score_house_family_empty_spaces(player: &Player) -> i32 {
     ret
 }
 
+#[allow(clippy::cast_possible_wrap)]
 fn score_cards(player: &Player) -> i32 {
     let mut ret: i32 = 0;
     // Score Majors

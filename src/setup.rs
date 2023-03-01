@@ -2,14 +2,19 @@ use crate::game::{ActionSpace, Game, Space};
 use crate::primitives::{new_res, Resource};
 use rand::Rng;
 
-pub fn get_init_state(num_players: usize, human_player: bool, debug: bool) -> Game {
+pub fn get_init_state(
+    num_players: usize,
+    human_player: bool,
+    default_ai_id: usize,
+    debug: bool,
+) -> Game {
     assert!(num_players > 0);
     assert!(num_players < 5);
 
     let first_player_idx = rand::thread_rng().gen_range(0..num_players);
 
     if debug {
-        println!("First player is {}", first_player_idx);
+        println!("First player is {first_player_idx}");
     }
 
     let spaces = vec![
@@ -82,5 +87,11 @@ pub fn get_init_state(num_players: usize, human_player: bool, debug: bool) -> Ga
         Space::create_new(ActionSpace::FarmRedevelopment, None),
     ];
 
-    Game::create_new(spaces, first_player_idx, num_players, human_player)
+    Game::create_new(
+        spaces,
+        first_player_idx,
+        num_players,
+        human_player,
+        default_ai_id,
+    )
 }
