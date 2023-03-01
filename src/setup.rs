@@ -13,11 +13,10 @@ pub fn get_init_state(num_players: usize, human_player: bool, debug: bool) -> Ga
     }
 
     let spaces = vec![
-        Space::create_new("Copse", ActionSpace::Copse, Some(new_res())),
-        Space::create_new("Grove", ActionSpace::Grove, Some(new_res())),
-        Space::create_new("Forest", ActionSpace::Forest, Some(new_res())),
+        Space::create_new(ActionSpace::Copse, Some(new_res())),
+        Space::create_new(ActionSpace::Grove, Some(new_res())),
+        Space::create_new(ActionSpace::Forest, Some(new_res())),
         Space::create_new(
-            "Resource Market",
             ActionSpace::ResourceMarket,
             Some({
                 let mut res = new_res();
@@ -27,17 +26,12 @@ pub fn get_init_state(num_players: usize, human_player: bool, debug: bool) -> Ga
                 res
             }),
         ),
-        Space::create_new("Hollow", ActionSpace::Hollow, Some(new_res())),
-        Space::create_new("Clay Pit", ActionSpace::ClayPit, Some(new_res())),
-        Space::create_new("Reed Bank", ActionSpace::ReedBank, Some(new_res())),
+        Space::create_new(ActionSpace::Hollow, Some(new_res())),
+        Space::create_new(ActionSpace::ClayPit, Some(new_res())),
+        Space::create_new(ActionSpace::ReedBank, Some(new_res())),
+        Space::create_new(ActionSpace::TravelingPlayers, Some(new_res())),
+        Space::create_new(ActionSpace::Fishing, Some(new_res())),
         Space::create_new(
-            "Traveling Players",
-            ActionSpace::TravelingPlayers,
-            Some(new_res()),
-        ),
-        Space::create_new("Fishing", ActionSpace::Fishing, Some(new_res())),
-        Space::create_new(
-            "Day Laborer",
             ActionSpace::DayLaborer,
             Some({
                 let mut res = new_res();
@@ -46,7 +40,6 @@ pub fn get_init_state(num_players: usize, human_player: bool, debug: bool) -> Ga
             }),
         ),
         Space::create_new(
-            "Grain Seeds",
             ActionSpace::GrainSeeds,
             Some({
                 let mut res = new_res();
@@ -55,7 +48,6 @@ pub fn get_init_state(num_players: usize, human_player: bool, debug: bool) -> Ga
             }),
         ),
         Space::create_new(
-            "Meeting Place",
             ActionSpace::MeetingPlace,
             Some({
                 let mut res = new_res();
@@ -63,24 +55,19 @@ pub fn get_init_state(num_players: usize, human_player: bool, debug: bool) -> Ga
                 res
             }),
         ),
-        Space::create_new("Farmland", ActionSpace::Farmland, None),
-        Space::create_new("Farm Expansion", ActionSpace::FarmExpansion, None),
-        Space::create_new("Lessons 1", ActionSpace::Lessons1, None),
-        Space::create_new("Lessons 2", ActionSpace::Lessons2, None),
-        Space::create_new("Grain Utilization", ActionSpace::GrainUtilization, None),
-        Space::create_new("Fencing", ActionSpace::Fencing, None),
-        Space::create_new("Sheep Market", ActionSpace::SheepMarket, Some(new_res())),
-        Space::create_new("Improvements", ActionSpace::Improvements, None),
+        Space::create_new(ActionSpace::Farmland, None),
+        Space::create_new(ActionSpace::FarmExpansion, None),
+        Space::create_new(ActionSpace::Lessons1, None),
+        Space::create_new(ActionSpace::Lessons2, None),
+        Space::create_new(ActionSpace::GrainUtilization, None),
+        Space::create_new(ActionSpace::Fencing, None),
+        Space::create_new(ActionSpace::SheepMarket, Some(new_res())),
+        Space::create_new(ActionSpace::Improvements, None),
+        Space::create_new(ActionSpace::WesternQuarry, Some(new_res())),
+        Space::create_new(ActionSpace::WishForChildren, None),
+        Space::create_new(ActionSpace::HouseRedevelopment, None),
+        Space::create_new(ActionSpace::PigMarket, Some(new_res())),
         Space::create_new(
-            "Western Quarry",
-            ActionSpace::WesternQuarry,
-            Some(new_res()),
-        ),
-        Space::create_new("Wish For Children", ActionSpace::WishForChildren, None),
-        Space::create_new("House Redevelopment", ActionSpace::HouseRedevelopment, None),
-        Space::create_new("Pig Market", ActionSpace::PigMarket, Some(new_res())),
-        Space::create_new(
-            "Vegetable Seeds",
             ActionSpace::VegetableSeeds,
             Some({
                 let mut res = new_res();
@@ -88,19 +75,11 @@ pub fn get_init_state(num_players: usize, human_player: bool, debug: bool) -> Ga
                 res
             }),
         ),
-        Space::create_new(
-            "Eastern Quarry",
-            ActionSpace::EasternQuarry,
-            Some(new_res()),
-        ),
-        Space::create_new("Cattle Market", ActionSpace::CattleMarket, Some(new_res())),
-        Space::create_new("Cultivation", ActionSpace::Cultivation, None),
-        Space::create_new(
-            "Urgent Wish For Children",
-            ActionSpace::UrgentWishForChildren,
-            None,
-        ),
-        Space::create_new("Farm Redevelopment", ActionSpace::FarmRedevelopment, None),
+        Space::create_new(ActionSpace::EasternQuarry, Some(new_res())),
+        Space::create_new(ActionSpace::CattleMarket, Some(new_res())),
+        Space::create_new(ActionSpace::Cultivation, None),
+        Space::create_new(ActionSpace::UrgentWishForChildren, None),
+        Space::create_new(ActionSpace::FarmRedevelopment, None),
     ];
 
     Game::create_new(spaces, first_player_idx, num_players, human_player)

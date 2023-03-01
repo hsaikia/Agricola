@@ -10,10 +10,10 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::io;
 
-const NUM_GAMES_TO_SIMULATE: usize = 30000;
+const NUM_GAMES_TO_SIMULATE: usize = 10000;
 const MCTS_EXPLORATION_PARAM: f32 = 2.0;
 
-#[derive(Clone, Hash)]
+#[derive(Eq, PartialEq, Clone, Hash)]
 pub enum ActionSpace {
     Copse,
     Grove,
@@ -47,9 +47,48 @@ pub enum ActionSpace {
     FarmRedevelopment,
 }
 
+lazy_static! {
+    static ref ACTION_SPACE_NAMES: HashMap<ActionSpace, &'static str> = {
+        let mut ret = HashMap::new();
+        ret.insert(ActionSpace::Copse, "Copse");
+        ret.insert(ActionSpace::Grove, "Grove");
+        ret.insert(ActionSpace::Forest, "Forest");
+        ret.insert(ActionSpace::ResourceMarket, "Resource Market");
+        ret.insert(ActionSpace::Hollow, "Hollow");
+        ret.insert(ActionSpace::ClayPit, "Clay Pit");
+        ret.insert(ActionSpace::ReedBank, "Reed Bank");
+        ret.insert(ActionSpace::TravelingPlayers, "Traveling Players");
+        ret.insert(ActionSpace::Fishing, "Fishing");
+        ret.insert(ActionSpace::DayLaborer, "Day Laborer");
+        ret.insert(ActionSpace::GrainSeeds, "Grain Seeds");
+        ret.insert(ActionSpace::MeetingPlace, "Meeting Place");
+        ret.insert(ActionSpace::Farmland, "Farmland");
+        ret.insert(ActionSpace::FarmExpansion, "Farm Expansion");
+        ret.insert(ActionSpace::Lessons1, "Lessons1");
+        ret.insert(ActionSpace::Lessons2, "Lessons2");
+        ret.insert(ActionSpace::GrainUtilization, "Grain Utilization");
+        ret.insert(ActionSpace::Fencing, "Fencing");
+        ret.insert(ActionSpace::SheepMarket, "Sheep Market");
+        ret.insert(ActionSpace::Improvements, "Improvements");
+        ret.insert(ActionSpace::WesternQuarry, "Western Quarry");
+        ret.insert(ActionSpace::WishForChildren, "Wish For Children");
+        ret.insert(ActionSpace::HouseRedevelopment, "House Redevelopment");
+        ret.insert(ActionSpace::PigMarket, "Pig Market");
+        ret.insert(ActionSpace::VegetableSeeds, "Vegetable Seeds");
+        ret.insert(ActionSpace::EasternQuarry, "Eastern Quarry");
+        ret.insert(ActionSpace::CattleMarket, "Cattle Market");
+        ret.insert(ActionSpace::Cultivation, "Cultivation");
+        ret.insert(
+            ActionSpace::UrgentWishForChildren,
+            "Urgent Wish For Children",
+        );
+        ret.insert(ActionSpace::FarmRedevelopment, "Farm Redevelopment");
+        ret
+    };
+}
+
 #[derive(Clone, Hash)]
 pub struct Space {
-    name: String, // TODO : remove from here and make get_name into a global static hashmap
     action_space: ActionSpace,
     occupied: bool,
     accumulation_space: bool,
@@ -58,11 +97,7 @@ pub struct Space {
 }
 
 impl Space {
-    pub fn create_new(
-        p_name: &str,
-        p_action_space: ActionSpace,
-        p_resource: Option<Resources>,
-    ) -> Space {
+    pub fn create_new(p_action_space: ActionSpace, p_resource: Option<Resources>) -> Space {
         let mut p_resource_space = false;
         let mut p_accumulation_space = false;
         let mut def_resource = new_res();
@@ -77,7 +112,6 @@ impl Space {
         };
 
         Space {
-            name: String::from(p_name),
             action_space: p_action_space,
             occupied: false,
             accumulation_space: p_accumulation_space,
@@ -211,7 +245,10 @@ impl Game {
                         PlayerKind::Human => {
                             print!("\n\nAvailable actions : ");
                             for (i, e) in actions.iter().enumerate() {
-                                print!(", {}:{}", i, self.spaces[e[0]].name);
+                                print!(
+                                    ", {}:{}",
+                                    i, &ACTION_SPACE_NAMES[&self.spaces[e[0]].action_space]
+                                );
                                 if e.len() > 1 {
                                     print!("{:?}", e)
                                 }
@@ -269,7 +306,7 @@ impl Game {
 
                                 print!(
                                     "\nAvg score from {} simulated playouts for Action {}{:?} is {}.",
-                                    num_games_per_action, self.spaces[action[0]].name, action, avg
+                                    num_games_per_action, &ACTION_SPACE_NAMES[&self.spaces[action[0]].action_space], action, avg
                                 );
 
                                 if avg > best_average {
@@ -373,8 +410,8 @@ impl Game {
                                     best_action_idx = i;
                                 }
                                 print!(
-                                    "\nFitness from {} simulated playouts for Action {}{:?} is {}.",
-                                    games, self.spaces[action[0]].name, action, fitness
+                                    "\nFitness from {} simulated playouts for Action {}{:?} is {:.2}.",
+                                    games, &ACTION_SPACE_NAMES[&self.spaces[action[0]].action_space], action, fitness
                                 );
                             }
                             print!("\nTotal Games simulated {}.", total_games);
@@ -437,7 +474,7 @@ impl Game {
         if debug {
             print!(
                 "\nCurrent Player {} chooses action {} {:?}.",
-                self.current_player_idx, &space.name, action_vec
+                self.current_player_idx, &ACTION_SPACE_NAMES[&space.action_space], action_vec
             );
         }
 
@@ -708,7 +745,7 @@ impl Game {
             println!(
                 "\n\nRound {}. Action {} is revealed!",
                 self.next_visible_idx - 15,
-                &self.spaces[self.next_visible_idx].name
+                &ACTION_SPACE_NAMES[&self.spaces[self.next_visible_idx].action_space]
             );
         }
 
@@ -786,6 +823,7 @@ impl Game {
             } else {
                 //PlayerKind::Machine
                 PlayerKind::MCTSMachine
+                //PlayerKind::RandomMachine
             };
             let player = Player::create_new(food, player_kind);
             self.players.push(player);
@@ -797,9 +835,12 @@ impl Game {
         for i in 0..self.next_visible_idx {
             let space = &self.spaces[i];
             if space.occupied {
-                print!("\n[X] {} is occupied", &space.name);
+                print!(
+                    "\n[X] {} is occupied",
+                    &ACTION_SPACE_NAMES[&space.action_space]
+                );
             } else {
-                print!("\n[-] {} ", &space.name);
+                print!("\n[-] {} ", &ACTION_SPACE_NAMES[&space.action_space]);
                 print_resources(&space.resource);
             }
         }
@@ -815,14 +856,15 @@ impl Game {
         println!("\n\n-- Players --");
         for i in 0..self.players.len() {
             let p = &self.players[i];
-            print!("\n{}.", i);
-            p.display();
+            print!("\nFarm {} ", i);
             if i == self.current_player_idx {
-                print!("[X]");
+                print!("[Turn]");
             }
             if i == self.starting_player_idx {
-                print!("[S]");
+                print!("[Start Player]");
             }
+            println!();
+            p.display();
         }
     }
 }

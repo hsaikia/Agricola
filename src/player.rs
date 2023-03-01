@@ -759,54 +759,55 @@ impl Player {
     }
 
     pub fn display(&self) {
+        println!("Score {}", scoring::score(self, false));
         print!(
-            "{}/{} ({}) | ",
+            "House and Family [{}/{}]",
             "\u{1f464}".repeat(self.people_placed as usize),
-            "\u{1f464}".repeat((self.adults - self.people_placed) as usize),
-            scoring::score(self, false)
+            "\u{1f464}".repeat((self.adults - self.people_placed) as usize)
         );
         if self.children > 0 {
             print!("[{}]", "\u{1f476}".repeat(self.children as usize));
         }
-        if self.begging_tokens > 0 {
-            print!("[{}]", "\u{1f37d}".repeat(self.begging_tokens as usize));
-        }
-        print_resources(&self.resources);
 
         print!("[{}]", house_emoji(&self.house).repeat(self.rooms as usize));
+        println!();
 
-        if !self.pastures.is_empty() {
-            for p in &self.pastures {
-                p.display();
-            }
-        }
-
-        if !self.fields.is_empty() {
-            for f in &self.fields {
-                f.display();
-            }
-        }
+        print!("Resources ");
+        print_resources(&self.resources);
         let ns: usize = self.unfenced_stables as usize;
         if ns > 0 {
             print!("[{}]", "\u{26fa}".repeat(ns));
+        }
+
+        if self.begging_tokens > 0 {
+            print!("[{}]", "\u{1f37d}".repeat(self.begging_tokens as usize));
+        }
+
+        println!();
+
+        if !self.pastures.is_empty() {
+            print!("Pastures ");
+            for p in &self.pastures {
+                p.display();
+            }
+            println!();
+        }
+
+        if !self.fields.is_empty() {
+            print!("Fields ");
+            for f in &self.fields {
+                f.display();
+            }
+            println!();
         }
 
         for (i, e) in self.major_cards.iter().enumerate() {
             if !e {
                 continue;
             }
-            match ALL_MAJORS[i] {
-                MajorImprovement::Fireplace2 => print!("[FP2]"),
-                MajorImprovement::Fireplace3 => print!("[FP3]"),
-                MajorImprovement::CookingHearth4 => print!("[CH4]"),
-                MajorImprovement::CookingHearth5 => print!("[CH5]"),
-                MajorImprovement::Well => print!("[WL]"),
-                MajorImprovement::ClayOven => print!("[CO]"),
-                MajorImprovement::StoneOven => print!("[SO]"),
-                MajorImprovement::Joinery => print!("[JY]"),
-                MajorImprovement::Pottery => print!("[PY]"),
-                MajorImprovement::BasketmakersWorkshop => print!("[BMW]"),
-            }
+            print!("[{}]", &ALL_MAJORS[i].name());
         }
+
+        println!();
     }
 }
