@@ -28,10 +28,10 @@ Agricola is also an 'imperfect information' game, where certain information abou
 To run the release version (assuming you have Rust installed), from the parent directory run 
 
 ```
-cargo run --release -- <num_players> <optional : human_player>
+cargo run --release -- <num_players> <AI type id> <optional : human_player>
 ```
 
-where you can specify the number of players and whether the first player is a human player.
+where you can specify the number of players (1-4), AI type (0-2) and whether the first player is a human player.
 
 
 ## Results
