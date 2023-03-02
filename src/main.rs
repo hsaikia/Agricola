@@ -47,17 +47,16 @@ fn main() {
         }
     };
 
-    let mut human_player = false;
-    if args.len() == 4 {
-        // Make the first player Human
-        human_player = true;
-    }
+    // Make the first player Human
+    let first_player_human = args.len() == 4;
 
     let debug = true;
-    let mut game = setup::get_init_state(num_players, human_player, default_ai_id, debug);
+    let mut game = setup::get_init_state(num_players, first_player_human, default_ai_id, debug);
+
     let start = Instant::now();
     game.play(debug);
     let duration = start.elapsed();
+
     println!("\nTime elapsed: {duration:?}");
     println!("Scores {:?}", game.scores());
     println!("Fitness {:?}", game.fitness());

@@ -83,6 +83,7 @@ Fitness [-17, 8, -8, -16]
 - Best sowing strategy according to score.
 - Implement OCCs.
 - Implement Minors.
+- Unit Tests.
 
 ### MCTS Strategy
 
