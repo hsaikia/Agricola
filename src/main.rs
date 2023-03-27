@@ -4,13 +4,14 @@ use std::time::Instant;
 #[macro_use]
 extern crate lazy_static;
 
+mod actions;
 mod farm;
 mod game;
 mod major_improvements;
+mod mcts;
 mod player;
 mod primitives;
 mod scoring;
-mod setup;
 // mod fencing;
 
 fn main() {
@@ -49,9 +50,9 @@ fn main() {
 
     // Make the first player Human
     let first_player_human = args.len() == 4;
+    let mut game = game::State::create_new(num_players, first_player_human, default_ai_id);
 
     let debug = true;
-    let mut game = setup::get_init_state(num_players, first_player_human, default_ai_id, debug);
 
     let start = Instant::now();
     game.play(debug);

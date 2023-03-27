@@ -28,6 +28,7 @@ pub const RESOURCE_NAMES: [&str; NUM_RESOURCES] = [
     "\u{1f416}",
     "\u{1f404}",
 ];
+
 pub type Resources = [u32; NUM_RESOURCES];
 
 pub fn new_res() -> Resources {

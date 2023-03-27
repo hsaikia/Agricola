@@ -1,8 +1,8 @@
+use crate::actions::{ActionSpace, NUM_INITIAL_OPEN_SPACES, NUM_RESOURCE_SPACES};
 use crate::major_improvements::{MajorImprovement, ALL_MAJORS};
+use crate::mcts::GameRecord;
 use crate::player::{Kind, Player};
-use crate::primitives::{
-    new_res, pay_for_resource, print_resources, take_resource, Resource, Resources,
-};
+use crate::primitives::{pay_for_resource, print_resources, Resources};
 use crate::scoring;
 use rand::Rng;
 use std::collections::hash_map::DefaultHasher;
@@ -11,214 +11,32 @@ use std::hash::{Hash, Hasher};
 use std::io;
 
 const NUM_GAMES_TO_SIMULATE: usize = 10000;
-const MCTS_EXPLORATION_PARAM: f32 = 2.0;
-
-#[derive(Eq, PartialEq, Clone, Hash)]
-pub enum ActionSpace {
-    Copse,
-    Grove,
-    Forest,
-    ResourceMarket,
-    Hollow,
-    ClayPit,
-    ReedBank,
-    TravelingPlayers,
-    Fishing,
-    DayLaborer,
-    GrainSeeds,
-    MeetingPlace,
-    Farmland,
-    FarmExpansion,
-    Lessons1,
-    Lessons2,
-    GrainUtilization,
-    Fencing,
-    SheepMarket,
-    Improvements,
-    WesternQuarry,
-    WishForChildren,
-    HouseRedevelopment,
-    PigMarket,
-    VegetableSeeds,
-    EasternQuarry,
-    CattleMarket,
-    Cultivation,
-    UrgentWishForChildren,
-    FarmRedevelopment,
-}
-
-lazy_static! {
-    static ref ACTION_SPACE_NAMES: HashMap<ActionSpace, &'static str> = {
-        let mut ret = HashMap::new();
-        ret.insert(ActionSpace::Copse, "Copse");
-        ret.insert(ActionSpace::Grove, "Grove");
-        ret.insert(ActionSpace::Forest, "Forest");
-        ret.insert(ActionSpace::ResourceMarket, "Resource Market");
-        ret.insert(ActionSpace::Hollow, "Hollow");
-        ret.insert(ActionSpace::ClayPit, "Clay Pit");
-        ret.insert(ActionSpace::ReedBank, "Reed Bank");
-        ret.insert(ActionSpace::TravelingPlayers, "Traveling Players");
-        ret.insert(ActionSpace::Fishing, "Fishing");
-        ret.insert(ActionSpace::DayLaborer, "Day Laborer");
-        ret.insert(ActionSpace::GrainSeeds, "Grain Seeds");
-        ret.insert(ActionSpace::MeetingPlace, "Meeting Place");
-        ret.insert(ActionSpace::Farmland, "Farmland");
-        ret.insert(ActionSpace::FarmExpansion, "Farm Expansion");
-        ret.insert(ActionSpace::Lessons1, "Lessons1");
-        ret.insert(ActionSpace::Lessons2, "Lessons2");
-        ret.insert(ActionSpace::GrainUtilization, "Grain Utilization");
-        ret.insert(ActionSpace::Fencing, "Fencing");
-        ret.insert(ActionSpace::SheepMarket, "Sheep Market");
-        ret.insert(ActionSpace::Improvements, "Improvements");
-        ret.insert(ActionSpace::WesternQuarry, "Western Quarry");
-        ret.insert(ActionSpace::WishForChildren, "Wish For Children");
-        ret.insert(ActionSpace::HouseRedevelopment, "House Redevelopment");
-        ret.insert(ActionSpace::PigMarket, "Pig Market");
-        ret.insert(ActionSpace::VegetableSeeds, "Vegetable Seeds");
-        ret.insert(ActionSpace::EasternQuarry, "Eastern Quarry");
-        ret.insert(ActionSpace::CattleMarket, "Cattle Market");
-        ret.insert(ActionSpace::Cultivation, "Cultivation");
-        ret.insert(
-            ActionSpace::UrgentWishForChildren,
-            "Urgent Wish For Children",
-        );
-        ret.insert(ActionSpace::FarmRedevelopment, "Farm Redevelopment");
-        ret
-    };
-}
 
 #[derive(Clone, Hash)]
-pub struct Space {
-    action_space: ActionSpace,
-    occupied: bool,
-    accumulation_space: bool,
-    resource_space: bool, // all accumulation spaces are also resource spaces
-    resource: Resources,
-}
-
-impl Space {
-    pub fn create_new(p_action_space: ActionSpace, p_resource: Option<Resources>) -> Space {
-        let mut p_resource_space = false;
-        let mut p_accumulation_space = false;
-        let mut def_resource = new_res();
-
-        if let Some(res) = p_resource {
-            def_resource = res;
-            p_resource_space = true;
-            let res_sum: u32 = def_resource.iter().sum();
-            if res_sum == 0 {
-                p_accumulation_space = true;
-            }
-        };
-
-        Space {
-            action_space: p_action_space,
-            occupied: false,
-            accumulation_space: p_accumulation_space,
-            resource_space: p_resource_space,
-            resource: def_resource,
-        }
-    }
-}
-
-#[derive(Clone)]
-struct GameState {
-    average_fitness: Vec<f32>, // Wins for each player
-    total_games: u32,
-}
-
-impl GameState {
-    fn new(num_players: usize) -> Self {
-        GameState {
-            average_fitness: vec![0.0; num_players],
-            total_games: 0,
-        }
-    }
-
-    #[allow(clippy::cast_precision_loss)]
-    fn add_fitness(&mut self, fitness: &Vec<i32>) {
-        assert!(fitness.len() == self.average_fitness.len());
-
-        for it in fitness.iter().zip(self.average_fitness.iter_mut()) {
-            let (a, b) = it;
-            *b = (*b * self.total_games as f32 + *a as f32) / (self.total_games + 1) as f32;
-        }
-        self.total_games += 1;
-    }
-
-    // Returns index of the node to traverse
-    #[allow(clippy::cast_precision_loss)]
-    fn choose_uct(
-        player_to_play: usize,
-        nodes: &Vec<u64>,
-        mcts_cache: &HashMap<u64, GameState>,
-    ) -> usize {
-        assert!(!nodes.is_empty());
-        // Use UCT formula to sample a child node
-        let mut total: u32 = 0;
-        let mut idx: usize = 0;
-        let mut highest_uct: f32 = 0.0;
-        let mut min_fitness: f32 = f32::INFINITY;
-        let mut max_fitness: f32 = f32::NEG_INFINITY;
-
-        for (i, node) in nodes.iter().enumerate() {
-            // If child key isn't in the cache, it hasn't been explored - explore it immediately
-            if !mcts_cache.contains_key(node) {
-                return i;
-            }
-            let fitness = mcts_cache[node].average_fitness[player_to_play];
-            min_fitness = fitness.min(min_fitness);
-            max_fitness = fitness.max(max_fitness);
-            total += mcts_cache[node].total_games;
-        }
-
-        for (i, node) in nodes.iter().enumerate() {
-            let n: u32 = mcts_cache[node].total_games;
-            // If any node has never been seen before - explore it
-            if n == 0 {
-                return i;
-            }
-            let fitness = mcts_cache[node].average_fitness[player_to_play];
-            // UCT constant is 2
-            assert!(total > 0);
-            let p = (fitness - min_fitness) / (max_fitness - min_fitness)
-                + f32::sqrt(MCTS_EXPLORATION_PARAM * total as f32 / n as f32);
-
-            if p > highest_uct {
-                highest_uct = p;
-                idx = i;
-            }
-        }
-        idx
-    }
-}
-
-#[derive(Clone, Hash)]
-pub struct Game {
-    spaces: Vec<Space>,
-    players: Vec<Player>,
+pub struct State {
+    pub resource_map: [Resources; NUM_RESOURCE_SPACES],
+    open_spaces: Vec<ActionSpace>,
+    pub occupied_spaces: Vec<usize>,
+    hidden_spaces: Vec<Vec<ActionSpace>>,
+    pub players: Vec<Player>,
     major_improvements: [bool; 10],
-    current_player_idx: usize,
+    pub current_player_idx: usize,
     starting_player_idx: usize,
-    next_visible_idx: usize,
     people_placed_this_round: u32,
 }
 
-impl Game {
-    pub fn create_new(
-        p_spaces: Vec<Space>,
-        first_player_idx: usize,
-        num_players: usize,
-        human_player: bool,
-        default_ai_id: usize,
-    ) -> Game {
-        let mut state = Game {
-            spaces: p_spaces,
+impl State {
+    pub fn create_new(num_players: usize, human_player: bool, default_ai_id: usize) -> State {
+        let first_player_idx = rand::thread_rng().gen_range(0..num_players);
+        let mut state = State {
+            resource_map: ActionSpace::init_resource_map(),
+            open_spaces: ActionSpace::initial_open_spaces(),
+            occupied_spaces: Vec::new(),
+            hidden_spaces: ActionSpace::initial_hidden_spaces(),
             major_improvements: [true; 10],
             players: Vec::<Player>::new(),
             current_player_idx: first_player_idx,
             starting_player_idx: first_player_idx,
-            next_visible_idx: 16,
             people_placed_this_round: 0,
         };
         state.init_players(first_player_idx, num_players, human_player, default_ai_id);
@@ -253,10 +71,7 @@ impl Game {
         if let Some(actions) = maybe_actions {
             print!("\n\nAvailable actions : ");
             for (i, e) in actions.iter().enumerate() {
-                print!(
-                    ", {}:{}",
-                    i, &ACTION_SPACE_NAMES[&self.spaces[e[0]].action_space]
-                );
+                print!(", {}:{:?}", i, &ActionSpace::action_space_from_idx(e[0]));
                 if e.len() > 1 {
                     print!("{e:?}");
                 }
@@ -324,9 +139,9 @@ impl Game {
                 let avg = sum as f32 / num_games_per_action as f32;
 
                 print!(
-                    "\nAvg score from {} simulated playouts for Action {}{:?} is {}.",
+                    "\nAvg score from {} simulated playouts for Action {:?}{:?} is {}.",
                     num_games_per_action,
-                    &ACTION_SPACE_NAMES[&self.spaces[action[0]].action_space],
+                    &ActionSpace::action_space_from_idx(action[0]),
                     action,
                     avg
                 );
@@ -357,11 +172,11 @@ impl Game {
             }
 
             // Initialize cache
-            let mut mcts_cache: HashMap<u64, GameState> = HashMap::new();
+            let mut mcts_cache: HashMap<u64, GameRecord> = HashMap::new();
 
             for _g in 0..NUM_GAMES_TO_SIMULATE {
                 let sample_idx =
-                    GameState::choose_uct(self.current_player_idx, &action_hashes, &mcts_cache);
+                    GameRecord::choose_uct(self.current_player_idx, &action_hashes, &mcts_cache);
                 let mut tmp_game = self.clone();
                 tmp_game.apply_action(&actions[sample_idx], false);
 
@@ -382,7 +197,7 @@ impl Game {
                             tmp_game2.apply_action(sub_action, false);
                             sub_action_hashes.push(tmp_game2.get_hash());
                         }
-                        let chosen_idx = GameState::choose_uct(
+                        let chosen_idx = GameRecord::choose_uct(
                             tmp_game.current_player_idx,
                             &sub_action_hashes,
                             &mcts_cache,
@@ -399,7 +214,7 @@ impl Game {
                 if let std::collections::hash_map::Entry::Vacant(e) =
                     mcts_cache.entry(expand_node_hash)
                 {
-                    e.insert(GameState::new(tmp_game.players.len()));
+                    e.insert(GameRecord::new(tmp_game.players.len()));
                 }
 
                 // Perform playout
@@ -436,10 +251,11 @@ impl Game {
                     best_fitness = fitness;
                     best_action_idx = i;
                 }
+
                 print!(
-                    "\nFitness from {} simulated playouts for Action {}{:?} is {:.2}.",
+                    "\nFitness from {} simulated playouts for Action {:?}{:?} is {:.2}.",
                     games,
-                    &ACTION_SPACE_NAMES[&self.spaces[action[0]].action_space],
+                    &ActionSpace::action_space_from_idx(action[0]),
                     action,
                     fitness
                 );
@@ -471,17 +287,11 @@ impl Game {
 
     fn get_all_available_actions(&mut self, debug: bool) -> Option<Vec<Vec<usize>>> {
         if self.people_placed_this_round == 0 {
-            if self.next_visible_idx == 20
-                || self.next_visible_idx == 23
-                || self.next_visible_idx == 25
-                || self.next_visible_idx == 27
-                || self.next_visible_idx == 29
-                || self.next_visible_idx == 30
-            {
+            if self.hidden_spaces[0].is_empty() {
                 self.harvest(debug);
             }
 
-            if self.next_visible_idx == 30 {
+            if self.hidden_spaces.len() == 1 && self.hidden_spaces[0].is_empty() {
                 if debug {
                     println!("\nGAME OVER!");
                 }
@@ -512,29 +322,23 @@ impl Game {
 
     fn apply_action(&mut self, action_vec: &Vec<usize>, debug: bool) {
         // This function assumes that the action is available to the current player
-
         let action_idx = action_vec[0];
+        let player = &mut self.players[self.current_player_idx];
 
-        let space = &mut self.spaces[action_idx];
+        let action_space = ActionSpace::action_space_from_idx(action_idx).unwrap();
+        if let Some(resource_idx) = action_space.resource_map_idx() {
+            let res = &mut self.resource_map[resource_idx];
+            action_space.collect_resources(player, res);
+        }
+
         if debug {
             print!(
-                "\nCurrent Player {} chooses action {} {action_vec:?}.",
-                self.current_player_idx, &ACTION_SPACE_NAMES[&space.action_space]
+                "\nCurrent Player {} chooses action {:?} {action_vec:?}.",
+                self.current_player_idx, &action_space
             );
         }
 
-        let player = &mut self.players[self.current_player_idx];
-
-        if space.resource_space {
-            // Assumes that the space is accessible and the current player can use this action.
-            let res = &space.resource;
-            take_resource(res, &mut player.resources);
-            // Zero resources if space is an accumulation space
-            if space.accumulation_space {
-                space.resource = new_res();
-            }
-        }
-        match space.action_space {
+        match action_space {
             // If animal accumulation space, re-org animals in the farm
             ActionSpace::SheepMarket | ActionSpace::PigMarket | ActionSpace::CattleMarket => {
                 player.reorg_animals(false);
@@ -560,6 +364,7 @@ impl Game {
                 player.bake_bread();
             }
             ActionSpace::Improvements => {
+                assert!(action_vec.len() == 2);
                 player.build_major(action_vec[1], &mut self.major_improvements, debug);
                 // TODO add minors
             }
@@ -596,8 +401,8 @@ impl Game {
             }
             _ => (),
         }
-        // Set the space to occupied
-        space.occupied = true;
+        // Add the space to the occupied list
+        self.occupied_spaces.push(action_space.action_space_idx());
         // Increment people placed by player
         player.increment_people_placed();
         self.people_placed_this_round += 1;
@@ -608,13 +413,18 @@ impl Game {
     fn available_place_worker_actions(&self, _debug: bool) -> Vec<Vec<usize>> {
         let player = &self.players[self.current_player_idx];
         let mut actions: Vec<Vec<usize>> = Vec::new();
-        for i in 0..self.next_visible_idx {
+
+        for action_space in &self.open_spaces {
             let mut additional_subsequent_choices: Vec<Vec<usize>> = Vec::new();
-            let space = &self.spaces[i];
-            if space.occupied {
+
+            if self
+                .occupied_spaces
+                .contains(&action_space.action_space_idx())
+            {
                 continue;
             }
-            match space.action_space {
+
+            match action_space {
                 ActionSpace::Farmland => {
                     if !player.can_add_new_field() {
                         continue;
@@ -626,9 +436,6 @@ impl Game {
                         continue;
                     }
                     additional_subsequent_choices = player.all_possible_room_stable_builds();
-                    // if debug {
-                    //     print!("FarmExpansion Choices {:?}", choices);
-                    // }
                 }
                 ActionSpace::Improvements => {
                     additional_subsequent_choices = MajorImprovement::available_majors_to_build(
@@ -688,10 +495,10 @@ impl Game {
             }
 
             if additional_subsequent_choices.is_empty() {
-                actions.push(vec![i]);
+                actions.push(vec![action_space.action_space_idx()]);
             } else {
                 for choices in additional_subsequent_choices {
-                    let mut all_choices = vec![i];
+                    let mut all_choices = vec![action_space.action_space_idx()];
                     all_choices.extend(choices);
                     actions.push(all_choices);
                 }
@@ -758,44 +565,35 @@ impl Game {
     }
 
     fn init_new_round(&mut self, debug: bool) {
-        assert!(self.next_visible_idx < 30);
+        loop {
+            let maybe_curr_stage = self.hidden_spaces.pop();
+            if let Some(mut curr_stage) = maybe_curr_stage {
+                if !curr_stage.is_empty() {
+                    let random_idx = rand::thread_rng().gen_range(0..curr_stage.len());
+                    let last_idx = curr_stage.len() - 1;
+                    curr_stage.swap(random_idx, last_idx);
+                    let next_action_space = curr_stage.pop().unwrap();
 
-        // Shuffle
-        // 16, 17, 18 .. 19
-        // 20, 21 .. 22
-        // 23 .. 24
-        // 25 .. 26
-        // 27 .. 28
-        // 29
+                    // Reveal the new action space
+                    self.open_spaces.push(next_action_space);
+                    // Put the rest of the hidden spaces in the current stage back
+                    self.hidden_spaces.push(curr_stage);
 
-        if [16, 17, 18].contains(&self.next_visible_idx) {
-            let random_idx = rand::thread_rng().gen_range(self.next_visible_idx..20);
-            self.spaces.swap(random_idx, self.next_visible_idx);
-        } else if [20, 21].contains(&self.next_visible_idx) {
-            let random_idx = rand::thread_rng().gen_range(self.next_visible_idx..23);
-            self.spaces.swap(random_idx, self.next_visible_idx);
-        } else if self.next_visible_idx == 23 {
-            let random_idx = rand::thread_rng().gen_range(self.next_visible_idx..25);
-            self.spaces.swap(random_idx, self.next_visible_idx);
-        } else if self.next_visible_idx == 25 {
-            let random_idx = rand::thread_rng().gen_range(self.next_visible_idx..27);
-            self.spaces.swap(random_idx, self.next_visible_idx);
-        } else if self.next_visible_idx == 27 {
-            let random_idx = rand::thread_rng().gen_range(self.next_visible_idx..29);
-            self.spaces.swap(random_idx, self.next_visible_idx);
+                    break;
+                }
+            } else {
+                return; // Game ended
+            }
         }
 
         if debug {
             // Reveal the next action space
             println!(
-                "\n\nRound {}. Action {} is revealed!",
-                self.next_visible_idx - 15,
-                &ACTION_SPACE_NAMES[&self.spaces[self.next_visible_idx].action_space]
+                "\n\nRound {}. Action {:?} is revealed!",
+                self.open_spaces.len() - NUM_INITIAL_OPEN_SPACES,
+                &self.open_spaces[self.open_spaces.len() - 1]
             );
         }
-
-        // Increment the next action space idx
-        self.next_visible_idx += 1;
 
         // Set start player
         self.current_player_idx = self.starting_player_idx;
@@ -806,51 +604,13 @@ impl Game {
         }
 
         // Update accumulation spaces
-        for i in 0..self.next_visible_idx {
-            let mut space = &mut self.spaces[i];
-            space.occupied = false;
-
-            if !space.accumulation_space {
+        self.occupied_spaces.clear();
+        for action_space in &self.open_spaces {
+            if action_space.resource_map_idx().is_none() {
                 continue;
             }
-
-            let res = &mut space.resource;
-            match space.action_space {
-                ActionSpace::Copse => {
-                    res[Resource::Wood] += 1;
-                }
-                ActionSpace::Grove => {
-                    res[Resource::Wood] += 2;
-                }
-                ActionSpace::Forest => {
-                    res[Resource::Wood] += 3;
-                }
-                ActionSpace::Hollow => {
-                    res[Resource::Clay] += 2;
-                }
-                ActionSpace::ClayPit => {
-                    res[Resource::Clay] += 1;
-                }
-                ActionSpace::ReedBank => {
-                    res[Resource::Reed] += 1;
-                }
-                ActionSpace::TravelingPlayers | ActionSpace::Fishing => {
-                    res[Resource::Food] += 1;
-                }
-                ActionSpace::SheepMarket => {
-                    res[Resource::Sheep] += 1;
-                }
-                ActionSpace::PigMarket => {
-                    res[Resource::Pigs] += 1;
-                }
-                ActionSpace::CattleMarket => {
-                    res[Resource::Cattle] += 1;
-                }
-                ActionSpace::WesternQuarry | ActionSpace::EasternQuarry => {
-                    res[Resource::Stone] += 1;
-                }
-                _ => (),
-            }
+            let res = &mut self.resource_map[action_space.resource_map_idx().unwrap()];
+            action_space.update_resources_on_accumulation_spaces(res);
         }
     }
 
@@ -880,16 +640,16 @@ impl Game {
 
     pub fn display(&self) {
         println!("\n\n-- Board --");
-        for i in 0..self.next_visible_idx {
-            let space = &self.spaces[i];
-            if space.occupied {
-                print!(
-                    "\n[X] {} is occupied",
-                    &ACTION_SPACE_NAMES[&space.action_space]
-                );
+
+        for space in &self.open_spaces {
+            let idx = space.action_space_idx();
+            if self.occupied_spaces.contains(&idx) {
+                print!("\n[X] {:?} is occupied", &space);
             } else {
-                print!("\n[-] {} ", &ACTION_SPACE_NAMES[&space.action_space]);
-                print_resources(&space.resource);
+                print!("\n[-] {:?} ", &space);
+                if space.resource_map_idx().is_some() {
+                    print_resources(&self.resource_map[space.resource_map_idx().unwrap()]);
+                }
             }
         }
 

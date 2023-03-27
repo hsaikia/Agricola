@@ -114,3 +114,8 @@ LOC
 ```
 git ls-files | grep '\.rs' | xargs wc -l
 ```
+
+Rust Compiler Update
+```
+rustup update
+```

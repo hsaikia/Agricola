@@ -97,8 +97,7 @@ impl Pasture {
 
             if stables_to_add > *num_unfenced_stables {
                 println!(
-                    "ERROR! Wanting to create pasture with {} FS and {} UFS and No empty FS {}",
-                    num_spaces, num_unfenced_stables, no_empty_farmyard_spaces_left
+                    "ERROR! Wanting to create pasture with {num_spaces} FS and {num_unfenced_stables} UFS and No empty FS {no_empty_farmyard_spaces_left}"
                 );
             }
             *num_unfenced_stables -= stables_to_add;

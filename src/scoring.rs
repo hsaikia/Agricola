@@ -18,7 +18,6 @@ fn calc_score(num: usize, scores: &[i32]) -> i32 {
         scores[num]
     }
 }
-
 fn score_plants(player: &Player, debug: bool) -> i32 {
     let mut num_grain: usize = 0;
     let mut num_veg: usize = 0;
@@ -35,10 +34,7 @@ fn score_plants(player: &Player, debug: bool) -> i32 {
     let veg_score = calc_score(num_veg, &VEGETABLE_SCORE);
 
     if debug {
-        print!(
-            "\nScoring {} Grain {} and {} Veggies {}.",
-            num_grain, gr_score, num_veg, veg_score
-        );
+        print!("\nScoring {num_grain} Grain {gr_score} and {num_veg} Veggies {veg_score}.");
     }
 
     gr_score + veg_score
