@@ -78,7 +78,7 @@ Fitness [-17, 8, -8, -16]
 
 ## TODO
 
-- Improve harvest algorithm - currently tends to consume the raw grain which could be sowed or baked next turn.
+- Improve harvest algorithm - currently tends to consume the raw grain which could be sowed or baked next turn. Reimplement Resource Conversions (Bake, any, Harvest) in terms of Actions.
 - Best fencing arrangements instead of same structure.
 - Best sowing strategy according to score.
 - Implement OCCs.

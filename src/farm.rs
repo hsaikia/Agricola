@@ -13,7 +13,7 @@ pub fn house_emoji(house: &House) -> &str {
     }
 }
 
-#[derive(Clone, Hash)]
+#[derive(Debug, Clone, Hash)]
 pub enum PlantedSeed {
     Empty,
     Grain,
@@ -69,6 +69,25 @@ impl Field {
             1
         };
         print!("[{}]", seed_emoji(&self.seed).repeat(reps));
+    }
+
+    pub fn sow(&mut self, seed: &PlantedSeed) -> bool {
+        // If non-empty field, return false
+        match self.seed {
+            PlantedSeed::Grain | PlantedSeed::Vegetable => return false,
+            PlantedSeed::Empty => (),
+        }
+
+        // Set the amount according to the seed
+        match seed {
+            PlantedSeed::Grain => self.amount = 3,
+            PlantedSeed::Vegetable => self.amount = 2,
+            _ => (),
+        }
+
+        // Set the seed
+        self.seed = seed.clone();
+        true
     }
 }
 

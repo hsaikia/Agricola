@@ -1,8 +1,6 @@
-use crate::primitives::{
-    can_pay_for_resource, new_res, ConversionTime, Resource, ResourceConversion, Resources,
-};
+use crate::primitives::{can_pay_for_resource, new_res, Resource, ResourceExchange, Resources};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq)]
 pub enum MajorImprovement {
     Fireplace2,
     Fireplace3,
@@ -16,184 +14,197 @@ pub enum MajorImprovement {
     BasketmakersWorkshop,
 }
 
-pub const ALL_MAJORS: [MajorImprovement; 10] = [
-    MajorImprovement::Fireplace2,
-    MajorImprovement::Fireplace3,
-    MajorImprovement::CookingHearth4,
-    MajorImprovement::CookingHearth5,
-    MajorImprovement::Well,
-    MajorImprovement::ClayOven,
-    MajorImprovement::StoneOven,
-    MajorImprovement::Joinery,
-    MajorImprovement::Pottery,
-    MajorImprovement::BasketmakersWorkshop,
-];
-
 impl MajorImprovement {
-    pub fn available_majors_to_build(
-        majors_owned: &[bool; ALL_MAJORS.len()],
-        majors_on_board: &[bool; ALL_MAJORS.len()],
+    pub fn can_build_major(
+        majors_owned: &Vec<Self>,
+        majors_on_board: &Vec<Self>,
         resources: &Resources,
-    ) -> Vec<Vec<usize>> {
-        // If one of the FPs are already built
-        let fp2_built: bool = majors_owned[MajorImprovement::Fireplace2.index()];
-        let fp3_built: bool = majors_owned[MajorImprovement::Fireplace3.index()];
+    ) -> bool {
+        let fp2_built: bool = majors_owned.contains(&Self::Fireplace2);
+        let fp3_built: bool = majors_owned.contains(&Self::Fireplace3);
+        let ch4_built: bool = majors_owned.contains(&Self::CookingHearth4);
+        let ch5_built: bool = majors_owned.contains(&Self::CookingHearth5);
 
-        let mut available = [false; ALL_MAJORS.len()];
-
-        for idx in 0..ALL_MAJORS.len() {
-            if !majors_on_board[idx] {
-                continue;
-            }
-
-            // If FP2 or FP3 is already built
-            if fp2_built || fp3_built {
-                if idx == MajorImprovement::CookingHearth4.index()
-                    || idx == MajorImprovement::CookingHearth5.index()
-                {
-                    available[idx] = true;
+        for card in majors_on_board {
+            match card {
+                Self::Fireplace2 => {
+                    if !fp3_built && can_pay_for_resource(&card.cost(), resources) {
+                        return true;
+                    }
                 }
-
-                if idx == MajorImprovement::Fireplace2.index()
-                    || idx == MajorImprovement::Fireplace3.index()
-                {
-                    continue;
+                Self::Fireplace3 => {
+                    if !fp2_built && can_pay_for_resource(&card.cost(), resources) {
+                        return true;
+                    }
+                }
+                Self::CookingHearth4 => {
+                    if (fp2_built || fp3_built || can_pay_for_resource(&card.cost(), resources))
+                        && !ch5_built
+                    {
+                        return true;
+                    }
+                }
+                Self::CookingHearth5 => {
+                    if (fp2_built || fp3_built || can_pay_for_resource(&card.cost(), resources))
+                        && !ch4_built
+                    {
+                        return true;
+                    }
+                }
+                _ => {
+                    if can_pay_for_resource(&card.cost(), resources) {
+                        return true;
+                    }
                 }
             }
-            if can_pay_for_resource(&ALL_MAJORS[idx].cost(), resources) {
-                available[idx] = true;
-            }
         }
 
-        // If CH4 and CH5 are both present remove the expensive one
-        // Or if CH4 is already built remove CH5
-        if (available[MajorImprovement::CookingHearth4.index()]
-            && available[MajorImprovement::CookingHearth5.index()])
-            || majors_owned[MajorImprovement::CookingHearth4.index()]
-        {
-            available[MajorImprovement::CookingHearth5.index()] = false;
-        }
-
-        // If FP2 and FP3 are both present remove the expensive one
-        if available[MajorImprovement::Fireplace2.index()]
-            && available[MajorImprovement::Fireplace3.index()]
-        {
-            available[MajorImprovement::Fireplace3.index()] = false;
-        }
-
-        // Populate indices of all available majors
-        let mut available_indices = vec![];
-
-        for (i, e) in available.iter().enumerate() {
-            if *e {
-                available_indices.push(vec![i]);
-            }
-        }
-
-        available_indices
+        false
     }
 
-    // Vec <Resource to use, Amount to use, Food for each resource, Number of times usable at once>
-    pub fn conversions_to_food(&self) -> Option<Vec<ResourceConversion>> {
+    pub fn available_majors_to_build(
+        majors_owned: &Vec<Self>,
+        majors_on_board: &Vec<Self>,
+        resources: &Resources,
+    ) -> Vec<Self> {
+        let fp2_built: bool = majors_owned.contains(&Self::Fireplace2);
+        let fp3_built: bool = majors_owned.contains(&Self::Fireplace3);
+        let ch4_built: bool = majors_owned.contains(&Self::CookingHearth4);
+        let ch5_built: bool = majors_owned.contains(&Self::CookingHearth5);
+
+        let mut available: Vec<Self> = vec![];
+
+        for card in majors_on_board {
+            match card {
+                Self::Fireplace2 => {
+                    if !fp3_built && can_pay_for_resource(&card.cost(), resources) {
+                        available.push(card.clone());
+                    }
+                }
+                Self::Fireplace3 => {
+                    if !fp2_built && can_pay_for_resource(&card.cost(), resources) {
+                        available.push(card.clone());
+                    }
+                }
+                Self::CookingHearth4 => {
+                    if (fp2_built || fp3_built || can_pay_for_resource(&card.cost(), resources))
+                        && !ch5_built
+                    {
+                        available.push(card.clone());
+                    }
+                }
+                Self::CookingHearth5 => {
+                    if (fp2_built || fp3_built || can_pay_for_resource(&card.cost(), resources))
+                        && !ch4_built
+                    {
+                        available.push(card.clone());
+                    }
+                }
+                _ => {
+                    if can_pay_for_resource(&card.cost(), resources) {
+                        available.push(card.clone());
+                    }
+                }
+            }
+        }
+        available
+    }
+
+    pub fn exchanges(&self, used: &Vec<Self>) -> Option<Vec<ResourceExchange>> {
         match self {
-            Self::Fireplace2 | Self::Fireplace3 => Some(vec![
-                ResourceConversion::food_conversion(
-                    Resource::Sheep,
-                    1,
-                    2,
-                    u32::MAX,
-                    ConversionTime::Any,
-                ),
-                ResourceConversion::food_conversion(
-                    Resource::Pigs,
-                    1,
-                    2,
-                    u32::MAX,
-                    ConversionTime::Any,
-                ),
-                ResourceConversion::food_conversion(
-                    Resource::Vegetable,
-                    1,
-                    2,
-                    u32::MAX,
-                    ConversionTime::Any,
-                ),
-                ResourceConversion::food_conversion(
-                    Resource::Cattle,
-                    1,
-                    3,
-                    u32::MAX,
-                    ConversionTime::Any,
-                ),
-                ResourceConversion::food_conversion(Resource::Grain, 1, 2, 1, ConversionTime::Bake),
-            ]),
-            Self::CookingHearth4 | Self::CookingHearth5 => Some(vec![
-                ResourceConversion::food_conversion(
-                    Resource::Sheep,
-                    1,
-                    2,
-                    u32::MAX,
-                    ConversionTime::Any,
-                ),
-                ResourceConversion::food_conversion(
-                    Resource::Pigs,
-                    1,
-                    3,
-                    u32::MAX,
-                    ConversionTime::Any,
-                ),
-                ResourceConversion::food_conversion(
-                    Resource::Vegetable,
-                    1,
-                    3,
-                    u32::MAX,
-                    ConversionTime::Any,
-                ),
-                ResourceConversion::food_conversion(
-                    Resource::Cattle,
-                    1,
-                    4,
-                    u32::MAX,
-                    ConversionTime::Any,
-                ),
-                ResourceConversion::food_conversion(Resource::Grain, 1, 3, 1, ConversionTime::Bake),
-            ]),
-            Self::ClayOven => Some(vec![ResourceConversion::food_conversion(
-                Resource::Grain,
-                1,
-                5,
-                1,
-                ConversionTime::Bake,
-            )]),
-            Self::StoneOven => Some(vec![ResourceConversion::food_conversion(
-                Resource::Grain,
-                1,
-                4,
-                2,
-                ConversionTime::Bake,
-            )]),
-            Self::Joinery => Some(vec![ResourceConversion::food_conversion(
-                Resource::Wood,
-                1,
-                2,
-                1,
-                ConversionTime::Harvest,
-            )]),
-            Self::Pottery => Some(vec![ResourceConversion::food_conversion(
-                Resource::Clay,
-                1,
-                2,
-                1,
-                ConversionTime::Harvest,
-            )]),
-            Self::BasketmakersWorkshop => Some(vec![ResourceConversion::food_conversion(
-                Resource::Reed,
-                1,
-                3,
-                1,
-                ConversionTime::Harvest,
-            )]),
-            Self::Well => None,
+            Self::Fireplace2 | Self::Fireplace3 => {
+                let mut ret: Vec<ResourceExchange> = vec![];
+                ret.push(ResourceExchange {
+                    from: Resource::Sheep,
+                    to: Resource::Food,
+                    num_from: 1,
+                    num_to: 2,
+                });
+                ret.push(ResourceExchange {
+                    from: Resource::Pigs,
+                    to: Resource::Food,
+                    num_from: 1,
+                    num_to: 2,
+                });
+                ret.push(ResourceExchange {
+                    from: Resource::Vegetable,
+                    to: Resource::Food,
+                    num_from: 1,
+                    num_to: 2,
+                });
+                ret.push(ResourceExchange {
+                    from: Resource::Cattle,
+                    to: Resource::Food,
+                    num_from: 1,
+                    num_to: 3,
+                });
+                Some(ret)
+            }
+            Self::CookingHearth4 | Self::CookingHearth5 => {
+                let mut ret: Vec<ResourceExchange> = vec![];
+                ret.push(ResourceExchange {
+                    from: Resource::Sheep,
+                    to: Resource::Food,
+                    num_from: 1,
+                    num_to: 2,
+                });
+                ret.push(ResourceExchange {
+                    from: Resource::Pigs,
+                    to: Resource::Food,
+                    num_from: 1,
+                    num_to: 3,
+                });
+                ret.push(ResourceExchange {
+                    from: Resource::Vegetable,
+                    to: Resource::Food,
+                    num_from: 1,
+                    num_to: 3,
+                });
+                ret.push(ResourceExchange {
+                    from: Resource::Cattle,
+                    to: Resource::Food,
+                    num_from: 1,
+                    num_to: 4,
+                });
+                Some(ret)
+            }
+            Self::Joinery => {
+                let mut ret: Vec<ResourceExchange> = vec![];
+                if !used.contains(&self) {
+                    ret.push(ResourceExchange {
+                        from: Resource::Wood,
+                        to: Resource::Food,
+                        num_from: 1,
+                        num_to: 2,
+                    });
+                }
+                Some(ret)
+            }
+            Self::Pottery => {
+                let mut ret: Vec<ResourceExchange> = vec![];
+                if !used.contains(&self) {
+                    ret.push(ResourceExchange {
+                        from: Resource::Clay,
+                        to: Resource::Food,
+                        num_from: 1,
+                        num_to: 2,
+                    });
+                }
+                Some(ret)
+            }
+            Self::BasketmakersWorkshop => {
+                let mut ret: Vec<ResourceExchange> = vec![];
+                if !used.contains(&self) {
+                    ret.push(ResourceExchange {
+                        from: Resource::Reed,
+                        to: Resource::Food,
+                        num_from: 1,
+                        num_to: 3,
+                    });
+                }
+                Some(ret)
+            }
+            _ => None,
         }
     }
 
@@ -203,36 +214,6 @@ impl MajorImprovement {
             Self::ClayOven | Self::Joinery | Self::Pottery | Self::BasketmakersWorkshop => 2,
             Self::StoneOven => 3,
             Self::Well => 4,
-        }
-    }
-
-    pub fn name(&self) -> &str {
-        match self {
-            Self::Fireplace2 => "Fireplace (2)",
-            Self::Fireplace3 => "Fireplace (3)",
-            Self::CookingHearth4 => "Cooking Hearth (4)",
-            Self::CookingHearth5 => "Cooking Hearth (5)",
-            Self::Well => "Well",
-            Self::ClayOven => "Clay Oven",
-            Self::StoneOven => "Stone Oven",
-            Self::Joinery => "Joinery",
-            Self::Pottery => "Pottery",
-            Self::BasketmakersWorkshop => "Basketmaker's Workshop",
-        }
-    }
-
-    pub fn index(&self) -> usize {
-        match self {
-            Self::Fireplace2 => 0,
-            Self::Fireplace3 => 1,
-            Self::CookingHearth4 => 2,
-            Self::CookingHearth5 => 3,
-            Self::Well => 4,
-            Self::ClayOven => 5,
-            Self::StoneOven => 6,
-            Self::Joinery => 7,
-            Self::Pottery => 8,
-            Self::BasketmakersWorkshop => 9,
         }
     }
 
@@ -294,6 +275,12 @@ impl MajorImprovement {
                 res[Resource::Stone] = 2;
                 res
             }
+        }
+    }
+
+    pub fn display(majors: &Vec<Self>) {
+        for major in majors {
+            print!("[{:?}]", major);
         }
     }
 }

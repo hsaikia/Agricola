@@ -1,5 +1,5 @@
 use crate::farm::{House, PlantedSeed};
-use crate::major_improvements::{MajorImprovement, ALL_MAJORS};
+use crate::major_improvements::MajorImprovement;
 use crate::player::Player;
 use crate::primitives::Resource;
 
@@ -107,12 +107,9 @@ fn score_house_family_empty_spaces(player: &Player) -> i32 {
 fn score_cards(player: &Player) -> i32 {
     let mut ret: i32 = 0;
     // Score Majors
-    for (i, e) in player.major_cards.iter().enumerate() {
-        if !e {
-            continue;
-        }
-        ret += ALL_MAJORS[i].points() as i32;
-        match ALL_MAJORS[i] {
+    for major in &player.major_cards {
+        ret += major.points() as i32;
+        match major {
             MajorImprovement::Joinery => {
                 if player.resources[Resource::Wood] >= 7 {
                     ret += 3;

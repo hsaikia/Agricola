@@ -1,8 +1,9 @@
+use crate::algorithms::Kind;
 use crate::farm::{house_emoji, Animal, Field, House, Pasture, PlantedSeed};
-use crate::major_improvements::{MajorImprovement, ALL_MAJORS};
+use crate::major_improvements::MajorImprovement;
 use crate::primitives::{
-    can_pay_for_resource, new_res, pay_for_resource, print_resources, take_resource,
-    ConversionTime, Resource, ResourceConversion, Resources, RESOURCE_NAMES,
+    can_pay_for_resource, new_res, pay_for_resource, print_resources, Resource, ResourceExchange,
+    Resources,
 };
 use crate::scoring;
 use std::cmp;
@@ -37,34 +38,26 @@ lazy_static! {
 }
 
 #[derive(Clone, Hash)]
-pub enum Kind {
-    Human,
-    UniformMachine,
-    RandomMachine, // Random
-    MCTSMachine,
-}
-
-#[derive(Clone, Hash)]
 pub struct Player {
     // Animals in this resources array are the ones that are pets in the house and the ones that are kept in unfenced stables
     pub kind: Kind,
     pub resources: Resources,
     people_placed: u32,
-    adults: u32,
-    children: u32,
+    pub adults: u32,
+    pub children: u32,
     pub begging_tokens: u32,
     build_room_cost: Resources,
     build_stable_cost: Resources,
     pub renovation_cost: Resources,
-    pub major_cards: [bool; ALL_MAJORS.len()],
-    conversions: Vec<ResourceConversion>,
+    pub major_cards: Vec<MajorImprovement>,
     pub house: House,
     pub rooms: u32,
     pub fields: Vec<Field>,
     pub pastures: Vec<Pasture>,
     pub unfenced_stables: u32,
     pub fences_left: u32,
-    promised_resources: Vec<Resources>,
+    pub major_used_for_harvest: Vec<MajorImprovement>,
+    pub harvest_paid: bool,
 }
 
 impl Player {
@@ -93,15 +86,15 @@ impl Player {
             build_room_cost: room_cost,
             build_stable_cost: stable_cost,
             renovation_cost: reno_cost,
-            major_cards: [false; ALL_MAJORS.len()],
-            conversions: ResourceConversion::default_conversions(),
+            major_cards: vec![],
             house: House::Wood,
             rooms: STARTING_ROOMS,
-            fields: Vec::new(),
-            pastures: Vec::new(),
+            fields: vec![],
+            pastures: vec![],
             unfenced_stables: 0,
             fences_left: MAX_FENCES,
-            promised_resources: Vec::new(),
+            major_used_for_harvest: vec![],
+            harvest_paid: false,
         }
     }
 
@@ -119,6 +112,15 @@ impl Player {
         let mut pasture_spaces: u32 = 0;
         for pasture in &self.pastures {
             pasture_spaces += pasture.farmyard_spaces;
+        }
+
+        let r = self.rooms;
+        let f = self.fields.len() as u32;
+        let p = pasture_spaces;
+        let s = self.unfenced_stables;
+
+        if r + f + p + s > FARMYARD_SPACES {
+            panic!("Error! {r} R {f} F {p} P {s} S existing together!");
         }
 
         FARMYARD_SPACES
@@ -177,85 +179,6 @@ impl Player {
         }
     }
 
-    fn optimize_converting_resources_to_food(&mut self, debug: bool, conv_time: &ConversionTime) {
-        let mut max_res_to_convert_map = new_res();
-        let mut res_value_map = new_res();
-        for conv in &self.conversions {
-            if let Some(ret) = conv.conversion_options(&self.resources, conv_time) {
-                max_res_to_convert_map[ret.0.clone()] = ret.2;
-                res_value_map[ret.0.clone()] = cmp::max(res_value_map[ret.0.clone()], ret.1);
-            }
-        }
-
-        // Converts resources to food, one at a time, causing least changes to total score
-        let food_required = 2 * self.adults + self.children;
-        while food_required > self.resources[Resource::Food] {
-            let mut res_present = false;
-            let mut best_score: i32 = i32::MIN;
-            let mut best_resource_idx = 0;
-
-            for i in 0..max_res_to_convert_map.len() {
-                if max_res_to_convert_map[i] > 0 {
-                    res_present = true;
-                    // Test
-                    let mut tmp_player = self.clone();
-                    tmp_player.resources[Resource::Food] += res_value_map[i];
-                    tmp_player.resources[i] -= 1;
-                    tmp_player.breed_and_reorg_animals(false);
-                    let score = scoring::score_resources(&tmp_player, false);
-                    if score > best_score {
-                        best_score = score;
-                        best_resource_idx = i;
-                    }
-                }
-            }
-
-            // If no conversion possible, break
-            if !res_present {
-                break;
-            }
-
-            // Convert best resource
-            if debug {
-                print!(
-                    "\nConverting 1 {} to {} Food (Best Score {best_score}).",
-                    RESOURCE_NAMES[best_resource_idx], res_value_map[best_resource_idx]
-                );
-            }
-            self.resources[best_resource_idx] -= 1;
-            max_res_to_convert_map[best_resource_idx] -= 1;
-            self.resources[Resource::Food] += res_value_map[best_resource_idx];
-        }
-    }
-
-    pub fn harvest(&mut self, debug: bool) {
-        // Harvest grain and veggies
-        self.harvest_fields();
-
-        // Move all animals to the resources array
-        self.add_animals_in_pastures_to_resources();
-
-        // Convert resources to food if required
-        self.optimize_converting_resources_to_food(debug, &ConversionTime::Harvest);
-
-        // Breed animals and reorg them
-        self.breed_and_reorg_animals(debug);
-
-        // Pay for harvest
-        let food_required = 2 * self.adults + self.children;
-        let food_provided = cmp::min(food_required, self.resources[Resource::Food]);
-
-        if debug && food_required > food_provided {
-            print!(
-                "\nBegging Tokens as {} food is missing :( ",
-                food_required - food_provided
-            );
-        }
-
-        self.resources[Resource::Food] -= food_provided;
-        self.begging_tokens += food_required - food_provided;
-    }
-
     pub fn breed_and_reorg_animals(&mut self, debug: bool) {
         // Breed animals
         Self::breed_animals(&mut self.resources, debug);
@@ -283,7 +206,7 @@ impl Player {
         res
     }
 
-    fn add_animals_in_pastures_to_resources(&mut self) {
+    pub fn add_animals_in_pastures_to_resources(&mut self) {
         for p in &mut self.pastures {
             match p.animal {
                 Animal::Sheep => self.resources[Resource::Sheep] += p.amount,
@@ -364,165 +287,61 @@ impl Player {
 
         if !discard_leftovers {
             // Eat the leftover animals :(
-            for conv in &mut self.conversions {
-                conv.convert_all(&mut leftover, &ConversionTime::Any);
-                conv.reset();
+            if self.major_cards.contains(&MajorImprovement::CookingHearth4)
+                || self.major_cards.contains(&MajorImprovement::CookingHearth5)
+            {
+                self.resources[Resource::Food] += 2 * leftover[Resource::Sheep]
+                    + 3 * leftover[Resource::Pigs]
+                    + 4 * leftover[Resource::Cattle];
+            } else if self.major_cards.contains(&MajorImprovement::Fireplace2)
+                || self.major_cards.contains(&MajorImprovement::Fireplace2)
+            {
+                self.resources[Resource::Food] += 2 * leftover[Resource::Sheep]
+                    + 2 * leftover[Resource::Pigs]
+                    + 3 * leftover[Resource::Cattle];
             }
-            self.resources[Resource::Food] += leftover[Resource::Food];
         }
     }
 
-    pub fn build_major(
-        &mut self,
-        major_idx: usize,
-        majors: &mut [bool; ALL_MAJORS.len()],
-        debug: bool,
-    ) {
-        assert!(major_idx <= ALL_MAJORS.len());
-        assert!(majors[major_idx]);
-        let chosen_major: MajorImprovement = ALL_MAJORS[major_idx].clone();
-
-        if debug {
-            print!("\nChosen major {chosen_major:?}");
-        }
-
-        // If one of the FPs are already built
-        let fp2_built: bool = self.major_cards[MajorImprovement::Fireplace2.index()];
-        let fp3_built: bool = self.major_cards[MajorImprovement::Fireplace3.index()];
-
-        // Build major
-        match chosen_major {
-            // Pay
-            MajorImprovement::CookingHearth4 | MajorImprovement::CookingHearth5 => {
-                if fp2_built {
-                    self.major_cards[MajorImprovement::Fireplace2.index()] = false;
-                    // Add FP2 back to board
-                    majors[MajorImprovement::Fireplace2.index()] = true;
-                } else if fp3_built {
-                    self.major_cards[MajorImprovement::Fireplace3.index()] = false;
-                    // Add FP3 back to board
-                    majors[MajorImprovement::Fireplace3.index()] = true;
-                } else {
-                    pay_for_resource(&chosen_major.cost(), &mut self.resources);
-                }
-            }
-            _ => {
-                pay_for_resource(&chosen_major.cost(), &mut self.resources);
-            }
-        }
-        // Built
-        self.major_cards[major_idx] = true;
-
-        // Remove from board
-        majors[major_idx] = false;
-
-        // Add conversions
-        self.conversions.clear();
-
-        for (i, e) in self.major_cards.iter().enumerate() {
-            if !e {
-                continue;
-            }
-            if let Some(v) = ALL_MAJORS[i].conversions_to_food() {
-                self.conversions.extend(v);
-            }
-        }
-
-        // Default conversions are usually pretty bad, add them only at the end
-        if self.major_cards[MajorImprovement::Fireplace2.index()]
-            || self.major_cards[MajorImprovement::Fireplace3.index()]
-            || self.major_cards[MajorImprovement::CookingHearth4.index()]
-            || self.major_cards[MajorImprovement::CookingHearth5.index()]
+    pub fn can_bake_bread(&self) -> bool {
+        // Check if any of the baking improvements are present
+        // And at least one grain in supply
+        if (self.major_cards.contains(&MajorImprovement::Fireplace2)
+            || self.major_cards.contains(&MajorImprovement::Fireplace3)
+            || self.major_cards.contains(&MajorImprovement::CookingHearth4)
+            || self.major_cards.contains(&MajorImprovement::CookingHearth5)
+            || self.major_cards.contains(&MajorImprovement::ClayOven)
+            || self.major_cards.contains(&MajorImprovement::StoneOven))
+            && self.resources[Resource::Grain] > 0
         {
-            self.conversions
-                .extend(ResourceConversion::default_grain_conversions());
-        } else {
-            self.conversions
-                .extend(ResourceConversion::default_conversions());
-        }
-
-        // Free actions + resources
-        match chosen_major {
-            MajorImprovement::Well => {
-                while self.promised_resources.len() < 5 {
-                    let res = new_res();
-                    self.promised_resources.push(res);
-                }
-                for i in 0..5 {
-                    self.promised_resources[i][Resource::Food] += 1;
-                }
-            }
-            MajorImprovement::ClayOven | MajorImprovement::StoneOven => {
-                self.bake_bread();
-            }
-            _ => (),
-        }
-    }
-
-    // Converts as much grain into food as possible
-    // TODO - this might not be the best strategy! Make generic.
-    pub fn bake_bread(&mut self) {
-        let mut best_conversion = self.resources;
-        for conv in &mut self.conversions {
-            let mut res = self.resources;
-            conv.convert_all(&mut res, &ConversionTime::Bake);
-            if res[Resource::Food] > best_conversion[Resource::Food] {
-                best_conversion = res;
-            }
-        }
-        self.resources = best_conversion;
-    }
-
-    // Sows alternatively between grain and veggies
-    // TODO - this might not be the best strategy! Make generic.
-    pub fn sow(&mut self) {
-        let mut empty_field_idx: usize = 0;
-        let mut grain_fields: u32 = 0;
-        let mut veg_fields: u32 = 0;
-        for (i, f) in &mut self.fields.iter().enumerate() {
-            match f.seed {
-                PlantedSeed::Grain => grain_fields += 1,
-                PlantedSeed::Vegetable => veg_fields += 1,
-                PlantedSeed::Empty => empty_field_idx = i,
-            }
-        }
-
-        let field_to_sow = &mut self.fields[empty_field_idx];
-
-        if self.resources[Resource::Vegetable] == 0
-            || (self.resources[Resource::Grain] > 0 && grain_fields <= veg_fields)
-        {
-            assert!(self.resources[Resource::Grain] > 0);
-            field_to_sow.seed = PlantedSeed::Grain;
-            field_to_sow.amount = 3;
-            self.resources[Resource::Grain] -= 1;
-        } else if self.resources[Resource::Grain] == 0 || veg_fields < grain_fields {
-            assert!(self.resources[Resource::Vegetable] > 0);
-            field_to_sow.seed = PlantedSeed::Vegetable;
-            field_to_sow.amount = 2;
-            self.resources[Resource::Vegetable] -= 1;
-        }
-
-        if self.can_sow() {
-            // Sow as much as possible
-            self.sow();
-        }
-    }
-
-    pub fn can_sow(&self) -> bool {
-        if self.resources[Resource::Grain] == 0 && self.resources[Resource::Vegetable] == 0 {
-            return false;
-        }
-
-        for f in &self.fields {
-            if let PlantedSeed::Empty = f.seed {
-                return true;
-            }
+            return true;
         }
         false
     }
 
+    pub fn sow_field(&mut self, seed: &PlantedSeed) {
+        for field in &mut self.fields {
+            if field.sow(seed) {
+                match seed {
+                    PlantedSeed::Grain => self.resources[Resource::Grain] -= 1,
+                    PlantedSeed::Vegetable => self.resources[Resource::Vegetable] -= 1,
+                    _ => (),
+                }
+                break;
+            }
+        }
+    }
+
+    pub fn can_sow(&self) -> bool {
+        (self.resources[Resource::Grain] > 0 || self.resources[Resource::Vegetable] > 0)
+            && self
+                .fields
+                .iter()
+                .any(|f| matches!(f.seed, PlantedSeed::Empty))
+    }
+
     pub fn fence(&mut self) {
+        assert!(self.can_fence());
         // Follow convention as mentioned in can_fence()
         let mut recurse: bool = false;
         for (p, w) in &FENCING_CHOICES[self.fences_left as usize] {
@@ -596,7 +415,7 @@ impl Player {
     }
 
     pub fn can_grow_family_without_room(&self) -> bool {
-        self.family_members() < MAX_FAMILY_MEMBERS && self.family_members() >= self.rooms
+        self.family_members() < MAX_FAMILY_MEMBERS
     }
 
     pub fn renovate(&mut self) {
@@ -628,43 +447,6 @@ impl Player {
         can_pay_for_resource(&self.renovation_cost, &self.resources)
     }
 
-    pub fn all_possible_room_stable_builds(&self) -> Vec<Vec<usize>> {
-        let mut ret = Vec::new();
-        for num_rooms in 0..FARMYARD_SPACES {
-            for num_stables in 0..MAX_STABLES {
-                if num_rooms == 0 && num_stables == 0 {
-                    continue;
-                }
-
-                let mut tmp_player = self.clone();
-                let mut rooms_failed = false;
-                let mut stables_failed = false;
-                for _ in 0..num_rooms {
-                    if tmp_player.can_build_room() {
-                        tmp_player.build_room();
-                    } else {
-                        rooms_failed = true;
-                    }
-                }
-                for _ in 0..num_stables {
-                    if tmp_player.can_build_stable() {
-                        tmp_player.build_stable();
-                    } else {
-                        stables_failed = true;
-                    }
-                }
-
-                if rooms_failed && stables_failed {
-                    return ret;
-                }
-                if !rooms_failed && !stables_failed {
-                    ret.push(vec![num_rooms as usize, num_stables as usize]);
-                }
-            }
-        }
-        ret
-    }
-
     // Builds a single room
     pub fn build_room(&mut self) {
         assert!(self.can_build_room());
@@ -687,7 +469,6 @@ impl Player {
 
     // Builds a single stable
     pub fn build_stable(&mut self) {
-        assert!(self.num_stables() < MAX_STABLES);
         assert!(self.can_build_stable());
         pay_for_resource(&self.build_stable_cost, &mut self.resources);
         // Add to pasture if possible, then unfenced
@@ -713,6 +494,7 @@ impl Player {
             for pasture in &self.pastures {
                 if pasture.stables == 0 {
                     all_filled = false;
+                    break;
                 }
             }
             if all_filled {
@@ -723,6 +505,7 @@ impl Player {
     }
 
     pub fn add_new_field(&mut self) {
+        assert!(self.can_add_new_field());
         let field = Field::new();
         self.fields.push(field);
     }
@@ -732,12 +515,11 @@ impl Player {
     }
 
     pub fn reset_for_next_round(&mut self) {
-        if let Some(res) = self.promised_resources.pop() {
-            take_resource(&res, &mut self.resources);
-        }
         self.adults += self.children;
         self.children = 0;
         self.people_placed = 0;
+        self.major_used_for_harvest.clear();
+        self.harvest_paid = false;
     }
 
     pub fn workers(&self) -> u32 {
@@ -754,6 +536,15 @@ impl Player {
 
     pub fn all_people_placed(&self) -> bool {
         self.people_placed == self.adults
+    }
+
+    pub fn can_use_exchange(&self, res_ex: &ResourceExchange) -> bool {
+        self.resources[res_ex.from.clone()] >= res_ex.num_from
+    }
+
+    pub fn use_exchange(&mut self, res_ex: &ResourceExchange) {
+        self.resources[res_ex.from.clone()] -= res_ex.num_from;
+        self.resources[res_ex.to.clone()] += res_ex.num_to;
     }
 
     pub fn display(&self) {
@@ -799,12 +590,7 @@ impl Player {
             println!();
         }
 
-        for (i, e) in self.major_cards.iter().enumerate() {
-            if !e {
-                continue;
-            }
-            print!("[{}]", &ALL_MAJORS[i].name());
-        }
+        MajorImprovement::display(&self.major_cards);
 
         println!();
     }

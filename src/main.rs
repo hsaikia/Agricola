@@ -5,6 +5,7 @@ use std::time::Instant;
 extern crate lazy_static;
 
 mod actions;
+mod algorithms;
 mod farm;
 mod game;
 mod major_improvements;
@@ -15,7 +16,7 @@ mod scoring;
 // mod fencing;
 
 fn main() {
-    // env::set_var("RUST_BACKTRACE", "1");
+    env::set_var("RUST_BACKTRACE", "full");
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 3 {
