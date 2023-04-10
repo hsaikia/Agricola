@@ -1,6 +1,6 @@
 use crate::algorithms::Kind;
 use crate::farm::{house_emoji, Animal, Field, House, Pasture, PlantedSeed};
-use crate::major_improvements::MajorImprovement;
+use crate::major_improvements::{Cheaper, MajorImprovement};
 use crate::primitives::{
     can_pay_for_resource, new_res, pay_for_resource, print_resources, Resource, ResourceExchange,
     Resources,
@@ -114,15 +114,6 @@ impl Player {
             pasture_spaces += pasture.farmyard_spaces;
         }
 
-        let r = self.rooms;
-        let f = self.fields.len() as u32;
-        let p = pasture_spaces;
-        let s = self.unfenced_stables;
-
-        if r + f + p + s > FARMYARD_SPACES {
-            panic!("Error! {r} R {f} F {p} P {s} S existing together!");
-        }
-
         FARMYARD_SPACES
             - self.rooms
             - self.fields.len() as u32
@@ -156,32 +147,23 @@ impl Player {
     }
 
     // Call after moving animals from pastures to resources and then move them back
-    fn breed_animals(res: &mut Resources, debug: bool) {
+    fn breed_animals(res: &mut Resources) {
         if res[Resource::Sheep] > 1 {
-            if debug {
-                print!("\nBreeding Sheep!");
-            }
             res[Resource::Sheep] += 1;
         }
 
         if res[Resource::Pigs] > 1 {
-            if debug {
-                print!("\nBreeding Pigs!");
-            }
             res[Resource::Pigs] += 1;
         }
 
         if res[Resource::Cattle] > 1 {
-            if debug {
-                print!("\nBreeding Cattle!");
-            }
             res[Resource::Cattle] += 1;
         }
     }
 
-    pub fn breed_and_reorg_animals(&mut self, debug: bool) {
+    pub fn breed_and_reorg_animals(&mut self) {
         // Breed animals
-        Self::breed_animals(&mut self.resources, debug);
+        Self::breed_animals(&mut self.resources);
 
         // Place animals back in pastures
         self.reorg_animals(true);
@@ -287,14 +269,22 @@ impl Player {
 
         if !discard_leftovers {
             // Eat the leftover animals :(
-            if self.major_cards.contains(&MajorImprovement::CookingHearth4)
-                || self.major_cards.contains(&MajorImprovement::CookingHearth5)
+            if self
+                .major_cards
+                .contains(&MajorImprovement::CookingHearth(Cheaper(true)))
+                || self
+                    .major_cards
+                    .contains(&MajorImprovement::CookingHearth(Cheaper(false)))
             {
                 self.resources[Resource::Food] += 2 * leftover[Resource::Sheep]
                     + 3 * leftover[Resource::Pigs]
                     + 4 * leftover[Resource::Cattle];
-            } else if self.major_cards.contains(&MajorImprovement::Fireplace2)
-                || self.major_cards.contains(&MajorImprovement::Fireplace2)
+            } else if self
+                .major_cards
+                .contains(&MajorImprovement::Fireplace(Cheaper(true)))
+                || self
+                    .major_cards
+                    .contains(&MajorImprovement::Fireplace(Cheaper(false)))
             {
                 self.resources[Resource::Food] += 2 * leftover[Resource::Sheep]
                     + 2 * leftover[Resource::Pigs]
@@ -306,10 +296,18 @@ impl Player {
     pub fn can_bake_bread(&self) -> bool {
         // Check if any of the baking improvements are present
         // And at least one grain in supply
-        if (self.major_cards.contains(&MajorImprovement::Fireplace2)
-            || self.major_cards.contains(&MajorImprovement::Fireplace3)
-            || self.major_cards.contains(&MajorImprovement::CookingHearth4)
-            || self.major_cards.contains(&MajorImprovement::CookingHearth5)
+        if (self
+            .major_cards
+            .contains(&MajorImprovement::Fireplace(Cheaper(true)))
+            || self
+                .major_cards
+                .contains(&MajorImprovement::Fireplace(Cheaper(false)))
+            || self
+                .major_cards
+                .contains(&MajorImprovement::CookingHearth(Cheaper(true)))
+            || self
+                .major_cards
+                .contains(&MajorImprovement::CookingHearth(Cheaper(false)))
             || self.major_cards.contains(&MajorImprovement::ClayOven)
             || self.major_cards.contains(&MajorImprovement::StoneOven))
             && self.resources[Resource::Grain] > 0
@@ -325,7 +323,7 @@ impl Player {
                 match seed {
                     PlantedSeed::Grain => self.resources[Resource::Grain] -= 1,
                     PlantedSeed::Vegetable => self.resources[Resource::Vegetable] -= 1,
-                    _ => (),
+                    PlantedSeed::Empty => (),
                 }
                 break;
             }

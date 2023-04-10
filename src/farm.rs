@@ -82,7 +82,7 @@ impl Field {
         match seed {
             PlantedSeed::Grain => self.amount = 3,
             PlantedSeed::Vegetable => self.amount = 2,
-            _ => (),
+            PlantedSeed::Empty => (),
         }
 
         // Set the seed

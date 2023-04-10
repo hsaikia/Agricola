@@ -1,13 +1,11 @@
 use crate::actions::{Action, NUM_RESOURCE_SPACES};
 use crate::algorithms::Kind;
-use crate::major_improvements::MajorImprovement;
-//use crate::mcts::GameRecord;
+use crate::major_improvements::{Cheaper, MajorImprovement};
 use crate::player::Player;
 use crate::primitives::{pay_for_resource, print_resources, Resources};
 use crate::scoring;
 use rand::Rng;
 use std::collections::hash_map::DefaultHasher;
-//use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
 const INITIAL_OPEN_SPACES: usize = 16;
@@ -39,14 +37,14 @@ impl State {
         let first_player_idx = rand::thread_rng().gen_range(0..num_players);
         let mut state = State {
             resource_map: Action::init_resource_map(),
-            open_spaces: Action::initial_open_spaces(),
+            open_spaces: Action::initial_open_spaces().to_vec(),
             occupied_spaces: Vec::new(),
             hidden_spaces: Action::initial_hidden_spaces(),
             major_improvements: vec![
-                MajorImprovement::Fireplace2,
-                MajorImprovement::Fireplace3,
-                MajorImprovement::CookingHearth4,
-                MajorImprovement::CookingHearth5,
+                MajorImprovement::Fireplace(Cheaper(true)),
+                MajorImprovement::Fireplace(Cheaper(false)),
+                MajorImprovement::CookingHearth(Cheaper(true)),
+                MajorImprovement::CookingHearth(Cheaper(false)),
                 MajorImprovement::Well,
                 MajorImprovement::ClayOven,
                 MajorImprovement::StoneOven,
@@ -58,7 +56,7 @@ impl State {
             current_player_idx: first_player_idx,
             starting_player_idx: first_player_idx,
             people_placed_this_round: 0,
-            last_action: Action::StartRound,
+            last_action: Action::StartGame,
             start_round_events: vec![],
         };
         state.init_players(first_player_idx, num_players, human_player, default_ai_id);
@@ -85,33 +83,26 @@ impl State {
 
     // When all rounds in the previous stage are played - it is time for harvest
     pub fn is_harvest(&self) -> bool {
-        if self.hidden_spaces.last().is_some() {
-            if self.hidden_spaces.last().unwrap().is_empty() {
-                return true;
-            }
+        if self.hidden_spaces.last().is_some() && self.hidden_spaces.last().unwrap().is_empty() {
+            return true;
         }
         false
     }
 
     // After paying for harvest - this function needs to be called to clear the empty hidden space
     pub fn remove_empty_stage(&mut self) {
-        if self.hidden_spaces.last().is_some() {
-            if self.hidden_spaces.last().unwrap().is_empty() {
-                self.hidden_spaces.pop();
-            }
+        if self.hidden_spaces.last().is_some() && self.hidden_spaces.last().unwrap().is_empty() {
+            self.hidden_spaces.pop();
         }
     }
 
-    fn get_hash(&self) -> u64 {
+    pub fn get_hash(&self) -> u64 {
         let mut s = DefaultHasher::new();
         self.hash(&mut s);
         s.finish()
     }
 
     pub fn play(&mut self, debug: bool) {
-        // Setup 1st round
-        let last_action = self.last_action.clone();
-        last_action.apply_choice(self);
         loop {
             let algorithm = self.player_kind();
             let status = algorithm.play(self, debug);
@@ -180,6 +171,7 @@ impl State {
                 match default_ai_id {
                     0 => Kind::RandomMachine,
                     1 => Kind::UniformMachine,
+                    2 => Kind::MCTSMachine,
                     _ => return,
                 }
             };
@@ -191,13 +183,20 @@ impl State {
     pub fn replace_fireplace_with_cooking_hearth(&mut self, major: MajorImprovement) {
         let player = &mut self.players[self.current_player_idx];
         assert!(
-            player.major_cards.contains(&MajorImprovement::Fireplace2)
-                || player.major_cards.contains(&MajorImprovement::Fireplace3)
+            player
+                .major_cards
+                .contains(&MajorImprovement::Fireplace(Cheaper(true)))
+                || player
+                    .major_cards
+                    .contains(&MajorImprovement::Fireplace(Cheaper(false)))
         );
 
-        let mut returned_fireplace = MajorImprovement::Fireplace2;
-        if player.major_cards.contains(&MajorImprovement::Fireplace3) {
-            returned_fireplace = MajorImprovement::Fireplace3;
+        let mut returned_fireplace = MajorImprovement::Fireplace(Cheaper(true));
+        if player
+            .major_cards
+            .contains(&MajorImprovement::Fireplace(Cheaper(false)))
+        {
+            returned_fireplace = MajorImprovement::Fireplace(Cheaper(false));
         }
 
         self.major_improvements.retain(|x| x != &major);

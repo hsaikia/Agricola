@@ -1,6 +1,6 @@
 use crate::farm::PlantedSeed;
 use crate::game::{Event, State};
-use crate::major_improvements::MajorImprovement;
+use crate::major_improvements::{Cheaper, MajorImprovement};
 use crate::player::Player;
 use crate::primitives::{can_pay_for_resource, ResourceExchange};
 use rand::Rng;
@@ -29,6 +29,9 @@ pub struct WithRoom(bool);
 
 #[derive(Debug, Clone, Hash)]
 pub struct Harvest(bool);
+
+#[derive(Debug, Clone, Hash)]
+pub struct CalledFromCultivation(bool);
 
 #[derive(Debug, Clone, Hash)]
 pub enum Action {
@@ -66,10 +69,8 @@ pub enum Action {
     PlaceWorker,
     BuildRoom,
     BuildStable,
-    BuildFireplace2,
-    BuildFireplace3,
-    BuildCookingHearth4(ReturnFireplace),
-    BuildCookingHearth5(ReturnFireplace),
+    BuildFireplace(Cheaper),
+    BuildCookingHearth(Cheaper, ReturnFireplace),
     BuildWell,
     BuildClayOven,
     BuildStoneOven,
@@ -80,34 +81,32 @@ pub enum Action {
     EndTurn,
     EndGame,
     BuildMajor,
-    BuildMinor,
     BakeBread(CalledFromGrainUtilization, NumGrainToBake),
     Sow(CalledFromGrainUtilization, PlantedSeed),
     Renovate(CalledFromHouseRedevelopment, CalledFromFarmRedevelopment),
     GrowFamily(WithRoom),
     Fence, // TODO make generic
-    Plow,
+    Plow(CalledFromCultivation),
     Convert(ResourceExchange, Option<MajorImprovement>, Harvest),
     PreHarvest,
     PayFoodOrBeg,
+    StartGame,
 }
 
 impl Action {
-    pub fn next_choices(&self, state: &State) -> Vec<Self> {
+    pub fn next_choices(state: &State) -> Vec<Self> {
         let player = &state.players[state.current_player_idx];
         let mut ret: Vec<Self> = Vec::new();
-        match self {
+        match &state.last_action {
+            Self::EndGame => return vec![],
+            Self::StartGame => return vec![Self::StartRound],
             Self::StartRound => return vec![Self::PlaceWorker],
             Self::PlaceWorker => return Self::place_worker_choices(state),
-            Self::UseFarmland => return vec![Self::Plow],
+            Self::UseFarmland => return vec![Self::Plow(CalledFromCultivation(false))],
             Self::UseFarmExpansion => return Self::farm_expansion_choices(player),
             Self::UseFencing => return vec![Self::Fence],
             Self::UseGrainUtilization => return Self::grain_utilization_choices(player),
-            Self::BuildRoom => {
-                ret.extend(Self::farm_expansion_choices(player));
-                ret.push(Self::EndTurn);
-            }
-            Self::BuildStable => {
+            Self::BuildRoom | Self::BuildStable => {
                 ret.extend(Self::farm_expansion_choices(player));
                 ret.push(Self::EndTurn);
             }
@@ -131,10 +130,11 @@ impl Action {
                 );
                 for major in &majors_available {
                     match major {
-                        MajorImprovement::Fireplace2 => ret.push(Self::BuildFireplace2),
-                        MajorImprovement::Fireplace3 => ret.push(Self::BuildFireplace3),
-                        MajorImprovement::CookingHearth4 | MajorImprovement::CookingHearth5 => {
-                            ret.extend(Self::cooking_hearth_choices(player, major.clone()))
+                        MajorImprovement::Fireplace(cheaper) => {
+                            ret.push(Self::BuildFireplace(cheaper.clone()));
+                        }
+                        MajorImprovement::CookingHearth(cheaper) => {
+                            ret.extend(Self::cooking_hearth_choices(player, cheaper));
                         }
                         MajorImprovement::Well => ret.push(Self::BuildWell),
                         MajorImprovement::ClayOven => ret.push(Self::BuildClayOven),
@@ -142,7 +142,7 @@ impl Action {
                         MajorImprovement::Joinery => ret.push(Self::BuildJoinery),
                         MajorImprovement::Pottery => ret.push(Self::BuildPottery),
                         MajorImprovement::BasketmakersWorkshop => {
-                            ret.push(Self::BuildBasketmakersWorkshop)
+                            ret.push(Self::BuildBasketmakersWorkshop);
                         }
                     }
                 }
@@ -189,9 +189,14 @@ impl Action {
             }
             Self::UseCultivation => {
                 if player.can_add_new_field() {
-                    ret.push(Self::Plow);
+                    ret.push(Self::Plow(CalledFromCultivation(true)));
                 }
-                ret.extend(Self::sow_choices(player, false));
+            }
+            Self::Plow(from_cultivation) => {
+                if from_cultivation.0 {
+                    ret.extend(Self::sow_choices(player, false));
+                }
+                ret.push(Self::EndTurn);
             }
             Self::UseFarmRedevelopment => {
                 ret.push(Self::Renovate(
@@ -203,14 +208,12 @@ impl Action {
                 let total_workers = state.players.iter().map(|p| p.workers()).sum();
                 if state.people_placed_this_round < total_workers {
                     ret.push(Self::PlaceWorker);
+                } else if state.is_harvest() {
+                    ret.push(Self::Harvest);
+                } else if state.can_init_new_round() {
+                    ret.push(Self::StartRound);
                 } else {
-                    if state.is_harvest() {
-                        ret.push(Self::Harvest);
-                    } else if state.can_init_new_round() {
-                        ret.push(Self::StartRound);
-                    } else {
-                        panic!("EndTurn should not result in EndGame directly");
-                    }
+                    panic!("EndTurn should not result in EndGame directly");
                 }
             }
             Self::Harvest => {
@@ -230,10 +233,8 @@ impl Action {
             }
 
             Self::Convert(_, _, harvest) => {
-                if harvest.0 {
-                    if !player.harvest_paid {
-                        ret.extend(Self::harvest_choices(player));
-                    }
+                if harvest.0 && !player.harvest_paid {
+                    ret.extend(Self::harvest_choices(player));
                 }
             }
 
@@ -281,7 +282,7 @@ impl Action {
             Self::UseMeetingPlace => {
                 state.starting_player_idx = state.current_player_idx;
             }
-            Self::Plow => {
+            Self::Plow(_) => {
                 let player = &mut state.players[state.current_player_idx];
                 player.add_new_field();
             }
@@ -301,39 +302,24 @@ impl Action {
                 let player = &mut state.players[state.current_player_idx];
                 player.sow_field(seed);
             }
-            Self::BuildFireplace2
-            | Self::BuildFireplace3
-            | Self::BuildClayOven
-            | Self::BuildStoneOven
-            | Self::BuildJoinery
-            | Self::BuildPottery
-            | Self::BuildBasketmakersWorkshop => {
-                match self {
-                    Self::BuildFireplace2 => state.build_major(MajorImprovement::Fireplace2),
-                    Self::BuildFireplace3 => state.build_major(MajorImprovement::Fireplace3),
-                    Self::BuildClayOven => state.build_major(MajorImprovement::ClayOven),
-                    Self::BuildStoneOven => state.build_major(MajorImprovement::StoneOven),
-                    Self::BuildJoinery => state.build_major(MajorImprovement::Joinery),
-                    Self::BuildPottery => state.build_major(MajorImprovement::Pottery),
-                    Self::BuildBasketmakersWorkshop => {
-                        state.build_major(MajorImprovement::BasketmakersWorkshop)
-                    }
-                    _ => (),
-                };
+            Self::BuildFireplace(cheaper) => {
+                state.build_major(MajorImprovement::Fireplace(cheaper.clone()));
             }
-            Self::BuildCookingHearth4(return_fireplace) => {
+            Self::BuildCookingHearth(cheaper, return_fireplace) => {
                 if return_fireplace.0 {
-                    state.replace_fireplace_with_cooking_hearth(MajorImprovement::CookingHearth4);
+                    state.replace_fireplace_with_cooking_hearth(MajorImprovement::CookingHearth(
+                        cheaper.clone(),
+                    ));
                 } else {
-                    state.build_major(MajorImprovement::CookingHearth4);
+                    state.build_major(MajorImprovement::CookingHearth(cheaper.clone()));
                 }
             }
-            Self::BuildCookingHearth5(return_fireplace) => {
-                if return_fireplace.0 {
-                    state.replace_fireplace_with_cooking_hearth(MajorImprovement::CookingHearth5);
-                } else {
-                    state.build_major(MajorImprovement::CookingHearth5);
-                }
+            Self::BuildClayOven => state.build_major(MajorImprovement::ClayOven),
+            Self::BuildStoneOven => state.build_major(MajorImprovement::StoneOven),
+            Self::BuildJoinery => state.build_major(MajorImprovement::Joinery),
+            Self::BuildPottery => state.build_major(MajorImprovement::Pottery),
+            Self::BuildBasketmakersWorkshop => {
+                state.build_major(MajorImprovement::BasketmakersWorkshop)
             }
             Self::BakeBread(_called_from_grain_util, num_grain_to_bake) => {
                 let player = &mut state.players[state.current_player_idx];
@@ -348,15 +334,19 @@ impl Action {
                         player.resources[Resource::Food] += 4;
                     } else if player
                         .major_cards
-                        .contains(&MajorImprovement::CookingHearth4)
+                        .contains(&MajorImprovement::CookingHearth(Cheaper(true)))
                         || player
                             .major_cards
-                            .contains(&MajorImprovement::CookingHearth5)
+                            .contains(&MajorImprovement::CookingHearth(Cheaper(false)))
                     {
                         // Hearth converts one grain to 3 food.
                         player.resources[Resource::Food] += 3;
-                    } else if player.major_cards.contains(&MajorImprovement::Fireplace2)
-                        || player.major_cards.contains(&MajorImprovement::Fireplace3)
+                    } else if player
+                        .major_cards
+                        .contains(&MajorImprovement::Fireplace(Cheaper(true)))
+                        || player
+                            .major_cards
+                            .contains(&MajorImprovement::Fireplace(Cheaper(false)))
                     {
                         // Fireplace converts one grain to 2 food.
                         player.resources[Resource::Food] += 2;
@@ -440,12 +430,13 @@ impl Action {
                 let food_required = 2 * player.adults + player.children;
                 if food_required > player.resources[Resource::Food] {
                     player.begging_tokens += food_required - player.resources[Resource::Food];
+                    player.resources[Resource::Food] = 0;
                 } else {
                     player.resources[Resource::Food] -= food_required;
                 }
 
                 player.harvest_paid = true;
-                player.breed_and_reorg_animals(false);
+                player.breed_and_reorg_animals();
                 state.current_player_idx = (state.current_player_idx + 1) % state.players.len();
                 state.remove_empty_stage();
             }
@@ -506,32 +497,28 @@ impl Action {
         ret
     }
 
-    fn cooking_hearth_choices(player: &Player, hearth: MajorImprovement) -> Vec<Self> {
+    fn cooking_hearth_choices(player: &Player, cheaper: &Cheaper) -> Vec<Self> {
         let mut ret: Vec<Self> = Vec::new();
-        match hearth {
-            MajorImprovement::CookingHearth4 => {
-                if player.major_cards.contains(&MajorImprovement::Fireplace2)
-                    || player.major_cards.contains(&MajorImprovement::Fireplace3)
-                {
-                    ret.push(Self::BuildCookingHearth4(ReturnFireplace(true)));
-                }
-                if can_pay_for_resource(&MajorImprovement::CookingHearth4.cost(), &player.resources)
-                {
-                    ret.push(Self::BuildCookingHearth4(ReturnFireplace(false)));
-                }
-            }
-            MajorImprovement::CookingHearth5 => {
-                if player.major_cards.contains(&MajorImprovement::Fireplace2)
-                    || player.major_cards.contains(&MajorImprovement::Fireplace3)
-                {
-                    ret.push(Self::BuildCookingHearth5(ReturnFireplace(true)));
-                }
-                if can_pay_for_resource(&MajorImprovement::CookingHearth5.cost(), &player.resources)
-                {
-                    ret.push(Self::BuildCookingHearth5(ReturnFireplace(false)));
-                }
-            }
-            _ => (),
+        if player
+            .major_cards
+            .contains(&MajorImprovement::Fireplace(cheaper.clone()))
+            || player
+                .major_cards
+                .contains(&MajorImprovement::Fireplace(cheaper.other()))
+        {
+            ret.push(Self::BuildCookingHearth(
+                cheaper.clone(),
+                ReturnFireplace(true),
+            ));
+        }
+        if can_pay_for_resource(
+            &MajorImprovement::CookingHearth(cheaper.clone()).cost(),
+            &player.resources,
+        ) {
+            ret.push(Self::BuildCookingHearth(
+                cheaper.clone(),
+                ReturnFireplace(false),
+            ));
         }
         ret
     }
@@ -629,7 +616,7 @@ impl Action {
                         continue;
                     }
                 }
-                Self::UseHouseRedevelopment => {
+                Self::UseHouseRedevelopment | Self::UseFarmRedevelopment => {
                     if !player.can_renovate() {
                         continue;
                     }
@@ -646,11 +633,6 @@ impl Action {
                 }
                 Self::UseCultivation => {
                     if !player.can_sow() && !player.can_add_new_field() {
-                        continue;
-                    }
-                }
-                Self::UseFarmRedevelopment => {
-                    if !player.can_renovate() {
                         continue;
                     }
                 }
@@ -729,7 +711,6 @@ impl Action {
             | Self::UseReedBank
             | Self::UseTravelingPlayers
             | Self::UseFishing
-            | Self::UseSheepMarket
             | Self::UseWesternQuarry
             | Self::UseEasternQuarry => {
                 take_resource(res, &mut player.resources);
@@ -808,19 +789,19 @@ impl Action {
     }
 
     pub fn display(&self) {
-        println!("\nChosen Action : {:?}", self);
+        println!("\nChosen Action : {self:?}");
     }
 
-    pub fn display_all(actions: &Vec<Self>) {
+    pub fn display_all(actions: &[Self]) {
         print!("\n\nActions : ");
         for (i, a) in actions.iter().enumerate() {
-            print!("[#{i}. {:?}]", a);
+            print!("[#{i}. {a:?}]");
         }
         println!();
     }
 
-    pub fn initial_open_spaces() -> Vec<Self> {
-        vec![
+    pub fn initial_open_spaces() -> &'static [Self] {
+        &[
             Self::UseCopse,
             Self::UseGrove,
             Self::UseForest,
@@ -898,30 +879,28 @@ impl Action {
             Self::PlaceWorker => 31,
             Self::BuildRoom => 32,
             Self::BuildStable => 33,
-            Self::BuildFireplace2 => 34,
-            Self::BuildFireplace3 => 35,
-            Self::BuildCookingHearth4(_) => 36,
-            Self::BuildCookingHearth5(_) => 37,
-            Self::BuildWell => 38,
-            Self::BuildClayOven => 39,
-            Self::BuildStoneOven => 40,
-            Self::BuildJoinery => 41,
-            Self::BuildPottery => 42,
-            Self::BuildBasketmakersWorkshop => 43,
-            Self::Harvest => 44,
-            Self::EndTurn => 45,
-            Self::EndGame => 46,
-            Self::BuildMajor => 47,
-            Self::BuildMinor => 48,
-            Self::BakeBread(_, _) => 49,
-            Self::Sow(_, _) => 50,
-            Self::Renovate(_, _) => 51,
-            Self::GrowFamily(_) => 52,
-            Self::Fence => 53,
-            Self::Plow => 54,
-            Self::Convert(_, _, _) => 55,
-            Self::PreHarvest => 56,
-            Self::PayFoodOrBeg => 57,
+            Self::BuildFireplace(_) => 34,
+            Self::BuildCookingHearth(_, _) => 35,
+            Self::BuildWell => 36,
+            Self::BuildClayOven => 37,
+            Self::BuildStoneOven => 38,
+            Self::BuildJoinery => 39,
+            Self::BuildPottery => 40,
+            Self::BuildBasketmakersWorkshop => 41,
+            Self::Harvest => 42,
+            Self::EndTurn => 43,
+            Self::EndGame => 44,
+            Self::BuildMajor => 45,
+            Self::BakeBread(_, _) => 46,
+            Self::Sow(_, _) => 47,
+            Self::Renovate(_, _) => 48,
+            Self::GrowFamily(_) => 49,
+            Self::Fence => 50,
+            Self::Plow(_) => 51,
+            Self::Convert(_, _, _) => 52,
+            Self::PreHarvest => 53,
+            Self::PayFoodOrBeg => 54,
+            Self::StartGame => 55,
         }
     }
 }
