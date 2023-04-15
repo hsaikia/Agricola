@@ -2,7 +2,7 @@ use crate::actions::{Action, NUM_RESOURCE_SPACES};
 use crate::algorithms::Kind;
 use crate::major_improvements::{Cheaper, MajorImprovement};
 use crate::player::Player;
-use crate::primitives::{pay_for_resource, print_resources, Resources};
+use crate::primitives::{pay_for_resource, print_resources, Resource, Resources};
 use crate::scoring;
 use rand::Rng;
 use std::collections::hash_map::DefaultHasher;
@@ -156,6 +156,58 @@ impl State {
         scores
     }
 
+    pub fn init_new_round(&mut self) {
+        assert!(self.can_init_new_round());
+
+        let maybe_curr_stage = self.hidden_spaces.pop();
+        if let Some(mut curr_stage) = maybe_curr_stage {
+            assert!(!curr_stage.is_empty());
+            let random_idx = rand::thread_rng().gen_range(0..curr_stage.len());
+            let last_idx = curr_stage.len() - 1;
+            curr_stage.swap(random_idx, last_idx);
+            let next_action_space = curr_stage.pop().unwrap();
+
+            // Reveal the new action space
+            self.open_spaces.push(next_action_space);
+            // Put the rest of the hidden spaces in the current stage back
+            self.hidden_spaces.push(curr_stage);
+        }
+
+        // Reset workers
+        self.players
+            .iter_mut()
+            .for_each(Player::reset_for_next_round);
+        self.people_placed_this_round = 0;
+
+        // Update accumulation spaces
+        self.occupied_spaces.clear();
+        for action in &self.open_spaces {
+            if action.resource_map_idx().is_none() {
+                continue;
+            }
+            let res = &mut self.resource_map[action.resource_map_idx().unwrap()];
+            action.update_resources_on_accumulation_spaces(res);
+        }
+
+        // Current Round
+        let current_round = self.current_round();
+
+        // Delete old events
+        self.start_round_events.retain(|e| e.round >= current_round);
+
+        // Reset start player
+        self.current_player_idx = self.starting_player_idx;
+
+        // Look for start round events
+        for event in &self.start_round_events {
+            for (i, player) in self.players.iter_mut().enumerate() {
+                if event.round == current_round && event.player_idx == i {
+                    player.resources = (event.func)(player.resources);
+                }
+            }
+        }
+    }
+
     fn init_players(
         &mut self,
         first_idx: usize,
@@ -210,6 +262,97 @@ impl State {
         pay_for_resource(&major.cost(), &mut player.resources);
         self.major_improvements.retain(|x| x != &major);
         player.major_cards.push(major);
+    }
+
+    pub fn bake_bread(&mut self, num_grain_to_bake: u32) {
+        let player = &mut self.players[self.current_player_idx];
+        if num_grain_to_bake == 1 {
+            assert!(player.can_bake_bread());
+            player.resources[Resource::Grain] -= 1;
+            if player.major_cards.contains(&MajorImprovement::ClayOven) {
+                // Clay Oven converts one grain to 5 food.
+                player.resources[Resource::Food] += 5;
+            } else if player.major_cards.contains(&MajorImprovement::StoneOven) {
+                // Stone Oven conversion is upto two grain for 4 food each.
+                player.resources[Resource::Food] += 4;
+            } else if player
+                .major_cards
+                .contains(&MajorImprovement::CookingHearth(Cheaper(true)))
+                || player
+                    .major_cards
+                    .contains(&MajorImprovement::CookingHearth(Cheaper(false)))
+            {
+                // Hearth converts one grain to 3 food.
+                player.resources[Resource::Food] += 3;
+            } else if player
+                .major_cards
+                .contains(&MajorImprovement::Fireplace(Cheaper(true)))
+                || player
+                    .major_cards
+                    .contains(&MajorImprovement::Fireplace(Cheaper(false)))
+            {
+                // Fireplace converts one grain to 2 food.
+                player.resources[Resource::Food] += 2;
+            }
+        } else if num_grain_to_bake == 2 {
+            assert!(
+                player.resources[Resource::Grain] > 1
+                    && player.major_cards.contains(&MajorImprovement::StoneOven)
+            );
+            // Stone Oven conversion is upto two grain for 4 food each.
+            player.resources[Resource::Grain] -= 2;
+            player.resources[Resource::Food] += 8;
+        }
+    }
+
+    pub fn pay_food_or_beg(&mut self) {
+        let player = &mut self.players[self.current_player_idx];
+        let food_required = 2 * player.adults + player.children;
+        if food_required > player.resources[Resource::Food] {
+            player.begging_tokens += food_required - player.resources[Resource::Food];
+            player.resources[Resource::Food] = 0;
+        } else {
+            player.resources[Resource::Food] -= food_required;
+        }
+
+        player.harvest_paid = true;
+        player.breed_and_reorg_animals();
+        self.current_player_idx = (self.current_player_idx + 1) % self.players.len();
+        self.remove_empty_stage();
+    }
+
+    pub fn end_turn(&mut self) {
+        let player = &mut self.players[self.current_player_idx];
+        // Increment people placed by player
+        player.increment_people_placed();
+
+        // Increment workers placed
+        self.people_placed_this_round += 1;
+
+        // Advance to next player
+        self.current_player_idx = (self.current_player_idx + 1) % self.players.len();
+
+        // Skip over players that have all their workers placed
+        let total_workers = self.players.iter().map(Player::workers).sum();
+        if self.people_placed_this_round < total_workers {
+            while self.players[self.current_player_idx].all_people_placed() {
+                self.current_player_idx = (self.current_player_idx + 1) % self.players.len();
+            }
+        }
+    }
+
+    pub fn renovate(&mut self) {
+        let player = &mut self.players[self.current_player_idx];
+        player.renovate();
+    }
+
+    pub fn grow_family(&mut self, with_room: bool) {
+        let player = &mut self.players[self.current_player_idx];
+        if with_room {
+            player.grow_family_with_room();
+        } else {
+            player.grow_family_without_room();
+        }
     }
 
     pub fn display(&self) {

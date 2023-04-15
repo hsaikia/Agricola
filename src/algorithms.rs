@@ -1,6 +1,6 @@
 use crate::actions::Action;
-use crate::game::State;
 use crate::mcts::GameRecord;
+use crate::state::State;
 use rand::Rng;
 use std::collections::HashMap;
 use std::io;

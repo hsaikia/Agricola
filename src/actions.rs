@@ -1,9 +1,8 @@
 use crate::farm::PlantedSeed;
-use crate::game::{Event, State};
 use crate::major_improvements::{Cheaper, MajorImprovement};
 use crate::player::Player;
 use crate::primitives::{can_pay_for_resource, ResourceExchange};
-use rand::Rng;
+use crate::state::{Event, State};
 
 use crate::primitives::{new_res, take_resource, Resource, Resources};
 pub const NUM_RESOURCE_SPACES: usize = 18;
@@ -122,34 +121,9 @@ impl Action {
                 // TODO : Add BuildMinor here
                 return vec![Self::BuildMajor];
             }
-            Self::BuildMajor => {
-                let majors_available = MajorImprovement::available_majors_to_build(
-                    &player.major_cards,
-                    &state.major_improvements,
-                    &player.resources,
-                );
-                for major in &majors_available {
-                    match major {
-                        MajorImprovement::Fireplace(cheaper) => {
-                            ret.push(Self::BuildFireplace(cheaper.clone()));
-                        }
-                        MajorImprovement::CookingHearth(cheaper) => {
-                            ret.extend(Self::cooking_hearth_choices(player, cheaper));
-                        }
-                        MajorImprovement::Well => ret.push(Self::BuildWell),
-                        MajorImprovement::ClayOven => ret.push(Self::BuildClayOven),
-                        MajorImprovement::StoneOven => ret.push(Self::BuildStoneOven),
-                        MajorImprovement::Joinery => ret.push(Self::BuildJoinery),
-                        MajorImprovement::Pottery => ret.push(Self::BuildPottery),
-                        MajorImprovement::BasketmakersWorkshop => {
-                            ret.push(Self::BuildBasketmakersWorkshop);
-                        }
-                    }
-                }
-            }
+            Self::BuildMajor => return Self::build_major_choices(state),
             Self::BuildClayOven | Self::BuildStoneOven => {
                 ret.extend(Self::baking_choices(player, false));
-                ret.push(Self::EndTurn);
             }
             Self::BakeBread(called_from_grain_util, _num_grain_to_bake) => {
                 if called_from_grain_util.0 {
@@ -164,20 +138,7 @@ impl Action {
                 ));
             }
             Self::Renovate(from_house_redev, from_farm_redev) => {
-                if from_house_redev.0
-                    && MajorImprovement::can_build_major(
-                        &player.major_cards,
-                        &state.major_improvements,
-                        &player.resources,
-                    )
-                {
-                    // TODO also add minor check
-                    ret.push(Self::BuildMajor);
-                }
-                if from_farm_redev.0 && player.can_fence() {
-                    ret.push(Self::Fence);
-                }
-                ret.push(Self::EndTurn);
+                return Self::renovate_choices(state, from_house_redev, from_farm_redev);
             }
             Self::UseWishForChildren => {
                 ret.push(Self::GrowFamily(WithRoom(true)));
@@ -205,16 +166,7 @@ impl Action {
                 ));
             }
             Self::EndTurn => {
-                let total_workers = state.players.iter().map(|p| p.workers()).sum();
-                if state.people_placed_this_round < total_workers {
-                    ret.push(Self::PlaceWorker);
-                } else if state.is_harvest() {
-                    ret.push(Self::Harvest);
-                } else if state.can_init_new_round() {
-                    ret.push(Self::StartRound);
-                } else {
-                    panic!("EndTurn should not result in EndGame directly");
-                }
+                Self::end_turn_choices(state);
             }
             Self::Harvest => {
                 if !player.harvest_paid {
@@ -258,26 +210,7 @@ impl Action {
 
         match self {
             Self::StartRound => {
-                Self::init_new_round(state);
-
-                // Current Round
-                let current_round = state.current_round();
-
-                // Delete old events
-                state
-                    .start_round_events
-                    .retain(|e| e.round >= current_round);
-
-                // Current player
-                let player = &mut state.players[state.current_player_idx];
-
-                // Look for start round events
-                for event in &state.start_round_events {
-                    if event.round == current_round && event.player_idx == state.current_player_idx
-                    {
-                        player.resources = (event.func)(player.resources);
-                    }
-                }
+                state.init_new_round();
             }
             Self::UseMeetingPlace => {
                 state.starting_player_idx = state.current_player_idx;
@@ -319,48 +252,10 @@ impl Action {
             Self::BuildJoinery => state.build_major(MajorImprovement::Joinery),
             Self::BuildPottery => state.build_major(MajorImprovement::Pottery),
             Self::BuildBasketmakersWorkshop => {
-                state.build_major(MajorImprovement::BasketmakersWorkshop)
+                state.build_major(MajorImprovement::BasketmakersWorkshop);
             }
             Self::BakeBread(_called_from_grain_util, num_grain_to_bake) => {
-                let player = &mut state.players[state.current_player_idx];
-                if num_grain_to_bake.0 == 1 {
-                    assert!(player.can_bake_bread());
-                    player.resources[Resource::Grain] -= 1;
-                    if player.major_cards.contains(&MajorImprovement::ClayOven) {
-                        // Clay Oven converts one grain to 5 food.
-                        player.resources[Resource::Food] += 5;
-                    } else if player.major_cards.contains(&MajorImprovement::StoneOven) {
-                        // Stone Oven conversion is upto two grain for 4 food each.
-                        player.resources[Resource::Food] += 4;
-                    } else if player
-                        .major_cards
-                        .contains(&MajorImprovement::CookingHearth(Cheaper(true)))
-                        || player
-                            .major_cards
-                            .contains(&MajorImprovement::CookingHearth(Cheaper(false)))
-                    {
-                        // Hearth converts one grain to 3 food.
-                        player.resources[Resource::Food] += 3;
-                    } else if player
-                        .major_cards
-                        .contains(&MajorImprovement::Fireplace(Cheaper(true)))
-                        || player
-                            .major_cards
-                            .contains(&MajorImprovement::Fireplace(Cheaper(false)))
-                    {
-                        // Fireplace converts one grain to 2 food.
-                        player.resources[Resource::Food] += 2;
-                    }
-                } else if num_grain_to_bake.0 == 2 {
-                    let player = &mut state.players[state.current_player_idx];
-                    assert!(
-                        player.resources[Resource::Grain] > 1
-                            && player.major_cards.contains(&MajorImprovement::StoneOven)
-                    );
-                    // Stone Oven conversion is upto two grain for 4 food each.
-                    player.resources[Resource::Grain] -= 2;
-                    player.resources[Resource::Food] += 8;
-                }
+                state.bake_bread(num_grain_to_bake.0);
             }
             Self::BuildWell => {
                 let current_round = state.current_round();
@@ -378,37 +273,10 @@ impl Action {
                 }
             }
             Self::Renovate(_from_house_redev, _from_farm_redev) => {
-                let player = &mut state.players[state.current_player_idx];
-                player.renovate();
+                state.renovate();
             }
-            Self::GrowFamily(with_room) => {
-                let player = &mut state.players[state.current_player_idx];
-                if with_room.0 {
-                    player.grow_family_with_room();
-                } else {
-                    player.grow_family_without_room();
-                }
-            }
-            Self::EndTurn => {
-                let player = &mut state.players[state.current_player_idx];
-                // Increment people placed by player
-                player.increment_people_placed();
-
-                // Increment workers placed
-                state.people_placed_this_round += 1;
-
-                // Advance to next player
-                state.current_player_idx = (state.current_player_idx + 1) % state.players.len();
-
-                // Skip over players that have all their workers placed
-                let total_workers = state.players.iter().map(|p| p.workers()).sum();
-                if state.people_placed_this_round < total_workers {
-                    while state.players[state.current_player_idx].all_people_placed() {
-                        state.current_player_idx =
-                            (state.current_player_idx + 1) % state.players.len();
-                    }
-                }
-            }
+            Self::GrowFamily(with_room) => state.grow_family(with_room.0),
+            Self::EndTurn => state.end_turn(),
             Self::PreHarvest => {
                 let player = &mut state.players[state.current_player_idx];
                 // Harvest grain and veggies
@@ -425,21 +293,7 @@ impl Action {
                     }
                 }
             }
-            Self::PayFoodOrBeg => {
-                let player = &mut state.players[state.current_player_idx];
-                let food_required = 2 * player.adults + player.children;
-                if food_required > player.resources[Resource::Food] {
-                    player.begging_tokens += food_required - player.resources[Resource::Food];
-                    player.resources[Resource::Food] = 0;
-                } else {
-                    player.resources[Resource::Food] -= food_required;
-                }
-
-                player.harvest_paid = true;
-                player.breed_and_reorg_animals();
-                state.current_player_idx = (state.current_player_idx + 1) % state.players.len();
-                state.remove_empty_stage();
-            }
+            Self::PayFoodOrBeg => state.pay_food_or_beg(),
             _ => (),
         }
 
@@ -449,6 +303,45 @@ impl Action {
             let res = &mut state.resource_map[resource_idx];
             self.collect_resources(player, res);
         }
+    }
+
+    fn end_turn_choices(state: &State) -> Vec<Self> {
+        let mut ret: Vec<Self> = Vec::new();
+        let total_workers = state.players.iter().map(Player::workers).sum();
+        if state.people_placed_this_round < total_workers {
+            ret.push(Self::PlaceWorker);
+        } else if state.is_harvest() {
+            ret.push(Self::Harvest);
+        } else if state.can_init_new_round() {
+            ret.push(Self::StartRound);
+        } else {
+            panic!("EndTurn should not result in EndGame directly");
+        }
+        ret
+    }
+
+    fn renovate_choices(
+        state: &State,
+        from_house_redev: &CalledFromHouseRedevelopment,
+        from_farm_redev: &CalledFromFarmRedevelopment,
+    ) -> Vec<Self> {
+        let player = &state.players[state.current_player_idx];
+        let mut ret: Vec<Self> = Vec::new();
+        if from_house_redev.0
+            && MajorImprovement::can_build_major(
+                &player.major_cards,
+                &state.major_improvements,
+                &player.resources,
+            )
+        {
+            // TODO also add minor check
+            ret.push(Self::BuildMajor);
+        }
+        if from_farm_redev.0 && player.can_fence() {
+            ret.push(Self::Fence);
+        }
+        ret.push(Self::EndTurn);
+        ret
     }
 
     fn harvest_choices(player: &Player) -> Vec<Self> {
@@ -567,6 +460,7 @@ impl Action {
                 NumGrainToBake(1),
             ));
         }
+        ret.push(Self::EndTurn);
         ret
     }
 
@@ -646,45 +540,37 @@ impl Action {
         ret
     }
 
-    fn init_new_round(state: &mut State) {
-        assert!(state.can_init_new_round());
+    fn build_major_choices(state: &State) -> Vec<Self> {
+        let player = &state.players[state.current_player_idx];
+        let mut ret: Vec<Self> = Vec::new();
 
-        let maybe_curr_stage = state.hidden_spaces.pop();
-        if let Some(mut curr_stage) = maybe_curr_stage {
-            assert!(!curr_stage.is_empty());
-            let random_idx = rand::thread_rng().gen_range(0..curr_stage.len());
-            let last_idx = curr_stage.len() - 1;
-            curr_stage.swap(random_idx, last_idx);
-            let next_action_space = curr_stage.pop().unwrap();
-
-            // Reveal the new action space
-            state.open_spaces.push(next_action_space);
-            // Put the rest of the hidden spaces in the current stage back
-            state.hidden_spaces.push(curr_stage);
-        }
-
-        // Set start player
-        state.current_player_idx = state.starting_player_idx;
-
-        // Reset workers
-        state
-            .players
-            .iter_mut()
-            .for_each(|player| player.reset_for_next_round());
-        state.people_placed_this_round = 0;
-
-        // Update accumulation spaces
-        state.occupied_spaces.clear();
-        for action in &state.open_spaces {
-            if action.resource_map_idx().is_none() {
-                continue;
+        let majors_available = MajorImprovement::available_majors_to_build(
+            &player.major_cards,
+            &state.major_improvements,
+            &player.resources,
+        );
+        for major in &majors_available {
+            match major {
+                MajorImprovement::Fireplace(cheaper) => {
+                    ret.push(Self::BuildFireplace(cheaper.clone()));
+                }
+                MajorImprovement::CookingHearth(cheaper) => {
+                    ret.extend(Self::cooking_hearth_choices(player, cheaper));
+                }
+                MajorImprovement::Well => ret.push(Self::BuildWell),
+                MajorImprovement::ClayOven => ret.push(Self::BuildClayOven),
+                MajorImprovement::StoneOven => ret.push(Self::BuildStoneOven),
+                MajorImprovement::Joinery => ret.push(Self::BuildJoinery),
+                MajorImprovement::Pottery => ret.push(Self::BuildPottery),
+                MajorImprovement::BasketmakersWorkshop => {
+                    ret.push(Self::BuildBasketmakersWorkshop);
+                }
             }
-            let res = &mut state.resource_map[action.resource_map_idx().unwrap()];
-            action.update_resources_on_accumulation_spaces(res);
         }
+        ret
     }
 
-    fn update_resources_on_accumulation_spaces(&self, res: &mut Resources) {
+    pub fn update_resources_on_accumulation_spaces(&self, res: &mut Resources) {
         match self {
             Self::UseCopse => res[Resource::Wood] += 1,
             Self::UseGrove => res[Resource::Wood] += 2,

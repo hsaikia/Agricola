@@ -7,12 +7,12 @@ extern crate lazy_static;
 mod actions;
 mod algorithms;
 mod farm;
-mod game;
 mod major_improvements;
 mod mcts;
 mod player;
 mod primitives;
 mod scoring;
+mod state;
 // mod fencing;
 
 fn main() {
@@ -51,7 +51,7 @@ fn main() {
 
     // Make the first player Human
     let first_player_human = args.len() == 4;
-    let mut game = game::State::create_new(num_players, first_player_human, default_ai_id);
+    let mut game = state::State::create_new(num_players, first_player_human, default_ai_id);
 
     let debug = true;
 
