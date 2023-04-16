@@ -91,7 +91,7 @@ impl MajorImprovement {
         available
     }
 
-    pub fn exchanges(&self, used: &[Self]) -> Option<Vec<ResourceExchange>> {
+    pub fn exchanges(&self) -> Vec<ResourceExchange> {
         match self {
             Self::Fireplace(_) => {
                 let ret: Vec<ResourceExchange> = vec![
@@ -120,7 +120,7 @@ impl MajorImprovement {
                         num_to: 3,
                     },
                 ];
-                Some(ret)
+                ret
             }
             Self::CookingHearth(_) => {
                 let ret: Vec<ResourceExchange> = vec![
@@ -149,45 +149,33 @@ impl MajorImprovement {
                         num_to: 4,
                     },
                 ];
-                Some(ret)
+                ret
             }
             Self::Joinery => {
-                let mut ret: Vec<ResourceExchange> = vec![];
-                if !used.contains(self) {
-                    ret.push(ResourceExchange {
-                        from: Resource::Wood,
-                        to: Resource::Food,
-                        num_from: 1,
-                        num_to: 2,
-                    });
-                }
-                Some(ret)
+                vec![ResourceExchange {
+                    from: Resource::Wood,
+                    to: Resource::Food,
+                    num_from: 1,
+                    num_to: 2,
+                }]
             }
             Self::Pottery => {
-                let mut ret: Vec<ResourceExchange> = vec![];
-                if !used.contains(self) {
-                    ret.push(ResourceExchange {
-                        from: Resource::Clay,
-                        to: Resource::Food,
-                        num_from: 1,
-                        num_to: 2,
-                    });
-                }
-                Some(ret)
+                vec![ResourceExchange {
+                    from: Resource::Clay,
+                    to: Resource::Food,
+                    num_from: 1,
+                    num_to: 2,
+                }]
             }
             Self::BasketmakersWorkshop => {
-                let mut ret: Vec<ResourceExchange> = vec![];
-                if !used.contains(self) {
-                    ret.push(ResourceExchange {
-                        from: Resource::Reed,
-                        to: Resource::Food,
-                        num_from: 1,
-                        num_to: 3,
-                    });
-                }
-                Some(ret)
+                vec![ResourceExchange {
+                    from: Resource::Reed,
+                    to: Resource::Food,
+                    num_from: 1,
+                    num_to: 3,
+                }]
             }
-            _ => None,
+            _ => vec![],
         }
     }
 

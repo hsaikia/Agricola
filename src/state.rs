@@ -1,6 +1,7 @@
 use crate::actions::{Action, NUM_RESOURCE_SPACES};
 use crate::algorithms::Kind;
 use crate::major_improvements::{Cheaper, MajorImprovement};
+use crate::occupations::Occupation;
 use crate::player::Player;
 use crate::primitives::{pay_for_resource, print_resources, Resource, Resources};
 use crate::scoring;
@@ -9,6 +10,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 const INITIAL_OPEN_SPACES: usize = 16;
+pub const NUM_ACTION_SPACES: usize = 30;
 
 #[derive(Clone, Hash, Debug)]
 pub struct Event {
@@ -30,6 +32,7 @@ pub struct State {
     pub people_placed_this_round: u32,
     pub last_action: Action,
     pub start_round_events: Vec<Event>,
+    pub available_occupations: Vec<Occupation>,
 }
 
 impl State {
@@ -37,7 +40,7 @@ impl State {
         let first_player_idx = rand::thread_rng().gen_range(0..num_players);
         let mut state = State {
             resource_map: Action::init_resource_map(),
-            open_spaces: Action::initial_open_spaces().to_vec(),
+            open_spaces: Action::initial_open_spaces(),
             occupied_spaces: Vec::new(),
             hidden_spaces: Action::initial_hidden_spaces(),
             major_improvements: vec![
@@ -58,6 +61,7 @@ impl State {
             people_placed_this_round: 0,
             last_action: Action::StartGame,
             start_round_events: vec![],
+            available_occupations: Occupation::all(),
         };
         state.init_players(first_player_idx, num_players, human_player, default_ai_id);
         state
@@ -65,6 +69,16 @@ impl State {
 
     pub fn current_round(&self) -> usize {
         self.open_spaces.len() - INITIAL_OPEN_SPACES
+    }
+
+    pub fn add_action(&mut self, action: &Action) {
+        // Set space to occupied of action corresponds to an action space
+        if action.action_idx() < NUM_ACTION_SPACES {
+            self.occupied_spaces.push(action.action_idx());
+        }
+
+        // Add action to the sequence of actions taken by the current player
+        self.last_action = action.clone();
     }
 
     pub fn can_init_new_round(&self) -> bool {
@@ -87,6 +101,14 @@ impl State {
             return true;
         }
         false
+    }
+
+    pub fn pre_harvest(&mut self) {
+        let player = &mut self.players[self.current_player_idx];
+        // Harvest grain and veggies
+        player.harvest_fields();
+        // Move all animals to the resources array
+        player.add_animals_in_pastures_to_resources();
     }
 
     // After paying for harvest - this function needs to be called to clear the empty hidden space
@@ -232,7 +254,7 @@ impl State {
         }
     }
 
-    pub fn replace_fireplace_with_cooking_hearth(&mut self, major: MajorImprovement) {
+    pub fn replace_fireplace_with_cooking_hearth(&mut self, major: &MajorImprovement) {
         let player = &mut self.players[self.current_player_idx];
         assert!(
             player
@@ -251,17 +273,36 @@ impl State {
             returned_fireplace = MajorImprovement::Fireplace(Cheaper(false));
         }
 
-        self.major_improvements.retain(|x| x != &major);
+        self.major_improvements.retain(|x| x != major);
         player.major_cards.retain(|x| x != &returned_fireplace);
-        player.major_cards.push(major);
+        player.major_cards.push(major.clone());
         self.major_improvements.push(returned_fireplace);
     }
 
-    pub fn build_major(&mut self, major: MajorImprovement) {
-        let player = &mut self.players[self.current_player_idx];
-        pay_for_resource(&major.cost(), &mut player.resources);
-        self.major_improvements.retain(|x| x != &major);
-        player.major_cards.push(major);
+    pub fn build_major(&mut self, major: &MajorImprovement, return_fireplace: bool) {
+        if return_fireplace {
+            self.replace_fireplace_with_cooking_hearth(major);
+        } else {
+            let player = &mut self.players[self.current_player_idx];
+            pay_for_resource(&major.cost(), &mut player.resources);
+            self.major_improvements.retain(|x| x != major);
+            player.major_cards.push(major.clone());
+
+            if matches!(major, MajorImprovement::Well) {
+                let current_round = self.current_round();
+                let func = |mut res: Resources| {
+                    res[Resource::Food] += 1;
+                    res
+                };
+                for i in 1..=5 {
+                    self.start_round_events.push(Event {
+                        round: current_round + i,
+                        player_idx: self.current_player_idx,
+                        func,
+                    });
+                }
+            }
+        }
     }
 
     pub fn bake_bread(&mut self, num_grain_to_bake: u32) {
@@ -273,7 +314,7 @@ impl State {
                 // Clay Oven converts one grain to 5 food.
                 player.resources[Resource::Food] += 5;
             } else if player.major_cards.contains(&MajorImprovement::StoneOven) {
-                // Stone Oven conversion is upto two grain for 4 food each.
+                // Stone Oven converts upto two grain for 4 food each.
                 player.resources[Resource::Food] += 4;
             } else if player
                 .major_cards
@@ -299,7 +340,7 @@ impl State {
                 player.resources[Resource::Grain] > 1
                     && player.major_cards.contains(&MajorImprovement::StoneOven)
             );
-            // Stone Oven conversion is upto two grain for 4 food each.
+            // Stone Oven converts upto two grain for 4 food each.
             player.resources[Resource::Grain] -= 2;
             player.resources[Resource::Food] += 8;
         }

@@ -1,6 +1,7 @@
 use crate::algorithms::Kind;
 use crate::farm::{house_emoji, Animal, Field, House, Pasture, PlantedSeed};
 use crate::major_improvements::{Cheaper, MajorImprovement};
+use crate::occupations::Occupation;
 use crate::primitives::{
     can_pay_for_resource, new_res, pay_for_resource, print_resources, Resource, ResourceExchange,
     Resources,
@@ -42,7 +43,7 @@ pub struct Player {
     // Animals in this resources array are the ones that are pets in the house and the ones that are kept in unfenced stables
     pub kind: Kind,
     pub resources: Resources,
-    people_placed: u32,
+    pub people_placed: u32,
     pub adults: u32,
     pub children: u32,
     pub begging_tokens: u32,
@@ -56,8 +57,10 @@ pub struct Player {
     pub pastures: Vec<Pasture>,
     pub unfenced_stables: u32,
     pub fences_left: u32,
-    pub major_used_for_harvest: Vec<MajorImprovement>,
+    pub majors_used_for_harvest: Vec<MajorImprovement>,
+    pub occupations: Vec<Occupation>,
     pub harvest_paid: bool,
+    pub before_round_start: bool,
 }
 
 impl Player {
@@ -93,8 +96,10 @@ impl Player {
             pastures: vec![],
             unfenced_stables: 0,
             fences_left: MAX_FENCES,
-            major_used_for_harvest: vec![],
+            majors_used_for_harvest: vec![],
+            occupations: vec![],
             harvest_paid: false,
+            before_round_start: true,
         }
     }
 
@@ -140,6 +145,10 @@ impl Player {
                 f.seed = PlantedSeed::Empty;
             }
         }
+    }
+
+    pub fn got_enough_food(&self) -> bool {
+        2 * self.adults + self.children <= self.resources[Resource::Food]
     }
 
     pub fn kind(&self) -> Kind {
@@ -516,8 +525,9 @@ impl Player {
         self.adults += self.children;
         self.children = 0;
         self.people_placed = 0;
-        self.major_used_for_harvest.clear();
+        self.majors_used_for_harvest.clear();
         self.harvest_paid = false;
+        self.before_round_start = true;
     }
 
     pub fn workers(&self) -> u32 {
@@ -530,6 +540,7 @@ impl Player {
 
     pub fn increment_people_placed(&mut self) {
         self.people_placed += 1;
+        self.before_round_start = false;
     }
 
     pub fn all_people_placed(&self) -> bool {
@@ -541,8 +552,62 @@ impl Player {
     }
 
     pub fn use_exchange(&mut self, res_ex: &ResourceExchange) {
+        assert!(self.can_use_exchange(res_ex));
         self.resources[res_ex.from.clone()] -= res_ex.num_from;
         self.resources[res_ex.to.clone()] += res_ex.num_to;
+    }
+
+    pub fn has_cooking_improvement(&self) -> bool {
+        self.major_cards
+            .contains(&MajorImprovement::Fireplace(Cheaper(true)))
+            | self
+                .major_cards
+                .contains(&MajorImprovement::Fireplace(Cheaper(false)))
+            | self
+                .major_cards
+                .contains(&MajorImprovement::CookingHearth(Cheaper(true)))
+            | self
+                .major_cards
+                .contains(&MajorImprovement::CookingHearth(Cheaper(false)))
+    }
+
+    pub fn has_resources_to_cook(&self) -> bool {
+        self.resources[Resource::Sheep]
+            + self.resources[Resource::Pigs]
+            + self.resources[Resource::Cattle]
+            + self.resources[Resource::Vegetable]
+            > 0
+    }
+
+    pub fn can_play_occupation(&self, cheaper: bool) -> bool {
+        let mut required_food = if cheaper { 1 } else { 2 };
+        if self.occupations.is_empty() && cheaper {
+            required_food = 0;
+        }
+        if self.occupations.len() < 2 && !cheaper {
+            required_food = 1;
+        }
+
+        // If can pay directly
+        if required_food <= self.resources[Resource::Food] {
+            return true;
+        }
+
+        // If cannot pay directly, but can convert some resources
+        required_food -= self.resources[Resource::Food];
+
+        let raw_grain_and_veg =
+            self.resources[Resource::Grain] + self.resources[Resource::Vegetable];
+        if required_food <= raw_grain_and_veg {
+            return true;
+        }
+
+        // Required food must be less than 3, and minimum food gained by cooking is 2
+        if self.has_cooking_improvement() && self.has_resources_to_cook() {
+            return true;
+        }
+
+        false
     }
 
     pub fn display(&self) {
@@ -589,6 +654,7 @@ impl Player {
         }
 
         MajorImprovement::display(&self.major_cards);
+        Occupation::display(&self.occupations);
 
         println!();
     }

@@ -9,6 +9,7 @@ mod algorithms;
 mod farm;
 mod major_improvements;
 mod mcts;
+mod occupations;
 mod player;
 mod primitives;
 mod scoring;

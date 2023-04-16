@@ -5,7 +5,7 @@ use rand::Rng;
 use std::collections::HashMap;
 use std::io;
 
-const NUM_GAMES_TO_SIMULATE: usize = 1000;
+const NUM_GAMES_TO_SIMULATE: usize = 10000;
 
 #[derive(Clone, Hash)]
 pub enum Kind {
