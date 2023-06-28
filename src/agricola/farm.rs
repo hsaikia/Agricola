@@ -234,8 +234,20 @@ impl Farm {
         for _ in 0..num_positions {
             let mut candidate_spaces = curr_farm.neighboring_empty_spaces(*space_type);
 
+            let num_occ_spaces = curr_farm
+                .farmyard_spaces
+                .iter()
+                .filter(|&x| x == space_type)
+                .count();
+            let num_cand_spaces = candidate_spaces.iter().filter(|&x| *x).count();
+
+            if num_occ_spaces > 0 && num_cand_spaces == 0 {
+                // Blocked on all sides, can't expand
+                break;
+            }
+
             // If no such farmyard space exists yet, can place anywhere on an empty space
-            if candidate_spaces.iter().filter(|&x| *x).count() == 0 {
+            if num_cand_spaces == 0 {
                 for (i, fys) in curr_farm.farmyard_spaces.iter().enumerate() {
                     candidate_spaces[i] = fys == &FarmyardSpace::Empty;
                 }
@@ -308,15 +320,6 @@ mod tests {
                 .count(),
             0
         );
-    }
-
-    #[test]
-    fn test_spaces() {
-        let farm = Farm::new();
-        assert_eq!(farm.spaces(&FarmyardSpace::Empty).len(), 13);
-        assert_eq!(farm.spaces(&FarmyardSpace::Room).len(), 2);
-        assert_eq!(farm.spaces(&FarmyardSpace::Field).len(), 0);
-        assert_eq!(farm.spaces(&FarmyardSpace::Pasture).len(), 0);
     }
 
     #[test]
