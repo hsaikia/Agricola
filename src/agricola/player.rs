@@ -1,6 +1,6 @@
 use crate::agricola::algorithms::Kind;
 use crate::agricola::farm::{
-    house_emoji, Animal, Farm, FarmyardSpace, Field, House, Pasture, Seed, NUM_FARMYARD_SPACES,
+    house_emoji, Animal, Farm, House, Pasture, Seed, MAX_FENCES, NUM_FARMYARD_SPACES,
 };
 use crate::agricola::major_improvements::{Cheaper, MajorImprovement};
 use crate::agricola::occupations::Occupation;
@@ -9,13 +9,14 @@ use crate::agricola::primitives::{
     Resources,
 };
 use crate::agricola::scoring;
+use rand::seq::SliceRandom;
+use rand::Rng;
 use std::cmp;
 
 const MAX_STABLES: usize = 4;
 const MAX_FAMILY_MEMBERS: usize = 5;
 const STARTING_ROOMS: usize = 2;
 const STARTING_PEOPLE: usize = 2;
-const MAX_FENCES: usize = 15;
 
 lazy_static! {
     // map[idx] = (p, w) : Choice of p pastures using w wood when idx number of fences remain.
@@ -54,7 +55,6 @@ pub struct Player {
     pub major_cards: Vec<MajorImprovement>,
     pub house: House,
     pub rooms: usize,
-    pub fields: Vec<Field>,
     pub pastures: Vec<Pasture>,
     pub unfenced_stables: usize,
     pub fences_left: usize,
@@ -94,7 +94,6 @@ impl Player {
             major_cards: vec![],
             house: House::Wood,
             rooms: STARTING_ROOMS,
-            fields: vec![],
             pastures: vec![],
             unfenced_stables: 0,
             fences_left: MAX_FENCES,
@@ -124,19 +123,17 @@ impl Player {
 
         NUM_FARMYARD_SPACES
             - self.rooms
-            - self.fields.len()
+            - self.farm.num_fields()
             - pasture_spaces
             - self.unfenced_stables
     }
 
     pub fn harvest_fields(&mut self) {
-        for f in &mut self.fields {
-            let opt_harvested_crop = f.harvest();
-            if let Some(harvested_crop) = opt_harvested_crop {
-                match harvested_crop {
-                    Seed::Grain => self.resources[Resource::Grain] += 1,
-                    Seed::Vegetable => self.resources[Resource::Vegetable] += 1,
-                }
+        let crops = self.farm.harvest_fields();
+        for crop in crops {
+            match crop {
+                Seed::Grain => self.resources[Resource::Grain] += 1,
+                Seed::Vegetable => self.resources[Resource::Vegetable] += 1,
             }
         }
     }
@@ -321,20 +318,16 @@ impl Player {
     }
 
     pub fn sow_field(&mut self, seed: &Seed) {
-        for field in &mut self.fields {
-            if field.sow(seed) {
-                match seed {
-                    Seed::Grain => self.resources[Resource::Grain] -= 1,
-                    Seed::Vegetable => self.resources[Resource::Vegetable] -= 1,
-                }
-                break;
-            }
+        self.farm.sow_field(seed);
+        match seed {
+            Seed::Grain => self.resources[Resource::Grain] -= 1,
+            Seed::Vegetable => self.resources[Resource::Vegetable] -= 1,
         }
     }
 
     pub fn can_sow(&self) -> bool {
         (self.resources[Resource::Grain] > 0 || self.resources[Resource::Vegetable] > 0)
-            && self.fields.iter().any(|f| matches!(f, Field::Empty))
+            && self.farm.can_sow()
     }
 
     pub fn fence(&mut self) {
@@ -352,11 +345,11 @@ impl Player {
                     no_empty_farmyard_spaces_left,
                 ));
 
-                let best_spaces = self.farm.best_spaces(*p, &FarmyardSpace::Pasture);
-                assert!(best_spaces.len() == *p);
-                for space_idx in best_spaces {
-                    self.farm.farmyard_spaces[space_idx] = FarmyardSpace::Pasture;
-                }
+                // let best_spaces = self.farm.best_spaces(*p, &FarmyardSpace::Pasture);
+                // assert!(best_spaces.len() == *p);
+                // for space_idx in best_spaces {
+                //     self.farm.farmyard_spaces[space_idx] = FarmyardSpace::Pasture;
+                // }
 
                 self.fences_left -= *w;
                 self.resources[Resource::Wood] -= *w;
@@ -457,9 +450,9 @@ impl Player {
         pay_for_resource(&self.build_room_cost, &mut self.resources);
         self.rooms += 1;
 
-        let best_spaces = self.farm.best_spaces(1, &FarmyardSpace::Room);
-        assert!(best_spaces.len() == 1);
-        self.farm.farmyard_spaces[best_spaces[0]] = FarmyardSpace::Room;
+        // let best_spaces = self.farm.best_spaces(1, &FarmyardSpace::Room);
+        // assert!(best_spaces.len() == 1);
+        // self.farm.farmyard_spaces[best_spaces[0]] = FarmyardSpace::Room;
 
         match self.house {
             House::Wood => self.renovation_cost[Resource::Clay] += 1,
@@ -513,18 +506,14 @@ impl Player {
     }
 
     pub fn add_new_field(&mut self) {
-        assert!(self.can_add_new_field());
-        let field = Field::new();
-
-        let best_spaces = self.farm.best_spaces(1, &FarmyardSpace::Field);
-        assert!(best_spaces.len() == 1);
-        self.farm.farmyard_spaces[best_spaces[0]] = FarmyardSpace::Field;
-
-        self.fields.push(field);
+        let idxs = self.farm.field_options();
+        assert!(!idxs.is_empty());
+        let idx = idxs.choose(&mut rand::thread_rng()).unwrap();
+        self.farm.add_field(*idx);
     }
 
     pub fn can_add_new_field(&self) -> bool {
-        self.empty_farmyard_spaces() > 0
+        !self.farm.field_options().is_empty()
     }
 
     pub fn reset_for_next_round(&mut self) {
@@ -646,14 +635,6 @@ impl Player {
             print!("Pastures ");
             for p in &self.pastures {
                 p.display();
-            }
-            println!();
-        }
-
-        if !self.fields.is_empty() {
-            print!("Fields ");
-            for f in &self.fields {
-                f.display();
             }
             println!();
         }

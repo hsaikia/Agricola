@@ -1,4 +1,4 @@
-use crate::agricola::farm::{Field, House, Seed};
+use crate::agricola::farm::{FarmyardSpace, House, Seed};
 use crate::agricola::major_improvements::MajorImprovement;
 use crate::agricola::player::Player;
 use crate::agricola::primitives::Resource;
@@ -18,18 +18,22 @@ fn calc_score(num: usize, scores: &[i32]) -> i32 {
         scores[num]
     }
 }
-fn score_plants(player: &Player, debug: bool) -> i32 {
+fn score_fields(player: &Player, debug: bool) -> i32 {
     let mut num_grain: usize = 0;
     let mut num_veg: usize = 0;
-    for field in &player.fields {
-        match field {
-            Field::Planted(seed, amount) => match seed {
+    let mut num_fields: usize = 0;
+
+    for space in &player.farm.farmyard_spaces {
+        match space {
+            FarmyardSpace::EmptyField => num_fields += 1,
+            FarmyardSpace::PlantedField(crop, amount) => match *crop {
                 Seed::Grain => num_grain += amount,
                 Seed::Vegetable => num_veg += amount,
             },
-            Field::Empty => (),
+            _ => (),
         }
     }
+
     num_grain += player.resources[Resource::Grain];
     num_veg += player.resources[Resource::Vegetable];
     let gr_score = calc_score(num_grain, &GRAIN_SCORE);
@@ -39,7 +43,7 @@ fn score_plants(player: &Player, debug: bool) -> i32 {
         print!("\nScoring {num_grain} Grain {gr_score} and {num_veg} Veggies {veg_score}.");
     }
 
-    gr_score + veg_score
+    gr_score + veg_score + calc_score(num_fields, &FIELD_SCORE)
 }
 
 fn score_animals(player: &Player, debug: bool) -> i32 {
@@ -62,10 +66,6 @@ fn score_animals(player: &Player, debug: bool) -> i32 {
     }
 
     sh_score + pig_score + cow_score
-}
-
-fn score_fields(player: &Player) -> i32 {
-    calc_score(player.fields.len(), &FIELD_SCORE)
 }
 
 #[allow(clippy::cast_possible_wrap)]
@@ -147,8 +147,6 @@ fn score_cards(player: &Player) -> i32 {
 
 pub fn score_resources(player: &Player, debug: bool) -> i32 {
     let mut ret: i32 = 0;
-    // Grain and Veggies
-    ret += score_plants(player, debug);
     // Animals
     ret += score_animals(player, debug);
     // Score cards
@@ -160,8 +158,8 @@ pub fn score_resources(player: &Player, debug: bool) -> i32 {
 pub fn score(player: &Player, debug: bool) -> i32 {
     let mut ret: i32 = 0;
 
-    // Fields
-    ret += score_fields(player);
+    // Fields (Grains and Veggies)
+    ret += score_fields(player, debug);
     // Pastures
     ret += score_pastures(player);
     // House, Family and Empty Spaces

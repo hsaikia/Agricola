@@ -298,11 +298,11 @@ fn play(
                                 House::Stone => color = Color::DARK_GRAY,
                             }
                         }
-                        FarmyardSpace::Field => {
+                        FarmyardSpace::EmptyField => {
                             space_type = "img/field.png";
                         }
-                        FarmyardSpace::Pasture => {
-                            space_type = "img/pasture.png";
+                        FarmyardSpace::UnfencedStable(_) => {
+                            space_type = "img/stable.png";
                         }
                         _ => (),
                     }

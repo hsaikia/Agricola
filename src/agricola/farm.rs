@@ -1,4 +1,5 @@
 pub const NUM_FARMYARD_SPACES: usize = 15;
+pub const MAX_FENCES: usize = 15;
 
 #[derive(Copy, Clone, Hash)]
 pub enum House {
@@ -15,7 +16,7 @@ pub fn house_emoji(house: &House) -> &str {
     }
 }
 
-#[derive(Debug, Copy, Clone, Hash)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq)]
 pub enum Seed {
     Grain,
     Vegetable,
@@ -28,7 +29,7 @@ fn seed_emoji(seed: &Seed) -> &str {
     }
 }
 
-#[derive(Copy, Clone, Hash)]
+#[derive(Copy, Clone, Hash, PartialEq)]
 pub enum Animal {
     Empty,
     Sheep,
@@ -45,56 +46,8 @@ fn animal_emoji(animal: &Animal) -> &str {
     }
 }
 
-#[derive(Copy, Clone, Hash)]
-pub enum Field {
-    Empty,
-    Planted(Seed, usize),
-}
-
 const PASTURE_CAPACITY: usize = 2;
 const STABLE_MULTIPLIER: usize = 2;
-
-impl Field {
-    pub fn new() -> Self {
-        Self::Empty
-    }
-
-    pub fn display(&self) {
-        match self {
-            Self::Empty => {
-                print!("[\u{1f7e9}]");
-            }
-            Self::Planted(seed, num) => {
-                print!("[{}]", seed_emoji(seed).repeat(*num));
-            }
-        }
-    }
-
-    pub fn sow(&mut self, seed: &Seed) -> bool {
-        if let Self::Empty = self {
-            match seed {
-                Seed::Grain => *self = Field::Planted(Seed::Grain, 3),
-                Seed::Vegetable => *self = Field::Planted(Seed::Vegetable, 2),
-            }
-            return true;
-        }
-        false
-    }
-
-    pub fn harvest(&mut self) -> Option<Seed> {
-        match self {
-            Self::Planted(seed, amount) => {
-                *amount -= 1;
-                let ret = Some(*seed);
-                if *amount == 0 {
-                    *self = Field::Empty;
-                }
-                ret
-            }
-            _ => None,
-        }
-    }
-}
 
 #[derive(Clone, Hash)]
 pub struct Pasture {
@@ -158,18 +111,45 @@ impl Pasture {
     }
 }
 
+// Fence mask [North, East, West, South]
+// e.g : 0000 -> Not fenced on either side
+// 0110 -> Fenced on East and West sides, connected to pastures on North and South sides
+
 #[derive(Copy, Clone, Default, Hash, PartialEq)]
 pub enum FarmyardSpace {
     #[default]
     Empty,
     Room,
-    Field,
-    Pasture, // Stable or Fence
+    EmptyField,
+    PlantedField(Seed, usize),
+    UnfencedStable(Animal),
+    FencedPasture(usize, Animal),
+    FencedPastureWithStable(usize, Animal),
 }
 
 // 00 01 02 03 04
 // 05 06 07 08 09
 // 10 11 12 13 14
+
+// Order : NEWS
+const NEIGHBOR_SPACES: [[Option<usize>; 4]; 15] = [
+    [None, Some(1), None, Some(5)],
+    [None, Some(2), Some(0), Some(6)],
+    [None, Some(3), Some(1), Some(7)],
+    [None, Some(4), Some(2), Some(8)],
+    [None, None, Some(3), Some(9)],
+    [Some(0), Some(6), None, Some(10)],
+    [Some(1), Some(7), Some(5), Some(11)],
+    [Some(2), Some(8), Some(6), Some(12)],
+    [Some(3), Some(9), Some(7), Some(13)],
+    [Some(4), None, Some(8), Some(14)],
+    [Some(5), Some(11), None, None],
+    [Some(6), Some(12), Some(10), None],
+    [Some(7), Some(13), Some(11), None],
+    [Some(8), Some(14), Some(12), None],
+    [Some(9), None, Some(13), None],
+];
+
 #[derive(Clone, Hash)]
 pub struct Farm {
     pub farmyard_spaces: [FarmyardSpace; NUM_FARMYARD_SPACES],
@@ -185,108 +165,316 @@ impl Farm {
         }
     }
 
-    fn neighboring_empty_spaces(&self, space_type: FarmyardSpace) -> [bool; NUM_FARMYARD_SPACES] {
+    fn candidate_pasture_spaces(&self) -> [bool; NUM_FARMYARD_SPACES] {
         let mut ret = [false; NUM_FARMYARD_SPACES];
+
+        let mut pasture_spaces = 0;
         for idx in 0..NUM_FARMYARD_SPACES {
-            if self.farmyard_spaces[idx] != space_type {
-                continue;
+            match self.farmyard_spaces[idx] {
+                FarmyardSpace::FencedPasture(_, _)
+                | FarmyardSpace::FencedPastureWithStable(_, _) => pasture_spaces += 1,
+                _ => (),
+            }
+        }
+
+        if pasture_spaces == 0 {
+            for (idx, space) in self.farmyard_spaces.iter().enumerate() {
+                match *space {
+                    FarmyardSpace::Empty | FarmyardSpace::UnfencedStable(_) => ret[idx] = true,
+                    _ => (),
+                }
             }
 
-            let r: i32 = idx as i32 / 5;
-            let c: i32 = idx as i32 % 5;
-            let cells = [(r - 1, c), (r, c - 1), (r + 1, c), (r, c + 1)];
-            for (x, y) in cells {
-                if x < 0 || y < 0 || x > 2 || y > 4 {
-                    continue;
-                }
-                let idx_neighbor = (x * 5 + y) as usize;
+            return ret;
+        }
 
-                if self.farmyard_spaces[idx_neighbor] != FarmyardSpace::Empty {
-                    continue;
+        for idx in 0..NUM_FARMYARD_SPACES {
+            for nidx in NEIGHBOR_SPACES[idx].into_iter().flatten() {
+                match self.farmyard_spaces[nidx] {
+                    FarmyardSpace::FencedPasture(_, _)
+                    | FarmyardSpace::FencedPastureWithStable(_, _) => ret[idx] = true,
+                    _ => (),
                 }
-
-                //println!("{}", idx_neighbor);
-                ret[idx_neighbor] = true;
             }
         }
         ret
     }
 
-    fn distance(idx1: usize, idx2: usize) -> f32 {
-        let x1 = idx1 as i32 / 5;
-        let x2 = idx2 as i32 / 5;
-        let y1 = idx1 as i32 % 5;
-        let y2 = idx2 as i32 % 5;
-
-        let dx = (x2 - x1) as f32;
-        let dy = (y2 - y1) as f32;
-
-        f32::sqrt((dx * dx) + (dy * dy))
-    }
-
-    // Finds the best position of the given type on the farm. Tries to keep different regions as farther apart as possible.
-    pub fn best_spaces(&self, num_positions: usize, space_type: &FarmyardSpace) -> Vec<usize> {
-        let mut ret: Vec<usize> = Vec::new();
-
-        assert!(*space_type != FarmyardSpace::Empty);
-
-        let mut curr_farm = self.clone();
-        for _ in 0..num_positions {
-            let mut candidate_spaces = curr_farm.neighboring_empty_spaces(*space_type);
-
-            let num_occ_spaces = curr_farm
-                .farmyard_spaces
-                .iter()
-                .filter(|&x| x == space_type)
-                .count();
-            let num_cand_spaces = candidate_spaces.iter().filter(|&x| *x).count();
-
-            if num_occ_spaces > 0 && num_cand_spaces == 0 {
-                // Blocked on all sides, can't expand
-                break;
+    fn pasture_position_score(&self, idx: usize) -> i32 {
+        match self.farmyard_spaces[idx] {
+            FarmyardSpace::EmptyField | FarmyardSpace::PlantedField(_, _) | FarmyardSpace::Room => {
+                return i32::MIN
             }
-
-            // If no such farmyard space exists yet, can place anywhere on an empty space
-            if num_cand_spaces == 0 {
-                for (i, fys) in curr_farm.farmyard_spaces.iter().enumerate() {
-                    candidate_spaces[i] = fys == &FarmyardSpace::Empty;
-                }
-            }
-
-            if candidate_spaces.iter().filter(|&x| *x).count() == 0 {
-                break;
-            }
-
-            let mut best_dist: f32 = 0.0;
-            let mut best_idx: usize = 0;
-            for (idx1, cs) in candidate_spaces.iter().enumerate() {
-                if !cs {
-                    continue;
-                }
-
-                let mut sum_dist: f32 = 0.0;
-
-                for idx2 in 0..NUM_FARMYARD_SPACES {
-                    if idx1 == idx2
-                        || curr_farm.farmyard_spaces[idx2] == *space_type
-                        || curr_farm.farmyard_spaces[idx2] == FarmyardSpace::Empty
-                    {
-                        continue;
-                    }
-
-                    sum_dist += Farm::distance(idx1, idx2);
-                }
-
-                if sum_dist > best_dist {
-                    best_dist = sum_dist;
-                    best_idx = idx1;
-                }
-            }
-
-            ret.push(best_idx);
-            curr_farm.farmyard_spaces[best_idx] = *space_type;
+            _ => (),
         }
 
+        let mut score: i32 = 0;
+        for opt_i in NEIGHBOR_SPACES[idx] {
+            match opt_i {
+                Some(i) => match self.farmyard_spaces[i] {
+                    FarmyardSpace::Empty
+                    | FarmyardSpace::FencedPasture(_, _)
+                    | FarmyardSpace::UnfencedStable(_)
+                    | FarmyardSpace::FencedPastureWithStable(_, _) => score += 1,
+                    FarmyardSpace::Room
+                    | FarmyardSpace::EmptyField
+                    | FarmyardSpace::PlantedField(_, _) => score -= 1,
+                },
+                None => score += 2,
+            }
+        }
+        score
+    }
+
+    fn surrounding_fences(&self, idx: usize) -> usize {
+        let mut ret: usize = 0;
+        match self.farmyard_spaces[idx] {
+            FarmyardSpace::FencedPasture(mask, _)
+            | FarmyardSpace::FencedPastureWithStable(mask, _) => {
+                ret += (mask & 8) + (mask & 4) + (mask & 2) + (mask & 1);
+            }
+            _ => (),
+        }
+        ret
+    }
+
+    fn neighbouring_fences(&self, idx: usize) -> usize {
+        let mut ret: usize = 0;
+        for (i, opt_nidx) in NEIGHBOR_SPACES[idx].iter().enumerate() {
+            if let Some(nidx) = opt_nidx {
+                match self.farmyard_spaces[*nidx] {
+                    FarmyardSpace::FencedPasture(mask, _)
+                    | FarmyardSpace::FencedPastureWithStable(mask, _) => {
+                        // i is the direction, the opposite direction on the neighbor is 3 - i (NEWS)
+                        // To check if a fence exists in that direction we simple bitwise AND with the mask
+                        if usize::pow(2, 3 - i as u32) & mask > 0 {
+                            ret += 1;
+                        }
+                    }
+                    _ => (),
+                }
+            }
+        }
+        ret
+    }
+
+    fn fencing_options(&self, wood: usize) -> Vec<(Vec<usize>, usize)> {
+        //let mut ret: Vec<Vec<usize>> = Vec::new();
+
+        // Calculate all used fences
+        // For all fenced pastures, count all their fences and neighboring fences, make sure a common fence is counted only once
+        let mut neighbouring_fences: usize = 0;
+        let mut surrounding_fences: usize = 0;
+        for idx in 0..NUM_FARMYARD_SPACES {
+            surrounding_fences += self.surrounding_fences(idx);
+            neighbouring_fences += self.neighbouring_fences(idx);
+        }
+
+        let available_fences = wood.min(MAX_FENCES + neighbouring_fences - surrounding_fences);
+
+        // Find single fences + wood, then for every new single fence, check other neighboring arrangements and form joint arrangements
+        let mut arrangements: Vec<(Vec<usize>, usize)> = Vec::new();
+
+        let candidate_pasture_spaces = self.candidate_pasture_spaces();
+
+        for idx in 0..NUM_FARMYARD_SPACES {
+            let mut can_use = 0;
+
+            if !candidate_pasture_spaces[idx] {
+                continue;
+            }
+
+            match self.farmyard_spaces[idx] {
+                FarmyardSpace::Empty | FarmyardSpace::UnfencedStable(_) => {
+                    // This space can be fenced
+                    // Check how many neighboring spaces are fenced already
+                    can_use = self.neighbouring_fences(idx);
+                }
+                FarmyardSpace::FencedPasture(_, _)
+                | FarmyardSpace::FencedPastureWithStable(_, _) => {
+                    can_use = self.surrounding_fences(idx);
+                }
+                _ => (),
+            }
+
+            // If available_fences are not enough for this single pasture
+            if can_use + available_fences < 4 {
+                continue;
+            }
+
+            // Find joint fence arrangements with arrangements found earlier
+            let mut new_arrangements: Vec<(Vec<usize>, usize)> = Vec::new();
+            // check other arrangements for joint fencing
+            for (other, w) in &arrangements {
+                let mut connected_sides: usize = 0;
+                for nidx in NEIGHBOR_SPACES[idx].into_iter().flatten() {
+                    if other.contains(&nidx) {
+                        connected_sides += 1;
+                    }
+                }
+
+                // Connected sides need not be fenced
+                if connected_sides > 0 {
+                    let mut joint_idxs = other.clone();
+                    joint_idxs.push(idx);
+                    let joint_num_wood = *w + 4 - can_use - 2 * connected_sides;
+
+                    if joint_num_wood <= available_fences {
+                        new_arrangements.push((joint_idxs, joint_num_wood))
+                    }
+                }
+            }
+
+            arrangements.push((vec![idx], 4 - can_use));
+            if !new_arrangements.is_empty() {
+                arrangements.append(&mut new_arrangements);
+            }
+        }
+
+        let mut scores: Vec<i32> = Vec::new();
+        let mut best_scores_by_num_pastures: [i32; NUM_FARMYARD_SPACES] =
+            [i32::MIN; NUM_FARMYARD_SPACES];
+        let mut best_scores_by_num_wood: [i32; MAX_FENCES] = [i32::MIN; MAX_FENCES];
+
+        for (arr, w) in &arrangements {
+            let mut score: i32 = 0;
+
+            for x in arr {
+                score += self.pasture_position_score(*x);
+            }
+
+            scores.push(score);
+
+            best_scores_by_num_pastures[arr.len()] =
+                score.max(best_scores_by_num_pastures[arr.len()]);
+            best_scores_by_num_wood[*w] = score.max(best_scores_by_num_wood[*w]);
+        }
+
+        let mut best_arrangements: Vec<(Vec<usize>, usize)> = Vec::new();
+
+        for (i, (arr, w)) in arrangements.iter().enumerate() {
+            if scores[i] == best_scores_by_num_pastures[arr.len()]
+                || scores[i] == best_scores_by_num_wood[*w]
+            {
+                best_arrangements.push(arrangements[i].clone());
+            }
+        }
+
+        //println!("{:?}", best_arrangements);
+        best_arrangements
+    }
+
+    fn fence_spaces(&mut self, spaces: &Vec<usize>) {
+        for space in spaces {
+            let mut mask: usize = 0;
+            for (i, opt_nidx) in NEIGHBOR_SPACES[*space].iter().enumerate() {
+                if let Some(nidx) = opt_nidx {
+                    if !spaces.contains(nidx) {
+                        mask |= usize::pow(2, i as u32)
+                    }
+                } else {
+                    mask |= usize::pow(2, i as u32)
+                }
+            }
+
+            let space_type = self.farmyard_spaces[*space];
+            match space_type {
+                FarmyardSpace::Empty => {
+                    self.farmyard_spaces[*space] = FarmyardSpace::FencedPasture(mask, Animal::Empty)
+                }
+                FarmyardSpace::UnfencedStable(animal) => {
+                    self.farmyard_spaces[*space] =
+                        FarmyardSpace::FencedPastureWithStable(mask, animal)
+                }
+                _ => (),
+            }
+        }
+    }
+
+    fn field_position_score(&self, idx: usize) -> i32 {
+        if self.farmyard_spaces[idx] != FarmyardSpace::Empty {
+            return i32::MIN;
+        }
+
+        let mut score: i32 = 0;
+        for opt_i in NEIGHBOR_SPACES[idx] {
+            match opt_i {
+                Some(i) => match self.farmyard_spaces[i] {
+                    FarmyardSpace::Empty
+                    | FarmyardSpace::PlantedField(_, _)
+                    | FarmyardSpace::EmptyField => score += 1,
+                    _ => score -= 1,
+                },
+                None => score += 2,
+            }
+        }
+        score
+    }
+
+    pub fn field_options(&self) -> Vec<usize> {
+        let scores: Vec<i32> = (0..NUM_FARMYARD_SPACES)
+            .map(|idx| self.field_position_score(idx))
+            .collect();
+        let max_score = *scores.iter().max().unwrap();
+
+        if max_score == i32::MIN {
+            return Vec::new();
+        }
+
+        (0..NUM_FARMYARD_SPACES)
+            .filter(|i| scores[*i] == max_score)
+            .collect()
+    }
+
+    pub fn num_fields(&self) -> usize {
+        self.farmyard_spaces
+            .iter()
+            .filter(|&f| {
+                matches!(
+                    f,
+                    FarmyardSpace::EmptyField | FarmyardSpace::PlantedField(_, _)
+                )
+            })
+            .count()
+    }
+
+    pub fn add_field(&mut self, idx: usize) {
+        assert!(self.farmyard_spaces[idx] == FarmyardSpace::Empty);
+        self.farmyard_spaces[idx] = FarmyardSpace::EmptyField;
+    }
+
+    pub fn can_sow(&self) -> bool {
+        self.farmyard_spaces
+            .iter()
+            .any(|f| matches!(f, FarmyardSpace::EmptyField))
+    }
+
+    pub fn sow_field(&mut self, seed: &Seed) {
+        assert!(self.can_sow());
+        let opt_empty_field = self
+            .farmyard_spaces
+            .iter_mut()
+            .find(|f| matches!(f, FarmyardSpace::EmptyField));
+        if let Some(field) = opt_empty_field {
+            match *seed {
+                Seed::Grain => *field = FarmyardSpace::PlantedField(Seed::Grain, 3),
+                Seed::Vegetable => *field = FarmyardSpace::PlantedField(Seed::Vegetable, 2),
+            }
+        }
+    }
+
+    pub fn harvest_fields(&mut self) -> Vec<Seed> {
+        let mut ret: Vec<Seed> = Vec::new();
+        for space in &mut self.farmyard_spaces {
+            if let FarmyardSpace::PlantedField(crop, amount) = space {
+                ret.push(*crop);
+                *amount -= 1;
+
+                if *amount == 0 {
+                    *space = FarmyardSpace::EmptyField;
+                }
+            }
+        }
         ret
     }
 }
@@ -297,36 +485,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_farm_neighboring_spaces() {
-        let farm = Farm::new();
-        assert_eq!(
-            farm.neighboring_empty_spaces(FarmyardSpace::Room)
-                .iter()
-                .filter(|&x| *x)
-                .count(),
-            3
-        );
-        assert_eq!(
-            farm.neighboring_empty_spaces(FarmyardSpace::Field)
-                .iter()
-                .filter(|&x| *x)
-                .count(),
-            0
-        );
-        assert_eq!(
-            farm.neighboring_empty_spaces(FarmyardSpace::Pasture)
-                .iter()
-                .filter(|&x| *x)
-                .count(),
-            0
-        );
+    fn xor_test() {
+        assert_eq!(1 & 2, 0);
+        assert_eq!(1 | 2 | 4, 7)
     }
 
     #[test]
-    fn test_best_spaces() {
+    fn test_fencing_options() {
         let farm = Farm::new();
-        assert_eq!(farm.best_spaces(1, &FarmyardSpace::Room), vec![0]);
-        assert_eq!(farm.best_spaces(1, &FarmyardSpace::Field), vec![4]);
-        assert_eq!(farm.best_spaces(2, &FarmyardSpace::Pasture), vec![4, 9]);
+        let fenc_opt = farm.fencing_options(3);
+        assert_eq!(fenc_opt.len(), 0);
+        let fenc_opt = farm.fencing_options(4);
+        assert_eq!(fenc_opt.len(), 2);
+        let fenc_opt = farm.fencing_options(6);
+        assert_eq!(fenc_opt.len(), 6);
+        let fenc_opt = farm.fencing_options(8);
+        assert_eq!(fenc_opt.len(), 9);
+        let fenc_opt = farm.fencing_options(MAX_FENCES);
+        assert_eq!(fenc_opt.len(), 21);
+    }
+
+    #[test]
+    fn test_field_options() {
+        let farm = Farm::new();
+        let field_opt = farm.field_options();
+        println!("{:?}", field_opt);
+        assert_eq!(field_opt.len(), 2);
     }
 }
