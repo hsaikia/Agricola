@@ -436,7 +436,7 @@ impl Action {
         // At the start of each round, if you have at least 3 rooms but only 2 people, you get 1 food and 1 crop of your choice (grain or vegetable).
         if player.before_round_start && player.occupations.contains(&Occupation::Childless) {
             let people = player.adults + player.children; // children should always be zero (grown into adults) at this point
-            if people == 2 && people < player.rooms {
+            if people == 2 && people < player.farm.room_indices().len() {
                 ret.push(Self::GetResourceFromChildless(Resource::Grain));
                 ret.push(Self::GetResourceFromChildless(Resource::Vegetable));
             }

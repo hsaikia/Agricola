@@ -1,7 +1,5 @@
 use crate::agricola::algorithms::Kind;
-use crate::agricola::farm::{
-    house_emoji, Animal, Farm, House, Pasture, Seed, MAX_FENCES, NUM_FARMYARD_SPACES,
-};
+use crate::agricola::farm::{Animal, Farm, House, Pasture, Seed, MAX_FENCES, NUM_FARMYARD_SPACES};
 use crate::agricola::major_improvements::{Cheaper, MajorImprovement};
 use crate::agricola::occupations::Occupation;
 use crate::agricola::primitives::{
@@ -10,12 +8,10 @@ use crate::agricola::primitives::{
 };
 use crate::agricola::scoring;
 use rand::seq::SliceRandom;
-use rand::Rng;
 use std::cmp;
 
 const MAX_STABLES: usize = 4;
 const MAX_FAMILY_MEMBERS: usize = 5;
-const STARTING_ROOMS: usize = 2;
 const STARTING_PEOPLE: usize = 2;
 
 lazy_static! {
@@ -54,7 +50,6 @@ pub struct Player {
     pub renovation_cost: Resources,
     pub major_cards: Vec<MajorImprovement>,
     pub house: House,
-    pub rooms: usize,
     pub pastures: Vec<Pasture>,
     pub unfenced_stables: usize,
     pub fences_left: usize,
@@ -93,7 +88,6 @@ impl Player {
             renovation_cost: reno_cost,
             major_cards: vec![],
             house: House::Wood,
-            rooms: STARTING_ROOMS,
             pastures: vec![],
             unfenced_stables: 0,
             fences_left: MAX_FENCES,
@@ -122,8 +116,8 @@ impl Player {
         }
 
         NUM_FARMYARD_SPACES
-            - self.rooms
-            - self.farm.num_fields()
+            - self.farm.room_indices().len()
+            - self.farm.field_indices().len()
             - pasture_spaces
             - self.unfenced_stables
     }
@@ -408,7 +402,8 @@ impl Player {
     }
 
     pub fn can_grow_family_with_room(&self) -> bool {
-        self.family_members() < MAX_FAMILY_MEMBERS && self.family_members() < self.rooms
+        self.family_members() < MAX_FAMILY_MEMBERS
+            && self.family_members() < self.farm.room_indices().len()
     }
 
     pub fn can_grow_family_without_room(&self) -> bool {
@@ -420,12 +415,14 @@ impl Player {
         // TODO for cards like Conservator this must be implemented in a more general way
         pay_for_resource(&self.renovation_cost, &mut self.resources);
         let current_type = &self.house;
+        let rooms = self.farm.room_indices().len();
+
         match current_type {
             House::Wood => {
                 self.house = House::Clay;
                 self.build_room_cost[Resource::Wood] = 0;
                 self.build_room_cost[Resource::Clay] = 5;
-                self.renovation_cost[Resource::Stone] = self.rooms;
+                self.renovation_cost[Resource::Stone] = rooms;
                 self.renovation_cost[Resource::Clay] = 0;
             }
             House::Clay => {
@@ -448,11 +445,9 @@ impl Player {
     pub fn build_room(&mut self) {
         assert!(self.can_build_room());
         pay_for_resource(&self.build_room_cost, &mut self.resources);
-        self.rooms += 1;
-
-        // let best_spaces = self.farm.best_spaces(1, &FarmyardSpace::Room);
-        // assert!(best_spaces.len() == 1);
-        // self.farm.farmyard_spaces[best_spaces[0]] = FarmyardSpace::Room;
+        let positions = self.farm.best_room_positions();
+        let idx = positions.choose(&mut rand::thread_rng()).unwrap();
+        self.farm.build_room(*idx);
 
         match self.house {
             House::Wood => self.renovation_cost[Resource::Clay] += 1,
@@ -462,7 +457,7 @@ impl Player {
     }
 
     pub fn can_build_room(&self) -> bool {
-        if self.empty_farmyard_spaces() == 0 {
+        if self.farm.best_room_positions().is_empty() {
             return false;
         }
         can_pay_for_resource(&self.build_room_cost, &self.resources)
@@ -506,14 +501,14 @@ impl Player {
     }
 
     pub fn add_new_field(&mut self) {
-        let idxs = self.farm.field_options();
+        let idxs = self.farm.best_field_positions();
         assert!(!idxs.is_empty());
         let idx = idxs.choose(&mut rand::thread_rng()).unwrap();
         self.farm.add_field(*idx);
     }
 
     pub fn can_add_new_field(&self) -> bool {
-        !self.farm.field_options().is_empty()
+        !self.farm.best_field_positions().is_empty()
     }
 
     pub fn reset_for_next_round(&mut self) {
@@ -615,9 +610,6 @@ impl Player {
         if self.children > 0 {
             print!("[{}]", "\u{1f476}".repeat(self.children));
         }
-
-        print!("[{}]", house_emoji(&self.house).repeat(self.rooms));
-        println!();
 
         print!("Resources ");
         print_resources(&self.resources);

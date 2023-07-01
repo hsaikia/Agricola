@@ -21,16 +21,14 @@ fn calc_score(num: usize, scores: &[i32]) -> i32 {
 fn score_fields(player: &Player, debug: bool) -> i32 {
     let mut num_grain: usize = 0;
     let mut num_veg: usize = 0;
-    let mut num_fields: usize = 0;
+    let num_fields: usize = player.farm.field_indices().len();
 
     for space in &player.farm.farmyard_spaces {
-        match space {
-            FarmyardSpace::EmptyField => num_fields += 1,
-            FarmyardSpace::PlantedField(crop, amount) => match *crop {
+        if let FarmyardSpace::PlantedField(crop, amount) = space {
+            match *crop {
                 Seed::Grain => num_grain += amount,
                 Seed::Vegetable => num_veg += amount,
-            },
-            _ => (),
+            }
         }
     }
 
@@ -88,11 +86,12 @@ fn score_begging_tokens(player: &Player) -> i32 {
 #[allow(clippy::cast_possible_wrap)]
 fn score_house_family_empty_spaces(player: &Player) -> i32 {
     let mut ret: i32 = 0;
+    let rooms = player.farm.room_indices().len();
 
     // House
     match player.house {
-        House::Clay => ret += player.rooms as i32,
-        House::Stone => ret += 2 * player.rooms as i32,
+        House::Clay => ret += rooms as i32,
+        House::Stone => ret += 2 * rooms as i32,
         House::Wood => (),
     }
 

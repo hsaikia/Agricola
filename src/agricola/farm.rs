@@ -391,56 +391,136 @@ impl Farm {
         }
     }
 
-    fn field_position_score(&self, idx: usize) -> i32 {
-        if self.farmyard_spaces[idx] != FarmyardSpace::Empty {
-            return i32::MIN;
+    pub fn best_field_positions(&self) -> Vec<usize> {
+        let mut pos_and_scores: Vec<(usize, i32)> = Vec::new();
+
+        // check if there are any fields, if not, all empty spaces must be scored
+        // if not, only empty spaces adjacent to fields must be scored
+
+        // get all field indices
+        let field_idxs = self.field_indices();
+
+        let mut max_score = i32::MIN;
+        for (idx, nspace) in NEIGHBOR_SPACES.iter().enumerate() {
+            if self.farmyard_spaces[idx] != FarmyardSpace::Empty {
+                continue;
+            }
+
+            if !field_idxs.is_empty() {
+                let mut has_adjacent_field = false;
+                for nidx in nspace.iter().flatten() {
+                    match self.farmyard_spaces[*nidx] {
+                        FarmyardSpace::EmptyField | FarmyardSpace::PlantedField(_, _) => {
+                            has_adjacent_field = true;
+                            break;
+                        }
+                        _ => (),
+                    }
+                }
+
+                if !has_adjacent_field {
+                    continue;
+                }
+            }
+
+            let mut score: i32 = 0;
+            for opt_i in nspace {
+                match opt_i {
+                    Some(i) => match self.farmyard_spaces[*i] {
+                        FarmyardSpace::Empty
+                        | FarmyardSpace::PlantedField(_, _)
+                        | FarmyardSpace::EmptyField => score += 1,
+                        _ => score -= 1,
+                    },
+                    None => score += 2,
+                }
+            }
+
+            max_score = max_score.max(score);
+            pos_and_scores.push((idx, score));
         }
 
-        let mut score: i32 = 0;
-        for opt_i in NEIGHBOR_SPACES[idx] {
-            match opt_i {
-                Some(i) => match self.farmyard_spaces[i] {
-                    FarmyardSpace::Empty
-                    | FarmyardSpace::PlantedField(_, _)
-                    | FarmyardSpace::EmptyField => score += 1,
-                    _ => score -= 1,
-                },
-                None => score += 2,
+        let mut ret: Vec<usize> = Vec::new();
+        for (i, s) in pos_and_scores {
+            if s == max_score {
+                ret.push(i);
             }
         }
-        score
+        ret
     }
 
-    pub fn field_options(&self) -> Vec<usize> {
-        let scores: Vec<i32> = (0..NUM_FARMYARD_SPACES)
-            .map(|idx| self.field_position_score(idx))
-            .collect();
-        let max_score = *scores.iter().max().unwrap();
-
-        if max_score == i32::MIN {
-            return Vec::new();
-        }
-
+    pub fn field_indices(&self) -> Vec<usize> {
         (0..NUM_FARMYARD_SPACES)
-            .filter(|i| scores[*i] == max_score)
-            .collect()
-    }
-
-    pub fn num_fields(&self) -> usize {
-        self.farmyard_spaces
-            .iter()
-            .filter(|&f| {
+            .filter(|&i| {
                 matches!(
-                    f,
+                    self.farmyard_spaces[i],
                     FarmyardSpace::EmptyField | FarmyardSpace::PlantedField(_, _)
                 )
             })
-            .count()
+            .collect()
+    }
+
+    pub fn best_room_positions(&self) -> Vec<usize> {
+        let mut pos_and_scores: Vec<(usize, i32)> = Vec::new();
+        let mut max_score = i32::MIN;
+
+        for (idx, nspace) in NEIGHBOR_SPACES.iter().enumerate() {
+            if self.farmyard_spaces[idx] != FarmyardSpace::Empty {
+                continue;
+            }
+
+            let mut has_adjacent_room = false;
+            for nidx in nspace.iter().flatten() {
+                if self.farmyard_spaces[*nidx] == FarmyardSpace::Room {
+                    has_adjacent_room = true;
+                    break;
+                }
+            }
+
+            if !has_adjacent_room {
+                continue;
+            }
+
+            let mut score: i32 = 0;
+            for opt_i in nspace {
+                match opt_i {
+                    Some(i) => match self.farmyard_spaces[*i] {
+                        FarmyardSpace::Empty | FarmyardSpace::Room => score += 1,
+                        _ => score -= 1,
+                    },
+                    None => score += 2,
+                }
+            }
+
+            max_score = max_score.max(score);
+            pos_and_scores.push((idx, score));
+        }
+
+        println!("{:?}", pos_and_scores);
+
+        let mut ret: Vec<usize> = Vec::new();
+        for (i, s) in pos_and_scores {
+            if s == max_score {
+                ret.push(i);
+            }
+        }
+        ret
+    }
+
+    pub fn room_indices(&self) -> Vec<usize> {
+        (0..NUM_FARMYARD_SPACES)
+            .filter(|&i| matches!(self.farmyard_spaces[i], FarmyardSpace::Room))
+            .collect()
     }
 
     pub fn add_field(&mut self, idx: usize) {
         assert!(self.farmyard_spaces[idx] == FarmyardSpace::Empty);
         self.farmyard_spaces[idx] = FarmyardSpace::EmptyField;
+    }
+
+    pub fn build_room(&mut self, idx: usize) {
+        assert!(self.farmyard_spaces[idx] == FarmyardSpace::Empty);
+        self.farmyard_spaces[idx] = FarmyardSpace::Room;
     }
 
     pub fn can_sow(&self) -> bool {
@@ -508,8 +588,16 @@ mod tests {
     #[test]
     fn test_field_options() {
         let farm = Farm::new();
-        let field_opt = farm.field_options();
-        println!("{:?}", field_opt);
+        let field_opt = farm.best_field_positions();
+        //println!("{:?}", field_opt);
         assert_eq!(field_opt.len(), 2);
+    }
+
+    #[test]
+    fn test_room_options() {
+        let farm = Farm::new();
+        let room_opt = farm.best_room_positions();
+        //println!("{:?}", room_opt);
+        assert_eq!(room_opt.len(), 1);
     }
 }
