@@ -15,9 +15,6 @@ use bevy_egui::{
 
 mod agricola;
 
-#[macro_use]
-extern crate lazy_static;
-
 const LX: f32 = 1000.0;
 const LY: f32 = 500.0;
 const PADDING: f32 = 10.0;

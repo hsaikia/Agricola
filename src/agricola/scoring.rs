@@ -1,7 +1,7 @@
-use crate::agricola::farm::{FarmyardSpace, House, Seed};
+use crate::agricola::farm::{Animal1, FarmyardSpace, House, Seed};
 use crate::agricola::major_improvements::MajorImprovement;
 use crate::agricola::player::Player;
-use crate::agricola::primitives::Resource;
+use crate::agricola::primitives::{Resource, Resources};
 
 const FIELD_SCORE: [i32; 6] = [-1, -1, 1, 2, 3, 4];
 const PASTURE_SCORE: [i32; 5] = [-1, 1, 2, 3, 4];
@@ -11,97 +11,59 @@ const SHEEP_SCORE: [i32; 9] = [-1, 1, 1, 1, 2, 2, 3, 3, 4];
 const PIGS_SCORE: [i32; 8] = [-1, 1, 1, 2, 2, 3, 3, 4];
 const CATTLE_SCORE: [i32; 7] = [-1, 1, 2, 2, 3, 3, 4];
 
-fn calc_score(num: usize, scores: &[i32]) -> i32 {
-    if num >= scores.len() {
-        scores[scores.len() - 1]
-    } else {
-        scores[num]
-    }
-}
-fn score_fields(player: &Player, debug: bool) -> i32 {
-    let mut num_grain: usize = 0;
-    let mut num_veg: usize = 0;
-    let num_fields: usize = player.farm.field_indices().len();
+fn score_farm(player: &Player) -> i32 {
+    let mut score = 0;
+    let mut res: Resources = player.resources;
+    let mut num_pastures: usize = 0;
+    let mut num_fields: usize = 0;
 
-    for space in &player.farm.farmyard_spaces {
-        if let FarmyardSpace::PlantedField(crop, amount) = space {
-            match *crop {
-                Seed::Grain => num_grain += amount,
-                Seed::Vegetable => num_veg += amount,
-            }
+    let pastures = player.farm.pastures_and_capacities();
+    for (p, c) in pastures {
+        if c > p.len() {
+            num_pastures += 1; // score all pastures except for unfenced stables
         }
     }
 
-    num_grain += player.resources[Resource::Grain];
-    num_veg += player.resources[Resource::Vegetable];
-    let gr_score = calc_score(num_grain, &GRAIN_SCORE);
-    let veg_score = calc_score(num_veg, &VEGETABLE_SCORE);
-
-    if debug {
-        print!("\nScoring {num_grain} Grain {gr_score} and {num_veg} Veggies {veg_score}.");
+    for space in &player.farm.farmyard_spaces {
+        match *space {
+            FarmyardSpace::Empty => score -= 1,
+            FarmyardSpace::Room => match player.house {
+                House::Clay => score += 1,
+                House::Stone => score += 2,
+                House::Wood => (),
+            },
+            FarmyardSpace::FencedPasture(_, opt_animal, has_stable) => {
+                if has_stable {
+                    score += 1;
+                }
+                if let Some(animal) = opt_animal {
+                    match animal.0 {
+                        Animal1::Sheep => res[Resource::Sheep] += 1,
+                        Animal1::Pigs => res[Resource::Pigs] += 1,
+                        Animal1::Cattle => res[Resource::Cattle] += 1,
+                    }
+                }
+            }
+            FarmyardSpace::PlantedField(seed, amt) => {
+                num_fields += 1;
+                match seed {
+                    Seed::Grain => res[Resource::Grain] += amt,
+                    Seed::Vegetable => res[Resource::Vegetable] += amt,
+                }
+            }
+            _ => (),
+        }
     }
 
-    gr_score + veg_score + calc_score(num_fields, &FIELD_SCORE)
-}
+    score += PASTURE_SCORE[num_pastures.min(PASTURE_SCORE.len() - 1)];
+    score += FIELD_SCORE[num_fields.min(FIELD_SCORE.len() - 1)];
+    score += GRAIN_SCORE[res[Resource::Grain].min(GRAIN_SCORE.len() - 1)];
+    score += VEGETABLE_SCORE[res[Resource::Vegetable].min(VEGETABLE_SCORE.len() - 1)];
+    score += SHEEP_SCORE[res[Resource::Sheep].min(SHEEP_SCORE.len() - 1)];
+    score += PIGS_SCORE[res[Resource::Sheep].min(PIGS_SCORE.len() - 1)];
+    score += CATTLE_SCORE[res[Resource::Sheep].min(CATTLE_SCORE.len() - 1)];
 
-fn score_animals(player: &Player, debug: bool) -> i32 {
-    // All animals kept as pets and in unfenced stables
-    let res = player.animals_as_resources();
-    let sh_score = calc_score(res[Resource::Sheep], &SHEEP_SCORE);
-    let pig_score = calc_score(res[Resource::Pigs], &PIGS_SCORE);
-    let cow_score = calc_score(res[Resource::Cattle], &CATTLE_SCORE);
-
-    if debug {
-        print!(
-            "\nScoring {} Sheep {}. {} Pigs {}. {} Cows {}.",
-            res[Resource::Sheep],
-            sh_score,
-            res[Resource::Pigs],
-            pig_score,
-            res[Resource::Cattle],
-            cow_score
-        );
-    }
-
-    sh_score + pig_score + cow_score
-}
-
-#[allow(clippy::cast_possible_wrap)]
-fn score_pastures(player: &Player) -> i32 {
-    let mut ret: i32 = 0;
-    // Number of Pastures
-    ret += calc_score(player.pastures.len(), &PASTURE_SCORE);
-    // Number of fenced stables
-    for pasture in &player.pastures {
-        ret += pasture.stables as i32;
-    }
-    ret
-}
-
-#[allow(clippy::cast_possible_wrap)]
-fn score_begging_tokens(player: &Player) -> i32 {
-    -3 * player.begging_tokens as i32
-}
-
-#[allow(clippy::cast_possible_wrap)]
-fn score_house_family_empty_spaces(player: &Player) -> i32 {
-    let mut ret: i32 = 0;
-    let rooms = player.farm.room_indices().len();
-
-    // House
-    match player.house {
-        House::Clay => ret += rooms as i32,
-        House::Stone => ret += 2 * rooms as i32,
-        House::Wood => (),
-    }
-
-    // Family members
-    ret += 3 * player.family_members() as i32;
-
-    // Empty spaces
-    ret -= player.empty_farmyard_spaces() as i32;
-
-    ret
+    score
 }
 
 #[allow(clippy::cast_possible_wrap)]
@@ -144,29 +106,17 @@ fn score_cards(player: &Player) -> i32 {
     ret
 }
 
-pub fn score_resources(player: &Player, debug: bool) -> i32 {
-    let mut ret: i32 = 0;
-    // Animals
-    ret += score_animals(player, debug);
-    // Score cards
-    ret += score_cards(player);
-
-    ret
-}
-
-pub fn score(player: &Player, debug: bool) -> i32 {
+pub fn score(player: &Player) -> i32 {
     let mut ret: i32 = 0;
 
-    // Fields (Grains and Veggies)
-    ret += score_fields(player, debug);
-    // Pastures
-    ret += score_pastures(player);
     // House, Family and Empty Spaces
-    ret += score_house_family_empty_spaces(player);
+    ret += 3 * player.family_members() as i32;
     // All resources
-    ret += score_resources(player, debug);
+    ret += score_cards(player);
     // Begging Tokens
-    ret += score_begging_tokens(player);
-    // TODO Score minors/occs
+    ret -= 3 * player.begging_tokens as i32;
+    // Score farm
+    ret += score_farm(player);
+
     ret
 }

@@ -83,7 +83,7 @@ pub enum Action {
     Sow(CalledFromGrainUtilization, Seed),
     Renovate(CalledFromHouseRedevelopment, CalledFromFarmRedevelopment),
     GrowFamily(WithRoom),
-    Fence, // TODO make generic
+    Fence(usize),
     Plow(CalledFromCultivation),
     Convert(ResourceExchange, Option<MajorImprovement>, ConversionStage),
     PreHarvest,
@@ -107,7 +107,7 @@ impl Action {
             Self::PlaceWorker => Self::place_worker_choices(state),
             Self::UseFarmland => vec![Self::Plow(CalledFromCultivation(false))],
             Self::UseFarmExpansion => Self::farm_expansion_choices(player),
-            Self::UseFencing => vec![Self::Fence],
+            Self::UseFencing => Self::fencing_choices(player),
             Self::UseGrainUtilization => Self::grain_utilization_choices(player, false),
             Self::BuildRoom | Self::BuildStable => {
                 ret.extend(Self::farm_expansion_choices(player));
@@ -288,7 +288,7 @@ impl Action {
             ret.push(Self::BuildMajor);
         }
         if from_farm_redev.0 && player.can_fence() {
-            ret.push(Self::Fence);
+            ret.extend(Self::fencing_choices(player));
         }
         ret.push(Self::EndTurn);
         ret
@@ -383,6 +383,15 @@ impl Action {
         }
         if player.can_build_stable() {
             ret.push(Self::BuildStable);
+        }
+        ret
+    }
+
+    fn fencing_choices(player: &Player) -> Vec<Self> {
+        let mut ret: Vec<Self> = Vec::new();
+        let pasture_sizes = player.fencing_choices();
+        for ps in pasture_sizes {
+            ret.push(Self::Fence(ps));
         }
         ret
     }
@@ -768,7 +777,7 @@ impl Action {
             Self::Sow(_, _) => 40,
             Self::Renovate(_, _) => 41,
             Self::GrowFamily(_) => 42,
-            Self::Fence => 43,
+            Self::Fence(_) => 43,
             Self::Plow(_) => 44,
             Self::Convert(_, _, _) => 45,
             Self::PreHarvest => 46,
@@ -805,9 +814,9 @@ impl Action {
                 let player = &mut state.players[state.current_player_idx];
                 player.add_new_field();
             }
-            Self::Fence => {
+            Self::Fence(pasture_size) => {
                 let player = &mut state.players[state.current_player_idx];
-                player.fence();
+                player.fence(*pasture_size);
             }
             Self::BuildRoom => {
                 let player = &mut state.players[state.current_player_idx];

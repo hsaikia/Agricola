@@ -108,7 +108,7 @@ impl State {
         // Harvest grain and veggies
         player.harvest_fields();
         // Move all animals to the resources array
-        player.add_animals_in_pastures_to_resources();
+        player.farm.farm_animals_to_resources(&mut player.resources);
     }
 
     // After paying for harvest - this function needs to be called to clear the empty hidden space
@@ -177,7 +177,7 @@ impl State {
     pub fn scores(&self) -> Vec<i32> {
         let mut scores: Vec<i32> = Vec::new();
         for p in &self.players {
-            scores.push(scoring::score(p, false));
+            scores.push(scoring::score(p));
         }
         scores
     }
@@ -356,7 +356,7 @@ impl State {
         }
 
         player.harvest_paid = true;
-        player.breed_and_reorg_animals();
+        player.reorg_animals(true);
         self.current_player_idx = (self.current_player_idx + 1) % self.players.len();
         self.remove_empty_stage();
     }
