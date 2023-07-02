@@ -21,7 +21,7 @@ pub enum Seed {
 }
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq)]
-pub enum Animal1 {
+pub enum Animal {
     Sheep,
     Pigs,
     Cattle,
@@ -41,8 +41,8 @@ pub enum FarmyardSpace {
     Room,
     EmptyField,
     PlantedField(Seed, usize),
-    UnfencedStable(Option<(Animal1, usize)>),
-    FencedPasture(Mask, Option<(Animal1, usize)>, ContainsStable),
+    UnfencedStable(Option<(Animal, usize)>),
+    FencedPasture(Mask, Option<(Animal, usize)>, ContainsStable),
 }
 
 // 00 01 02 03 04
@@ -74,7 +74,7 @@ const MASK_ALL: Mask = 15; // 8 + 4 + 2 + 1
 #[derive(Debug, Clone, Hash)]
 pub struct Farm {
     pub farmyard_spaces: [FarmyardSpace; NUM_FARMYARD_SPACES],
-    pub pet: Option<(Animal1, usize)>,
+    pub pet: Option<(Animal, usize)>,
 }
 
 impl Farm {
@@ -372,9 +372,9 @@ impl Farm {
         // Add Pet
         if let Some((pet, amount)) = self.pet {
             match pet {
-                Animal1::Sheep => res[Resource::Sheep] += amount,
-                Animal1::Pigs => res[Resource::Pigs] += amount,
-                Animal1::Cattle => res[Resource::Cattle] += amount,
+                Animal::Sheep => res[Resource::Sheep] += amount,
+                Animal::Pigs => res[Resource::Pigs] += amount,
+                Animal::Cattle => res[Resource::Cattle] += amount,
             }
         }
 
@@ -387,9 +387,9 @@ impl Farm {
                 | FarmyardSpace::FencedPasture(_, animals, _) => {
                     if let Some((animal, amt)) = animals {
                         match *animal {
-                            Animal1::Sheep => res[Resource::Sheep] += *amt,
-                            Animal1::Pigs => res[Resource::Pigs] += *amt,
-                            Animal1::Cattle => res[Resource::Cattle] += *amt,
+                            Animal::Sheep => res[Resource::Sheep] += *amt,
+                            Animal::Pigs => res[Resource::Pigs] += *amt,
+                            Animal::Cattle => res[Resource::Cattle] += *amt,
                         }
                         *animals = None
                     }
@@ -405,9 +405,9 @@ impl Farm {
         self.farm_animals_to_resources(&mut res);
 
         let mut animal_count = vec![
-            (Animal1::Sheep, res[Resource::Sheep]),
-            (Animal1::Pigs, res[Resource::Pigs]),
-            (Animal1::Cattle, res[Resource::Cattle]),
+            (Animal::Sheep, res[Resource::Sheep]),
+            (Animal::Pigs, res[Resource::Pigs]),
+            (Animal::Cattle, res[Resource::Cattle]),
         ];
 
         if breed {
@@ -468,9 +468,9 @@ impl Farm {
         // Leftovers are returned
         for (animal, amt) in animal_count {
             match animal {
-                Animal1::Sheep => res[Resource::Sheep] = amt,
-                Animal1::Pigs => res[Resource::Pigs] = amt,
-                Animal1::Cattle => res[Resource::Cattle] = amt,
+                Animal::Sheep => res[Resource::Sheep] = amt,
+                Animal::Pigs => res[Resource::Pigs] = amt,
+                Animal::Cattle => res[Resource::Cattle] = amt,
             }
         }
 

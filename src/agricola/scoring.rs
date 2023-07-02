@@ -1,4 +1,4 @@
-use crate::agricola::farm::{Animal1, FarmyardSpace, House, Seed};
+use crate::agricola::farm::{Animal, FarmyardSpace, House, Seed};
 use crate::agricola::major_improvements::MajorImprovement;
 use crate::agricola::player::Player;
 use crate::agricola::primitives::{Resource, Resources};
@@ -38,9 +38,9 @@ fn score_farm(player: &Player) -> i32 {
                 }
                 if let Some(animal) = opt_animal {
                     match animal.0 {
-                        Animal1::Sheep => res[Resource::Sheep] += 1,
-                        Animal1::Pigs => res[Resource::Pigs] += 1,
-                        Animal1::Cattle => res[Resource::Cattle] += 1,
+                        Animal::Sheep => res[Resource::Sheep] += 1,
+                        Animal::Pigs => res[Resource::Pigs] += 1,
+                        Animal::Cattle => res[Resource::Cattle] += 1,
                     }
                 }
             }
