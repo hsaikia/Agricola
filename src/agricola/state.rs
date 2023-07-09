@@ -1,5 +1,5 @@
 use crate::agricola::actions::{Action, NUM_RESOURCE_SPACES};
-use crate::agricola::algorithms::Kind;
+use crate::agricola::algorithms::PlayerType;
 use crate::agricola::major_improvements::{Cheaper, MajorImprovement};
 use crate::agricola::occupations::Occupation;
 use crate::agricola::player::Player;
@@ -36,7 +36,11 @@ pub struct State {
 }
 
 impl State {
-    pub fn create_new(num_players: usize, human_player: bool, default_ai_kind: &Kind) -> State {
+    pub fn create_new(
+        num_players: usize,
+        human_player: bool,
+        default_player_type: &PlayerType,
+    ) -> State {
         let first_player_idx = rand::thread_rng().gen_range(0..num_players);
         let mut state = State {
             resource_map: Action::init_resource_map(),
@@ -63,7 +67,12 @@ impl State {
             start_round_events: vec![],
             available_occupations: Occupation::all(),
         };
-        state.init_players(first_player_idx, num_players, human_player, default_ai_kind);
+        state.init_players(
+            first_player_idx,
+            num_players,
+            human_player,
+            default_player_type,
+        );
         state
     }
 
@@ -125,8 +134,13 @@ impl State {
     }
 
     pub fn play_move(&mut self, debug: bool) -> bool {
-        let algorithm = self.player_kind();
-        algorithm.play(self, debug)
+        let algorithm = self.player_type();
+        let opt_action = algorithm.best_action(self, debug);
+        if let Some(action) = opt_action {
+            action.apply_choice(self);
+            return true;
+        }
+        false
     }
 
     pub fn play(&mut self, debug: bool) {
@@ -138,13 +152,13 @@ impl State {
         }
     }
 
-    fn player_kind(&self) -> Kind {
-        self.players[self.current_player_idx].kind()
+    fn player_type(&self) -> PlayerType {
+        self.players[self.current_player_idx].player_type()
     }
 
     pub fn replace_all_players_with_random_bots(&mut self) {
         for p in &mut self.players {
-            p.kind = Kind::RandomMachine;
+            p.player_type = PlayerType::RandomMachine;
         }
     }
 
@@ -239,16 +253,16 @@ impl State {
         first_idx: usize,
         num: usize,
         human_player: bool,
-        default_ai_kind: &Kind,
+        default_player_type: &PlayerType,
     ) {
         for i in 0..num {
             let food = if i == first_idx { 2 } else { 3 };
-            let player_kind = if human_player && i == 0 {
-                Kind::Human
+            let player_type = if human_player && i == 0 {
+                PlayerType::Human
             } else {
-                default_ai_kind.clone()
+                default_player_type.clone()
             };
-            let player = Player::create_new(food, player_kind);
+            let player = Player::create_new(food, player_type);
             self.players.push(player);
         }
     }

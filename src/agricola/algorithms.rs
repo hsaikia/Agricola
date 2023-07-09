@@ -8,7 +8,7 @@ use std::io;
 const NUM_GAMES_TO_SIMULATE: usize = 10000;
 
 #[derive(Debug, Clone, Hash, PartialEq)]
-pub enum Kind {
+pub enum PlayerType {
     Human,
     RandomMachine,
     UniformMachine,
@@ -21,13 +21,11 @@ struct SimulationRecord {
     action_idx: usize,
 }
 
-impl Kind {
-    fn trivial_play(state: &mut State, debug: bool) -> (Option<bool>, Vec<Action>) {
+impl PlayerType {
+    fn play_human(state: &State, debug: bool) -> Option<Action> {
         let choices = Action::next_choices(state);
-
-        // No choices - End Game
         if choices.is_empty() {
-            return (Some(false), choices);
+            return None;
         }
 
         // Only one choice, play it
@@ -35,24 +33,7 @@ impl Kind {
             if debug {
                 choices[0].display();
             }
-            choices[0].apply_choice(state);
-            return (Some(true), choices);
-        }
-
-        if debug {
-            state.display();
-            Action::display_all(&choices);
-        }
-
-        // Multiple choices
-        (None, choices)
-    }
-
-    fn play_human(state: &mut State, debug: bool) -> bool {
-        let (maybe_status, choices) = Self::trivial_play(state, debug);
-
-        if let Some(status) = maybe_status {
-            return status;
+            return Some(choices[0].clone());
         }
 
         print!(
@@ -70,25 +51,31 @@ impl Kind {
 
                 if input_int >= choices.len() {
                     println!("Invalid action .. quitting");
-                    return false;
+                    return None;
                 }
 
                 if debug {
                     choices[input_int].display();
                 }
-                choices[input_int].apply_choice(state);
+                //choices[input_int].apply_choice(state);
+                return Some(choices[input_int].clone());
             }
             Err(_e) => return Self::play_human(state, debug), // parsing failed - try again
         }
-
-        true
     }
 
-    fn play_random(state: &mut State, debug: bool) -> bool {
-        let (maybe_status, choices) = Self::trivial_play(state, debug);
+    fn play_random(state: &State, debug: bool) -> Option<Action> {
+        let choices = Action::next_choices(state);
+        if choices.is_empty() {
+            return None;
+        }
 
-        if let Some(status) = maybe_status {
-            return status;
+        // Only one choice, play it
+        if choices.len() == 1 {
+            if debug {
+                choices[0].display();
+            }
+            return Some(choices[0].clone());
         }
 
         // Chose a random action
@@ -96,16 +83,23 @@ impl Kind {
         if debug {
             choices[action_idx].display();
         }
-        choices[action_idx].apply_choice(state);
-        true
+        //choices[action_idx].apply_choice(state);
+        Some(choices[action_idx].clone())
     }
 
     #[allow(clippy::cast_precision_loss)]
-    fn play_machine_uniform(state: &mut State, debug: bool) -> bool {
-        let (maybe_status, choices) = Self::trivial_play(state, debug);
+    fn play_machine_uniform(state: &State, debug: bool) -> Option<Action> {
+        let choices = Action::next_choices(state);
+        if choices.is_empty() {
+            return None;
+        }
 
-        if let Some(status) = maybe_status {
-            return status;
+        // Only one choice, play it
+        if choices.len() == 1 {
+            if debug {
+                choices[0].display();
+            }
+            return Some(choices[0].clone());
         }
 
         // 1. Simulate n games from each action with each player replaced by a random move AI.
@@ -146,15 +140,23 @@ impl Kind {
         if debug {
             choices[best_action_idx].display();
         }
-        choices[best_action_idx].apply_choice(state);
-        true
+        //choices[best_action_idx].apply_choice(state);
+        //true
+        Some(choices[best_action_idx].clone())
     }
 
-    fn play_machine_mcts(state: &mut State, debug: bool) -> bool {
-        let (maybe_status, choices) = Self::trivial_play(state, debug);
+    fn play_machine_mcts(state: &State, debug: bool) -> Option<Action> {
+        let choices = Action::next_choices(state);
+        if choices.is_empty() {
+            return None;
+        }
 
-        if let Some(status) = maybe_status {
-            return status;
+        // Only one choice, play it
+        if choices.len() == 1 {
+            if debug {
+                choices[0].display();
+            }
+            return Some(choices[0].clone());
         }
 
         let mut action_hashes: Vec<u64> = vec![];
@@ -266,16 +268,17 @@ impl Kind {
         if debug {
             choices[best_action_idx].display();
         }
-        choices[best_action_idx].apply_choice(state);
-        true
+        // choices[best_action_idx].apply_choice(state);
+        // true
+        Some(choices[best_action_idx].clone())
     }
 
-    pub fn play(&self, state: &mut State, debug: bool) -> bool {
+    pub fn best_action(&self, state: &State, debug: bool) -> Option<Action> {
         match self {
-            Kind::Human => Kind::play_human(state, debug),
-            Kind::RandomMachine => Kind::play_random(state, debug),
-            Kind::UniformMachine => Kind::play_machine_uniform(state, debug),
-            Kind::MCTSMachine => Kind::play_machine_mcts(state, debug),
+            PlayerType::Human => PlayerType::play_human(state, debug),
+            PlayerType::RandomMachine => PlayerType::play_random(state, debug),
+            PlayerType::UniformMachine => PlayerType::play_machine_uniform(state, debug),
+            PlayerType::MCTSMachine => PlayerType::play_machine_mcts(state, debug),
         }
     }
 }

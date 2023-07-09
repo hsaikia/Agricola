@@ -39,8 +39,7 @@ pub enum FarmyardSpace {
     #[default]
     Empty,
     Room,
-    EmptyField,
-    PlantedField(Seed, usize),
+    Field(Option<(Seed, usize)>),
     UnfencedStable(Option<(Animal, usize)>),
     FencedPasture(Mask, Option<(Animal, usize)>, ContainsStable),
 }
@@ -68,7 +67,7 @@ const NEIGHBOR_SPACES: [[Option<usize>; 4]; 15] = [
     [Some(9), None, Some(13), None],
 ];
 
-const MASK: [Mask; 4] = [8, 4, 2, 1];
+pub const MASK: [Mask; 4] = [8, 4, 2, 1];
 const MASK_ALL: Mask = 15; // 8 + 4 + 2 + 1
 
 #[derive(Debug, Clone, Hash)]
@@ -121,9 +120,7 @@ impl Farm {
 
     fn pasture_position_score(&self, idx: usize) -> i32 {
         match self.farmyard_spaces[idx] {
-            FarmyardSpace::EmptyField | FarmyardSpace::PlantedField(_, _) | FarmyardSpace::Room => {
-                return i32::MIN
-            }
+            FarmyardSpace::Field(_) | FarmyardSpace::Room => return i32::MIN,
             _ => (),
         }
 
@@ -135,9 +132,7 @@ impl Farm {
                     FarmyardSpace::FencedPasture(_, _, _) | FarmyardSpace::UnfencedStable(_) => {
                         score += 2
                     }
-                    FarmyardSpace::Room
-                    | FarmyardSpace::EmptyField
-                    | FarmyardSpace::PlantedField(_, _) => score -= 1,
+                    FarmyardSpace::Room | FarmyardSpace::Field(_) => score -= 1,
                 },
                 None => score += 2,
             }
@@ -148,7 +143,11 @@ impl Farm {
     fn surrounding_fences(&self, idx: usize) -> usize {
         let mut ret: usize = 0;
         if let FarmyardSpace::FencedPasture(mask, _, _) = self.farmyard_spaces[idx] {
-            ret += (mask & MASK[0]) + (mask & MASK[1]) + (mask & MASK[2]) + (mask & MASK[3]);
+            for i in 0..4 {
+                if mask & MASK[i] > 0 {
+                    ret += 1;
+                }
+            }
         }
         ret
     }
@@ -191,6 +190,7 @@ impl Farm {
         }
 
         let candidate_pasture_spaces = self.candidate_pasture_spaces();
+        let mut mask = 0;
 
         for idx in 0..NUM_FARMYARD_SPACES {
             let mut can_use = 0;
@@ -205,8 +205,9 @@ impl Farm {
                     // Check how many neighboring spaces are fenced already
                     can_use = self.neighbouring_fences(idx);
                 }
-                FarmyardSpace::FencedPasture(_, _, _) => {
+                FarmyardSpace::FencedPasture(mask_, _, _) => {
                     can_use = self.surrounding_fences(idx);
+                    mask = mask_;
                 }
                 _ => (),
             }
@@ -221,14 +222,22 @@ impl Farm {
             // check other arrangements for joint fencing
             for (other, w) in &arrangements {
                 let mut connected_sides: usize = 0;
-                for nidx in NEIGHBOR_SPACES[idx].into_iter().flatten() {
-                    if other.contains(&nidx) {
-                        connected_sides += 1;
+                for (ni, opt_nidx) in NEIGHBOR_SPACES[idx].iter().enumerate() {
+                    if let Some(nidx) = opt_nidx {
+                        // If fence is not present in self and present in the neighbor, it's a connecting side
+                        if mask & MASK[ni] == 0 && other.contains(nidx) {
+                            connected_sides += 1;
+                        }
                     }
                 }
 
                 // Connected sides need not be fenced
                 if connected_sides > 0 {
+                    if *w + 4 < can_use + 2 * connected_sides {
+                        println!("{:?}", self.farmyard_spaces);
+                        println!("Was checking for idx {idx} Can use {can_use} Conn {connected_sides} Arr {:?}", other);
+                    }
+                    assert!(*w + 4 >= can_use + 2 * connected_sides);
                     let mut joint_idxs = other.clone();
                     joint_idxs.push(idx);
                     let joint_num_wood = *w + 4 - can_use - 2 * connected_sides;
@@ -496,7 +505,7 @@ impl Farm {
                 let mut has_adjacent_field = false;
                 for nidx in nspace.iter().flatten() {
                     match self.farmyard_spaces[*nidx] {
-                        FarmyardSpace::EmptyField | FarmyardSpace::PlantedField(_, _) => {
+                        FarmyardSpace::Field(_) => {
                             has_adjacent_field = true;
                             break;
                         }
@@ -514,7 +523,7 @@ impl Farm {
                 match opt_i {
                     Some(i) => match self.farmyard_spaces[*i] {
                         FarmyardSpace::Empty => score += 1,
-                        FarmyardSpace::PlantedField(_, _) | FarmyardSpace::EmptyField => score += 2,
+                        FarmyardSpace::Field(_) => score += 2,
                         _ => score -= 1,
                     },
                     None => score += 2,
@@ -536,12 +545,7 @@ impl Farm {
 
     pub fn field_indices(&self) -> Vec<usize> {
         (0..NUM_FARMYARD_SPACES)
-            .filter(|&i| {
-                matches!(
-                    self.farmyard_spaces[i],
-                    FarmyardSpace::EmptyField | FarmyardSpace::PlantedField(_, _)
-                )
-            })
+            .filter(|&i| matches!(self.farmyard_spaces[i], FarmyardSpace::Field(_)))
             .collect()
     }
 
@@ -613,7 +617,7 @@ impl Farm {
                     Some(i) => match self.farmyard_spaces[*i] {
                         FarmyardSpace::Empty => score += 1,
                         FarmyardSpace::FencedPasture(_, _, _)
-                        | FarmyardSpace::UnfencedStable(_) => score += 2,
+                        | FarmyardSpace::UnfencedStable(_) => score += 3,
                         _ => score -= 1,
                     },
                     None => score += 2,
@@ -643,7 +647,7 @@ impl Farm {
 
     pub fn add_field(&mut self, idx: usize) {
         assert!(self.farmyard_spaces[idx] == FarmyardSpace::Empty);
-        self.farmyard_spaces[idx] = FarmyardSpace::EmptyField;
+        self.farmyard_spaces[idx] = FarmyardSpace::Field(None);
     }
 
     pub fn build_room(&mut self, idx: usize) {
@@ -693,7 +697,7 @@ impl Farm {
     pub fn can_sow(&self) -> bool {
         self.farmyard_spaces
             .iter()
-            .any(|f| matches!(f, FarmyardSpace::EmptyField))
+            .any(|f| matches!(f, FarmyardSpace::Field(None)))
     }
 
     pub fn sow_field(&mut self, seed: &Seed) {
@@ -701,11 +705,11 @@ impl Farm {
         let opt_empty_field = self
             .farmyard_spaces
             .iter_mut()
-            .find(|f| matches!(f, FarmyardSpace::EmptyField));
+            .find(|f| matches!(f, FarmyardSpace::Field(_)));
         if let Some(field) = opt_empty_field {
             match *seed {
-                Seed::Grain => *field = FarmyardSpace::PlantedField(Seed::Grain, 3),
-                Seed::Vegetable => *field = FarmyardSpace::PlantedField(Seed::Vegetable, 2),
+                Seed::Grain => *field = FarmyardSpace::Field(Some((Seed::Grain, 3))),
+                Seed::Vegetable => *field = FarmyardSpace::Field(Some((Seed::Vegetable, 2))),
             }
         }
     }
@@ -713,12 +717,12 @@ impl Farm {
     pub fn harvest_fields(&mut self) -> Vec<Seed> {
         let mut ret: Vec<Seed> = Vec::new();
         for space in &mut self.farmyard_spaces {
-            if let FarmyardSpace::PlantedField(crop, amount) = space {
+            if let FarmyardSpace::Field(Some((crop, amount))) = space {
                 ret.push(*crop);
                 *amount -= 1;
 
                 if *amount == 0 {
-                    *space = FarmyardSpace::EmptyField;
+                    *space = FarmyardSpace::Field(None);
                 }
             }
         }
@@ -734,9 +738,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn xor_test() {
+    fn mask_test() {
         assert_eq!(1 & 2, 0);
-        assert_eq!(1 | 2 | 4, 7)
+        assert_eq!(1 | 2 | 4, 7);
+        let mask = 15;
+        let sides: i32 = (0..4).map(|i| if mask & MASK[i] > 0 { 1 } else { 0 }).sum();
+        assert_eq!(sides, 4);
     }
 
     #[test]

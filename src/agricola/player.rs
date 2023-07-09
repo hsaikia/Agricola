@@ -1,4 +1,4 @@
-use crate::agricola::algorithms::Kind;
+use crate::agricola::algorithms::PlayerType;
 use crate::agricola::farm::{Farm, House, Seed};
 use crate::agricola::major_improvements::{Cheaper, MajorImprovement};
 use crate::agricola::occupations::Occupation;
@@ -15,7 +15,7 @@ const STARTING_PEOPLE: usize = 2;
 #[derive(Clone, Hash)]
 pub struct Player {
     // Animals in this resources array are the ones that are pets in the house and the ones that are kept in unfenced stables
-    pub kind: Kind,
+    pub player_type: PlayerType,
     pub resources: Resources,
     pub people_placed: usize,
     pub adults: usize,
@@ -34,7 +34,7 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn create_new(food: usize, p_kind: Kind) -> Self {
+    pub fn create_new(food: usize, player_type: PlayerType) -> Self {
         let mut res = new_res();
         res[Resource::Food] = food;
 
@@ -50,7 +50,7 @@ impl Player {
         reno_cost[Resource::Reed] = 1;
 
         Player {
-            kind: p_kind,
+            player_type,
             resources: res,
             people_placed: 0,
             adults: STARTING_PEOPLE,
@@ -83,8 +83,8 @@ impl Player {
         2 * self.adults + self.children <= self.resources[Resource::Food]
     }
 
-    pub fn kind(&self) -> Kind {
-        self.kind.clone()
+    pub fn player_type(&self) -> PlayerType {
+        self.player_type.clone()
     }
 
     pub fn reorg_animals(&mut self, breed: bool) {

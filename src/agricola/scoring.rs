@@ -44,7 +44,7 @@ fn score_farm(player: &Player) -> i32 {
                     }
                 }
             }
-            FarmyardSpace::PlantedField(seed, amt) => {
+            FarmyardSpace::Field(Some((seed, amt))) => {
                 num_fields += 1;
                 match seed {
                     Seed::Grain => res[Resource::Grain] += amt,

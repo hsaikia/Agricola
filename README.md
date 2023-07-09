@@ -78,14 +78,14 @@ Fitness [-17, 8, -8, -16]
 
 - Enable Human player(s)
 - Display Resources
-- Assign different colors to different players
 - Display action choices and action taken
 - Allow MCTS params to be changed from UI
-- Best fencing arrangements instead of same structure.
-- Implement OCCs.
-- Implement Minors.
-- Unit Tests.
+- Implement OCCs
+- Implement Minors
+- Unit Tests
 - Refactor such that indeterminate states are absent
+- Enable WASM target
+- Fix mismatched style vs cartesian coordinate system in visual layout
 
 ### MCTS Strategy
 
