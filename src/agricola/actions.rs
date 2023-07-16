@@ -83,7 +83,7 @@ pub enum Action {
     Sow(CalledFromGrainUtilization, Seed),
     Renovate(CalledFromHouseRedevelopment, CalledFromFarmRedevelopment),
     GrowFamily(WithRoom),
-    Fence(usize),
+    Fence(Vec<usize>),
     Plow(CalledFromCultivation),
     Convert(ResourceExchange, Option<MajorImprovement>, ConversionStage),
     PreHarvest,
@@ -681,14 +681,6 @@ impl Action {
         println!("\nChosen Action : {self:?}");
     }
 
-    pub fn display_all(actions: &[Self]) {
-        print!("\n\nActions : ");
-        for (i, a) in actions.iter().enumerate() {
-            print!("[#{i}. {a:?}]");
-        }
-        println!();
-    }
-
     pub fn initial_open_spaces() -> Vec<Self> {
         vec![
             Self::UseCopse,
@@ -814,9 +806,9 @@ impl Action {
                 let player = &mut state.players[state.current_player_idx];
                 player.add_new_field();
             }
-            Self::Fence(pasture_size) => {
+            Self::Fence(pasture_indices) => {
                 let player = &mut state.players[state.current_player_idx];
-                player.fence(*pasture_size);
+                player.fence(pasture_indices);
             }
             Self::BuildRoom => {
                 let player = &mut state.players[state.current_player_idx];

@@ -16,19 +16,6 @@ pub enum Resource {
 
 const NUM_RESOURCES: usize = 10;
 
-pub const RESOURCE_NAMES: [&str; NUM_RESOURCES] = [
-    "FOOD",
-    "WOOD",
-    "CLAY",
-    "STONE",
-    "REED",
-    "GRAIN",
-    "VEGETABLE",
-    "SHEEP",
-    "BOAR",
-    "CATTLE",
-];
-
 pub const RESOURCE_EMOJIS: [&str; NUM_RESOURCES] = [
     "\u{1f372}",
     "\u{1fab5}",
@@ -61,22 +48,14 @@ impl IndexMut<Resource> for Resources {
     }
 }
 
-pub fn print_resources(res: &Resources) {
-    let available = res.iter().enumerate().filter(|&(_, x)| x > &0);
-    for (i, n) in available {
-        print!("[{}]", RESOURCE_EMOJIS[i].repeat(*n));
-        //print!("[{} {}]", n, RESOURCE_NAMES[i]);
-    }
-}
-
 pub fn format_resources(res: &Resources) -> String {
-    let mut ret: String = String::new();
+    let mut ret = String::new();
     let available = res.iter().enumerate().filter(|&(_, x)| x > &0);
     for (i, n) in available {
         if !ret.is_empty() {
-            ret = format!("{} + ", ret);
+            ret = format!("{} +", ret);
         }
-        ret = format!("{} {}{}", ret, n, RESOURCE_NAMES[i]);
+        ret = format!("{} {}{}", ret, n, RESOURCE_EMOJIS[i]);
     }
     ret
 }

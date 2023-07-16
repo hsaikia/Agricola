@@ -7,18 +7,18 @@ use std::io;
 
 const NUM_GAMES_TO_SIMULATE: usize = 10000;
 
+struct SimulationRecord {
+    games: u32,
+    fitness: f32,
+    action_idx: usize,
+}
+
 #[derive(Debug, Clone, Hash, PartialEq)]
 pub enum PlayerType {
     Human,
     RandomMachine,
     UniformMachine,
     MCTSMachine,
-}
-
-struct SimulationRecord {
-    games: u32,
-    fitness: f32,
-    action_idx: usize,
 }
 
 impl PlayerType {
@@ -58,9 +58,9 @@ impl PlayerType {
                     choices[input_int].display();
                 }
                 //choices[input_int].apply_choice(state);
-                return Some(choices[input_int].clone());
+                Some(choices[input_int].clone())
             }
-            Err(_e) => return Self::play_human(state, debug), // parsing failed - try again
+            Err(_e) => Self::play_human(state, debug), // parsing failed - try again
         }
     }
 

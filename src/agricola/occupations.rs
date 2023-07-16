@@ -9,9 +9,11 @@ impl Occupation {
         vec![Self::AssistantTiller, Self::Childless]
     }
 
-    pub fn display(occs: &Vec<Self>) {
-        for occ in occs {
-            print!("[{occ:?}]");
+    pub fn display(cards: &Vec<Self>) -> String {
+        let mut ret = String::new();
+        for card in cards {
+            ret = format!("{ret}\n{card:?}");
         }
+        ret
     }
 }

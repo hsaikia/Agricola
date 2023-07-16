@@ -3,7 +3,7 @@ use crate::agricola::algorithms::PlayerType;
 use crate::agricola::major_improvements::{Cheaper, MajorImprovement};
 use crate::agricola::occupations::Occupation;
 use crate::agricola::player::Player;
-use crate::agricola::primitives::{pay_for_resource, print_resources, Resource, Resources};
+use crate::agricola::primitives::{format_resources, pay_for_resource, Resource, Resources};
 use crate::agricola::scoring;
 use rand::Rng;
 use std::collections::hash_map::DefaultHasher;
@@ -36,12 +36,12 @@ pub struct State {
 }
 
 impl State {
-    pub fn create_new(
-        num_players: usize,
-        human_player: bool,
-        default_player_type: &PlayerType,
-    ) -> State {
-        let first_player_idx = rand::thread_rng().gen_range(0..num_players);
+    pub fn new(players: &Vec<PlayerType>) -> Option<Self> {
+        if players.is_empty() {
+            return None;
+        }
+
+        let first_player_idx = rand::thread_rng().gen_range(0..players.len());
         let mut state = State {
             resource_map: Action::init_resource_map(),
             open_spaces: Action::initial_open_spaces(),
@@ -67,13 +67,9 @@ impl State {
             start_round_events: vec![],
             available_occupations: Occupation::all(),
         };
-        state.init_players(
-            first_player_idx,
-            num_players,
-            human_player,
-            default_player_type,
-        );
-        state
+        state.init_players(players, first_player_idx);
+        //println!("New Game Started");
+        Some(state)
     }
 
     pub fn current_round(&self) -> usize {
@@ -100,7 +96,6 @@ impl State {
         if self.hidden_spaces.last().unwrap().is_empty() {
             return false;
         }
-
         true
     }
 
@@ -133,26 +128,18 @@ impl State {
         s.finish()
     }
 
-    pub fn play_move(&mut self, debug: bool) -> bool {
-        let algorithm = self.player_type();
-        let opt_action = algorithm.best_action(self, debug);
-        if let Some(action) = opt_action {
-            action.apply_choice(self);
-            return true;
-        }
-        false
-    }
-
     pub fn play(&mut self, debug: bool) {
         loop {
-            let status = self.play_move(debug);
-            if !status {
+            let opt_action = self.player_type().best_action(self, debug);
+            if let Some(action) = opt_action {
+                action.apply_choice(self);
+            } else {
                 break;
             }
         }
     }
 
-    fn player_type(&self) -> PlayerType {
+    pub fn player_type(&self) -> PlayerType {
         self.players[self.current_player_idx].player_type()
     }
 
@@ -248,21 +235,10 @@ impl State {
         }
     }
 
-    fn init_players(
-        &mut self,
-        first_idx: usize,
-        num: usize,
-        human_player: bool,
-        default_player_type: &PlayerType,
-    ) {
-        for i in 0..num {
+    fn init_players(&mut self, player_types: &[PlayerType], first_idx: usize) {
+        for (i, player_type) in player_types.iter().enumerate() {
             let food = if i == first_idx { 2 } else { 3 };
-            let player_type = if human_player && i == 0 {
-                PlayerType::Human
-            } else {
-                default_player_type.clone()
-            };
-            let player = Player::create_new(food, player_type);
+            let player = Player::create_new(food, player_type.clone());
             self.players.push(player);
         }
     }
@@ -409,37 +385,28 @@ impl State {
         }
     }
 
-    pub fn display(&self) {
-        println!("\n\n-- Board --");
-
+    pub fn format(&self) -> String {
+        let mut ret: String = String::new();
         for action in &self.open_spaces {
             let idx = action.action_idx();
             if self.occupied_spaces.contains(&idx) {
-                print!("\n[X] {:?} is occupied", &action);
+                ret = format!("{}\n[X] {:?} is occupied", ret, action);
             } else {
-                print!("\n[-] {:?} ", &action);
+                ret = format!("{}\n[-] {:?}", ret, action);
                 if action.resource_map_idx().is_some() {
-                    print_resources(&self.resource_map[action.resource_map_idx().unwrap()]);
+                    ret = format!(
+                        "{}{}",
+                        ret,
+                        format_resources(&self.resource_map[action.resource_map_idx().unwrap()])
+                    );
                 }
             }
         }
 
-        print!("\nMajors Available [");
-        MajorImprovement::display(&self.major_improvements);
-        println!("]");
-
-        println!("\n\n-- Players --");
-        for i in 0..self.players.len() {
-            let p = &self.players[i];
-            print!("\nFarm {i} ");
-            if i == self.current_player_idx {
-                print!("[Turn]");
-            }
-            if i == self.starting_player_idx {
-                print!("[Start Player]");
-            }
-            println!();
-            p.display();
+        ret = format!("{}\n\n=== Available majors ===\n", ret);
+        for major in &self.major_improvements {
+            ret = format!("{}\n{major:?}", ret);
         }
+        ret
     }
 }

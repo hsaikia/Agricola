@@ -1,12 +1,11 @@
 use crate::agricola::algorithms::PlayerType;
-use crate::agricola::farm::{Farm, House, Seed};
+use crate::agricola::farm::{Animal, Farm, FarmyardSpace, House, Seed};
 use crate::agricola::major_improvements::{Cheaper, MajorImprovement};
 use crate::agricola::occupations::Occupation;
 use crate::agricola::primitives::{
-    can_pay_for_resource, new_res, pay_for_resource, print_resources, Resource, ResourceExchange,
-    Resources,
+    can_pay_for_resource, new_res, pay_for_resource, Resource, ResourceExchange, Resources,
+    RESOURCE_EMOJIS,
 };
-use crate::agricola::scoring;
 use rand::seq::SliceRandom;
 
 const MAX_FAMILY_MEMBERS: usize = 5;
@@ -88,7 +87,14 @@ impl Player {
     }
 
     pub fn reorg_animals(&mut self, breed: bool) {
-        let leftovers = self.farm.reorg_animals(&self.resources, breed);
+        self.farm.reorg_animals(&mut self.resources, breed);
+
+        let sheep = self.resources[Resource::Sheep];
+        self.resources[Resource::Sheep] = 0;
+        let pigs = self.resources[Resource::Pigs];
+        self.resources[Resource::Pigs] = 0;
+        let cattle = self.resources[Resource::Cattle];
+        self.resources[Resource::Cattle] = 0;
 
         if self
             .major_cards
@@ -97,9 +103,7 @@ impl Player {
                 .major_cards
                 .contains(&MajorImprovement::CookingHearth(Cheaper(false)))
         {
-            self.resources[Resource::Food] += 2 * leftovers[Resource::Sheep]
-                + 3 * leftovers[Resource::Pigs]
-                + 4 * leftovers[Resource::Cattle];
+            self.resources[Resource::Food] += 2 * sheep + 3 * pigs + 4 * cattle;
         } else if self
             .major_cards
             .contains(&MajorImprovement::Fireplace(Cheaper(true)))
@@ -107,9 +111,7 @@ impl Player {
                 .major_cards
                 .contains(&MajorImprovement::Fireplace(Cheaper(false)))
         {
-            self.resources[Resource::Food] += 2 * leftovers[Resource::Sheep]
-                + 2 * leftovers[Resource::Pigs]
-                + 3 * leftovers[Resource::Cattle];
+            self.resources[Resource::Food] += 2 * sheep + 2 * pigs + 3 * cattle;
         }
     }
 
@@ -150,26 +152,27 @@ impl Player {
             && self.farm.can_sow()
     }
 
-    pub fn fencing_choices(&self) -> Vec<usize> {
-        let mut ret: Vec<usize> = Vec::new();
+    pub fn fencing_choices(&self) -> Vec<Vec<usize>> {
+        let mut ret: Vec<Vec<usize>> = Vec::new();
         let fencing_arrangements = self.farm.fencing_options(self.resources[Resource::Wood]);
         for (idxs, _w) in fencing_arrangements {
-            ret.push(idxs.len());
+            ret.push(idxs);
         }
         ret
     }
 
-    pub fn fence(&mut self, pasture_size: usize) {
+    pub fn fence(&mut self, pasture_indices: &Vec<usize>) {
         assert!(self.can_fence());
         let fencing_options = self.farm.fencing_options(self.resources[Resource::Wood]);
-        let mut idxs: Vec<usize> = Vec::new();
-        for (i, fo) in fencing_options.iter().enumerate() {
-            if fo.0.len() == pasture_size {
-                idxs.push(i);
+        let mut wood = 0;
+        for (_i, fo) in fencing_options.iter().enumerate() {
+            if &fo.0 == pasture_indices {
+                wood = fo.1;
             }
         }
-        let idx = idxs.choose(&mut rand::thread_rng()).unwrap();
-        self.farm.fence_spaces(&fencing_options[*idx].0);
+
+        self.farm.fence_spaces(pasture_indices);
+        self.resources[Resource::Wood] -= wood;
     }
 
     pub fn can_fence(&self) -> bool {
@@ -368,27 +371,159 @@ impl Player {
         false
     }
 
-    pub fn display(&self) {
-        println!("Score {}", scoring::score(self));
-        print!(
-            "House and Family [{}/{}]",
-            "\u{1f464}".repeat(self.people_placed),
-            "\u{1f464}".repeat(self.adults - self.people_placed)
+    pub fn display_resources(&self) -> String {
+        let res = &self.resources;
+        let mut ret = format!(
+            "{:2} {}   ",
+            res[Resource::Wood],
+            RESOURCE_EMOJIS[Resource::Wood as usize]
         );
-        if self.children > 0 {
-            print!("[{}]", "\u{1f476}".repeat(self.children));
+        ret = format!(
+            "{ret}{:2} {}   ",
+            res[Resource::Clay],
+            RESOURCE_EMOJIS[Resource::Clay as usize]
+        );
+        ret = format!(
+            "{ret}{:2} {}   ",
+            res[Resource::Stone],
+            RESOURCE_EMOJIS[Resource::Stone as usize]
+        );
+        ret = format!(
+            "{ret}{:2} {}",
+            res[Resource::Reed],
+            RESOURCE_EMOJIS[Resource::Reed as usize]
+        );
+        ret = format!(
+            "{ret}\n{:2} {}   ",
+            res[Resource::Grain],
+            RESOURCE_EMOJIS[Resource::Grain as usize]
+        );
+        ret = format!(
+            "{ret}{:2} {}   ",
+            res[Resource::Vegetable],
+            RESOURCE_EMOJIS[Resource::Vegetable as usize]
+        );
+        ret = format!(
+            "{ret}{:2} {}   ",
+            res[Resource::Food],
+            RESOURCE_EMOJIS[Resource::Food as usize]
+        );
+        ret = format!("{ret}{:2} \u{1f37d}", self.begging_tokens);
+        ret = format!(
+            "{ret}\n{:2} {}   ",
+            res[Resource::Sheep],
+            RESOURCE_EMOJIS[Resource::Sheep as usize]
+        );
+        ret = format!(
+            "{ret}{:2} {}   ",
+            res[Resource::Pigs],
+            RESOURCE_EMOJIS[Resource::Pigs as usize]
+        );
+        ret = format!(
+            "{ret}{:2} {}",
+            res[Resource::Cattle],
+            RESOURCE_EMOJIS[Resource::Cattle as usize]
+        );
+
+        ret = format!("{ret}\n\n{}", MajorImprovement::display(&self.major_cards));
+        ret = format!("{ret}\n\n{}", Occupation::display(&self.occupations));
+        ret
+    }
+
+    pub fn display_farm(&self) -> String {
+        const SX: usize = 5;
+        const SY: usize = 3;
+
+        const NEWLINE: &str = "\n";
+        let mut ret = String::from(NEWLINE);
+        let mut extras = String::from(NEWLINE);
+        for ii in 0..2 * SY + 1 {
+            for jj in 0..2 * SX + 1 {
+                let fidx = ii * (2 * SX + 1) + jj;
+
+                if (ii + jj) % 2 == 1 {
+                    // Fence
+                    if self.farm.fences[fidx] {
+                        if ii % 2 == 0 {
+                            //ret = format!("{ret} ━━ ");
+                            ret = format!("{ret} {fidx} ");
+                        } else {
+                            //ret = format!("{ret}┃");
+                            ret = format!("{ret}{fidx}");
+                        }
+                    } else if ii % 2 == 0 {
+                        ret = format!("{ret}    ");
+                    } else {
+                        ret = format!("{ret} ");
+                    }
+                } else if ii % 2 == 1 && jj % 2 == 1 {
+                    // Farmyard space
+                    let idx = (ii / 2) * 5 + jj / 2;
+                    match self.farm.farmyard_spaces[idx] {
+                        FarmyardSpace::Empty => {
+                            ret = format!("{ret} 🔲 ");
+                        }
+                        FarmyardSpace::Room => match self.house {
+                            House::Wood => ret = format!("{ret} 🛖 "),
+                            House::Clay => ret = format!("{ret} 🏠 "),
+                            House::Stone => ret = format!("{ret} 🏰 "),
+                        },
+                        FarmyardSpace::Field(opt_seed) => {
+                            ret = format!("{ret} 🟩 ");
+                            if let Some((seed, amt)) = opt_seed {
+                                match seed {
+                                    Seed::Grain => extras = format!("{extras} | {idx} -> {amt} 🌾"),
+                                    Seed::Vegetable => {
+                                        extras = format!("{extras} | {idx} -> {amt} 🎃")
+                                    }
+                                }
+                            }
+                        }
+                        FarmyardSpace::UnfencedStable(opt_animal) => {
+                            ret = format!("{ret} 🔶 ");
+                            if let Some((animal, amt)) = opt_animal {
+                                match animal {
+                                    Animal::Sheep => {
+                                        extras = format!("{extras} | {idx} -> {amt} 🐑")
+                                    }
+                                    Animal::Pigs => {
+                                        extras = format!("{extras} | {idx} -> {amt} 🐖")
+                                    }
+                                    Animal::Cattle => {
+                                        extras = format!("{extras} | {idx} -> {amt} 🐄")
+                                    }
+                                }
+                            }
+                        }
+                        FarmyardSpace::FencedPasture(opt_animal, has_stable) => {
+                            if has_stable {
+                                ret = format!("{ret} 🔶 ");
+                            } else {
+                                ret = format!("{ret} 🔲 ");
+                            }
+                            if let Some((animal, amt)) = opt_animal {
+                                match animal {
+                                    Animal::Sheep => {
+                                        extras = format!("{extras} | {idx} -> {amt} 🐑")
+                                    }
+                                    Animal::Pigs => {
+                                        extras = format!("{extras} | {idx} -> {amt} 🐖")
+                                    }
+                                    Animal::Cattle => {
+                                        extras = format!("{extras} | {idx} -> {amt} 🐄")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    ret = format!("{ret}+");
+                }
+            }
+            ret = format!("{}{}", ret, NEWLINE);
         }
 
-        print!("Resources ");
-        print_resources(&self.resources);
-
-        if self.begging_tokens > 0 {
-            print!("[{}]", "\u{1f37d}".repeat(self.begging_tokens));
-        }
-
-        MajorImprovement::display(&self.major_cards);
-        Occupation::display(&self.occupations);
-
-        println!();
+        ret = format!("{}{}{}{}", ret, NEWLINE, NEWLINE, extras);
+        ret
     }
 }

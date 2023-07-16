@@ -241,9 +241,11 @@ impl MajorImprovement {
         }
     }
 
-    pub fn display(majors: &Vec<Self>) {
-        for major in majors {
-            print!("[{major:?}]");
+    pub fn display(cards: &Vec<Self>) -> String {
+        let mut ret = String::new();
+        for card in cards {
+            ret = format!("{ret}\n{card:?}");
         }
+        ret
     }
 }
