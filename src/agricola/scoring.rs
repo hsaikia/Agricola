@@ -1,7 +1,7 @@
-use crate::agricola::farm::{Animal, FarmyardSpace, House, Seed};
-use crate::agricola::major_improvements::MajorImprovement;
-use crate::agricola::player::Player;
-use crate::agricola::primitives::{Resource, Resources};
+use super::farm::{Animal, FarmyardSpace, House, Seed};
+use super::major_improvements::MajorImprovement;
+use super::player::Player;
+use super::primitives::{Resource, Resources};
 
 const FIELD_SCORE: [i32; 6] = [-1, -1, 1, 2, 3, 4];
 const PASTURE_SCORE: [i32; 5] = [-1, 1, 2, 3, 4];

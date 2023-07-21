@@ -1,6 +1,6 @@
-use crate::agricola::actions::Action;
-use crate::agricola::mcts::GameRecord;
-use crate::agricola::state::State;
+use super::actions::Action;
+use super::mcts::GameRecord;
+use super::state::State;
 use rand::Rng;
 use std::collections::HashMap;
 use std::io;

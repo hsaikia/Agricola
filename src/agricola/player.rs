@@ -1,8 +1,8 @@
-use crate::agricola::algorithms::PlayerType;
-use crate::agricola::farm::{Animal, Farm, FarmyardSpace, House, Seed};
-use crate::agricola::major_improvements::{Cheaper, MajorImprovement};
-use crate::agricola::occupations::Occupation;
-use crate::agricola::primitives::{
+use super::algorithms::PlayerType;
+use super::farm::{Animal, Farm, FarmyardSpace, House, Seed};
+use super::major_improvements::{Cheaper, MajorImprovement};
+use super::occupations::Occupation;
+use super::primitives::{
     can_pay_for_resource, new_res, pay_for_resource, Resource, ResourceExchange, Resources,
     RESOURCE_EMOJIS,
 };
@@ -155,23 +155,23 @@ impl Player {
     pub fn fencing_choices(&self) -> Vec<Vec<usize>> {
         let mut ret: Vec<Vec<usize>> = Vec::new();
         let fencing_arrangements = self.farm.fencing_options(self.resources[Resource::Wood]);
-        for (idxs, _w) in fencing_arrangements {
+        for idxs in fencing_arrangements {
             ret.push(idxs);
         }
         ret
     }
 
-    pub fn fence(&mut self, pasture_indices: &Vec<usize>) {
+    pub fn fence(&mut self, fence_indices: &Vec<usize>) {
         assert!(self.can_fence());
         let fencing_options = self.farm.fencing_options(self.resources[Resource::Wood]);
         let mut wood = 0;
         for (_i, fo) in fencing_options.iter().enumerate() {
-            if &fo.0 == pasture_indices {
-                wood = fo.1;
+            if fo == fence_indices {
+                wood = fo.len();
             }
         }
 
-        self.farm.fence_spaces(pasture_indices);
+        self.farm.fence_spaces(fence_indices);
         self.resources[Resource::Wood] -= wood;
     }
 
@@ -445,11 +445,9 @@ impl Player {
                     // Fence
                     if self.farm.fences[fidx] {
                         if ii % 2 == 0 {
-                            //ret = format!("{ret} ━━ ");
-                            ret = format!("{ret} {fidx} ");
+                            ret = format!("{ret} ━━ ");
                         } else {
-                            //ret = format!("{ret}┃");
-                            ret = format!("{ret}{fidx}");
+                            ret = format!("{ret}┃");
                         }
                     } else if ii % 2 == 0 {
                         ret = format!("{ret}    ");

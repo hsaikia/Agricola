@@ -1,11 +1,11 @@
-use crate::agricola::farm::Seed;
-use crate::agricola::major_improvements::{Cheaper, MajorImprovement};
-use crate::agricola::occupations::Occupation;
-use crate::agricola::player::Player;
-use crate::agricola::primitives::{
+use super::farm::Seed;
+use super::major_improvements::{Cheaper, MajorImprovement};
+use super::occupations::Occupation;
+use super::player::Player;
+use super::primitives::{
     can_pay_for_resource, new_res, take_resource, Resource, ResourceExchange, Resources,
 };
-use crate::agricola::state::State;
+use super::state::State;
 pub const NUM_RESOURCE_SPACES: usize = 18;
 
 // Tuple <called from grain utilization, baked bread already>

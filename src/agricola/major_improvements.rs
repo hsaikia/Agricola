@@ -1,6 +1,4 @@
-use crate::agricola::primitives::{
-    can_pay_for_resource, new_res, Resource, ResourceExchange, Resources,
-};
+use super::primitives::{can_pay_for_resource, new_res, Resource, ResourceExchange, Resources};
 
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct Cheaper(pub bool);

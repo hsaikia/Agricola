@@ -1,10 +1,10 @@
-use crate::agricola::actions::{Action, NUM_RESOURCE_SPACES};
-use crate::agricola::algorithms::PlayerType;
-use crate::agricola::major_improvements::{Cheaper, MajorImprovement};
-use crate::agricola::occupations::Occupation;
-use crate::agricola::player::Player;
-use crate::agricola::primitives::{format_resources, pay_for_resource, Resource, Resources};
-use crate::agricola::scoring;
+use super::actions::{Action, NUM_RESOURCE_SPACES};
+use super::algorithms::PlayerType;
+use super::major_improvements::{Cheaper, MajorImprovement};
+use super::occupations::Occupation;
+use super::player::Player;
+use super::primitives::{format_resources, pay_for_resource, Resource, Resources};
+use super::scoring;
 use rand::Rng;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};

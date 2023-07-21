@@ -1,11 +1,9 @@
 use std::time::{Duration, Instant};
 use std::{error::Error, io};
 
-mod agricola;
-
-use agricola::scoring;
-use agricola::state::State;
-use agricola::{actions::Action, algorithms::PlayerType};
+use agricola_game::agricola::scoring;
+use agricola_game::agricola::state::State;
+use agricola_game::agricola::{actions::Action, algorithms::PlayerType};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,

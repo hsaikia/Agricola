@@ -1,7 +1,9 @@
-use crate::agricola::primitives::{Resource, Resources};
-use std::{collections::HashMap, hash::Hash};
+use super::primitives::{Resource, Resources};
+use std::{collections::HashMap, collections::VecDeque, hash::Hash};
 
-pub const NUM_FARMYARD_SPACES: usize = 15;
+const L: usize = 5;
+const W: usize = 3;
+pub const NUM_FARMYARD_SPACES: usize = L * W;
 pub const MAX_FENCES: usize = 15;
 pub const MAX_STABLES: usize = 4;
 const PASTURE_CAPACITY: usize = 2;
@@ -45,17 +47,8 @@ pub enum FarmyardSpace {
 // 05 06 07 08 09
 // 10 11 12 13 14
 
-// Fence positions
-// 00  01  02  03  04  05  06  07  08  09  10
-// 11 [12] 13 [14] 15 [16] 17 [18] 19 [20] 21
-// 22  23  24  25  26  27  28  29  30  31  32
-// 33 [34] 35 [36] 37 [38] 39 [40] 41 [42] 43
-// 44  45  46  47  48  49  50  51  52  53  54
-// 55 [56] 57 [58] 59 [60] 61 [62] 63 [64] 65
-// 66  67  68  69  70  71  72  73  74  75  76
-
 // Order : NEWS
-const NEIGHBOR_SPACES: [[Option<usize>; 4]; 15] = [
+const NEIGHBOR_SPACES: [[Option<usize>; 4]; NUM_FARMYARD_SPACES] = [
     [None, Some(1), None, Some(5)],
     [None, Some(2), Some(0), Some(6)],
     [None, Some(3), Some(1), Some(7)],
@@ -73,8 +66,17 @@ const NEIGHBOR_SPACES: [[Option<usize>; 4]; 15] = [
     [Some(9), None, Some(13), None],
 ];
 
+// Fence positions
+// 00  01  02  03  04  05  06  07  08  09  10
+// 11 [12] 13 [14] 15 [16] 17 [18] 19 [20] 21
+// 22  23  24  25  26  27  28  29  30  31  32
+// 33 [34] 35 [36] 37 [38] 39 [40] 41 [42] 43
+// 44  45  46  47  48  49  50  51  52  53  54
+// 55 [56] 57 [58] 59 [60] 61 [62] 63 [64] 65
+// 66  67  68  69  70  71  72  73  74  75  76
+
 // Order : NEWS
-const FENCE_INDICES: [[usize; 4]; 15] = [
+const FENCE_INDICES: [[usize; 4]; NUM_FARMYARD_SPACES] = [
     [1, 13, 11, 23],
     [3, 15, 13, 25],
     [5, 17, 15, 27],
@@ -101,221 +103,284 @@ pub struct Farm {
 
 impl Farm {
     pub fn new() -> Self {
-        let mut ret = [FarmyardSpace::Empty; NUM_FARMYARD_SPACES];
-        ret[5] = FarmyardSpace::Room;
-        ret[10] = FarmyardSpace::Room;
+        let mut farmyard_spaces = [FarmyardSpace::Empty; NUM_FARMYARD_SPACES];
+        farmyard_spaces[5] = FarmyardSpace::Room;
+        farmyard_spaces[10] = FarmyardSpace::Room;
+
         Self {
-            farmyard_spaces: ret,
+            farmyard_spaces,
             fences: [false; NUM_FENCE_INDICES],
             pet: None,
         }
     }
 
-    fn surrounding_fences(&self, idx: usize) -> usize {
-        if let FarmyardSpace::FencedPasture(_, _) = self.farmyard_spaces[idx] {
-            return (0..4)
-                .filter(|x| self.fences[FENCE_INDICES[idx][*x]])
-                .count();
+    pub fn display_fence_layout(layout: &Vec<usize>) {
+        let l = 2 * L + 1;
+        let w = 2 * W + 1;
+        for i in 0..w {
+            for j in 0..l {
+                let idx = i * l + j;
+                if i % 2 == 0 {
+                    if j % 2 == 0 {
+                        print!("+");
+                    } else {
+                        if layout.contains(&idx) {
+                            print!(" - ");
+                        } else {
+                            print!("   ");
+                        }
+                    }
+                } else {
+                    if j % 2 == 0 {
+                        if layout.contains(&idx) {
+                            print!("|");
+                        } else {
+                            print!(" ");
+                        }
+                    } else {
+                        print!("   ");
+                    }
+                }
+            }
+            print!("\n");
         }
-        0
+        print!("\n\n");
     }
 
-    fn candidate_pasture_spaces(&self) -> [bool; NUM_FARMYARD_SPACES] {
-        let mut ret = [false; NUM_FARMYARD_SPACES];
+    fn available_fence_spots(&self) -> [bool; NUM_FENCE_INDICES] {
+        // Mark all to false
+        let mut available_fence_spots = [false; NUM_FENCE_INDICES];
+        for i in 0..NUM_FARMYARD_SPACES {
+            match self.farmyard_spaces[i] {
+                FarmyardSpace::Empty
+                | FarmyardSpace::FencedPasture(_, _)
+                | FarmyardSpace::UnfencedStable(_) => {
+                    // Mark all unused spots next to empty spaces, fenced spaces, and spaces with unfenced stables
+                    for spot in FENCE_INDICES[i] {
+                        if !self.fences[spot] {
+                            available_fence_spots[spot] = true;
+                        }
+                    }
+                }
+                _ => (),
+            }
+        }
+        available_fence_spots
+    }
 
-        let mut pasture_spaces = 0;
-        for idx in 0..NUM_FARMYARD_SPACES {
-            if let FarmyardSpace::FencedPasture(_, _) = self.farmyard_spaces[idx] {
-                pasture_spaces += 1;
+    fn fence_graph() -> HashMap<usize, Vec<(usize, usize)>> {
+        let mut ret: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
+        let l = 2 * L + 1;
+        let w = 2 * W + 1;
+
+        // Horizontal connections
+        for i in 0..w {
+            if i % 2 == 1 {
+                continue;
+            }
+            for j in 0..l - 2 {
+                if j % 2 == 1 {
+                    continue;
+                }
+
+                let edge_idx = i * l + j + 1;
+                let idx_from = i * l + j;
+                let idx_to = i * l + j + 2;
+
+                ret.entry(idx_from)
+                    .or_insert_with(Vec::new)
+                    .push((idx_to, edge_idx));
+                ret.entry(idx_to)
+                    .or_insert_with(Vec::new)
+                    .push((idx_from, edge_idx));
             }
         }
 
-        // If not pastures yet, all empty spaces/uf stables can be fenced
-        if pasture_spaces == 0 {
-            for (idx, space) in self.farmyard_spaces.iter().enumerate() {
-                match *space {
-                    FarmyardSpace::Empty | FarmyardSpace::UnfencedStable(_) => ret[idx] = true,
-                    _ => (),
-                }
+        // Vertical connections
+        for i in 0..w - 2 {
+            if i % 2 == 1 {
+                continue;
             }
-
-            return ret;
-        }
-
-        // all neighboring farmyard spaces to a pasture can be fenced
-        for idx in 0..NUM_FARMYARD_SPACES {
-            for nidx in NEIGHBOR_SPACES[idx].into_iter().flatten() {
-                if let FarmyardSpace::FencedPasture(_, _) = self.farmyard_spaces[nidx] {
-                    ret[idx] = true;
+            for j in 0..l {
+                if j % 2 == 1 {
+                    continue;
                 }
-            }
-        }
 
-        // .. except the ones that are already fenced on all sides
-        for (idx, fs) in ret.iter_mut().enumerate().take(NUM_FARMYARD_SPACES) {
-            if let FarmyardSpace::FencedPasture(_, _) = self.farmyard_spaces[idx] {
-                if self.surrounding_fences(idx) == 4 {
-                    *fs = false;
-                }
+                let edge_idx = i * l + j + l;
+                let idx_from = i * l + j;
+                let idx_to = (i + 2) * l + j;
+
+                ret.entry(idx_from)
+                    .or_insert_with(Vec::new)
+                    .push((idx_to, edge_idx));
+                ret.entry(idx_to)
+                    .or_insert_with(Vec::new)
+                    .push((idx_from, edge_idx));
             }
         }
         ret
     }
 
-    fn pasture_position_score(&self, idx: usize) -> i32 {
-        match self.farmyard_spaces[idx] {
-            FarmyardSpace::Field(_) | FarmyardSpace::Room => return i32::MIN,
-            _ => (),
-        }
+    // Starts a BFS from nodes (corners of farmyard spaces) and outputs all paths that end at terminal nodes (nodes that are connected to at least one fence)
+    pub fn fencing_options(&self, wood: usize) -> Vec<Vec<usize>> {
+        let graph = Self::fence_graph();
+        let available_fence_spots = self.available_fence_spots();
+        let total_fences_used = self.total_fences_used();
+        let available_wood = wood.min(MAX_FENCES - total_fences_used);
 
-        let mut score: i32 = 0;
-        for opt_i in NEIGHBOR_SPACES[idx] {
-            match opt_i {
-                Some(i) => match self.farmyard_spaces[i] {
-                    FarmyardSpace::Empty => score += 1,
-                    FarmyardSpace::FencedPasture(_, _) | FarmyardSpace::UnfencedStable(_) => {
-                        score += 2
-                    }
-                    FarmyardSpace::Room | FarmyardSpace::Field(_) => score -= 1,
-                },
-                None => score += 2,
+        //println!("{graph:?}");
+        //println!("Total fences used {}", self.total_fences_used());
+
+        // (to, from, edge)
+        let mut queue: VecDeque<(usize, Vec<(usize, usize)>)> = VecDeque::new();
+        let mut terminal_nodes: Vec<usize> = Vec::new();
+
+        // Check for terminal nodes (i.e., whether there are fences already)
+        for (k, v) in &graph {
+            // Add possible terminal nodes
+            //println!("{k} => {v:?}");
+            if v.iter().any(|&x| self.fences[x.1]) {
+                //println!("{k} is a terminal node");
+                terminal_nodes.push(*k);
             }
         }
-        score
+
+        //println!("TNs {terminal_nodes:?}");
+
+        if terminal_nodes.is_empty() {
+            // No fences, add all nodes to the queue
+            for (k, v) in &graph {
+                for elem in v {
+                    if !available_fence_spots[elem.1] {
+                        continue;
+                    }
+                    queue.push_back((*k, vec![*elem]));
+                }
+            }
+        } else {
+            // Only add nodes that are terminal
+            for k in &terminal_nodes {
+                for elem in &graph[k] {
+                    if !available_fence_spots[elem.1] {
+                        continue;
+                    }
+                    queue.push_back((*k, vec![*elem]));
+                }
+            }
+        }
+
+        let mut arrangements: Vec<Vec<usize>> = Vec::new();
+        while !queue.is_empty() {
+            let top = queue.pop_front();
+            if let Some((idx1, v)) = top {
+                if v.len() > available_wood {
+                    continue;
+                }
+
+                let mut arr: Vec<usize> = Vec::new();
+
+                // Starting and ending at the same terminal node - does not share an exisiting fence => Invalid
+                if v.iter()
+                    .any(|&y| y.0 == idx1 && terminal_nodes.contains(&y.0))
+                {
+                    continue;
+                }
+
+                if v.iter()
+                    .any(|&y| y.0 == idx1 || terminal_nodes.contains(&y.0))
+                {
+                    // Found a loop, this is a valid fence arrangement
+                    // Add all fence positions from the start up until this point
+                    for elem in &v {
+                        arr.push(elem.1);
+                        if elem.0 == idx1 || terminal_nodes.contains(&elem.0) {
+                            break;
+                        }
+                    }
+                }
+
+                if !arr.is_empty() {
+                    arr.sort();
+
+                    if arrangements.contains(&arr) {
+                        continue;
+                    }
+                    arrangements.push(arr);
+                } else {
+                    if let Some((last_idx, e)) = v.last() {
+                        for neighbors in &graph[last_idx] {
+                            if !available_fence_spots[neighbors.1] {
+                                continue;
+                            }
+
+                            // Skip if edge is the same
+                            if *e == neighbors.1 {
+                                continue;
+                            }
+
+                            // Don't proceed if node was already seen in the sequence
+                            if v.iter().any(|&x| x.0 == neighbors.0) {
+                                continue;
+                            }
+
+                            // Add the node to the sequence to make a new sequence
+                            let mut vv = v.clone();
+                            vv.push(*neighbors);
+                            queue.push_back((idx1, vv));
+                        }
+                    }
+                }
+            }
+        }
+        arrangements
     }
 
     fn total_fences_used(&self) -> usize {
         self.fences.iter().filter(|&x| *x).count()
     }
 
-    pub fn fencing_options(&self, wood: usize) -> Vec<(Vec<usize>, usize)> {
-        let available_fences = wood.min(MAX_FENCES - self.total_fences_used());
-
-        // Find single fences + wood, then for every new single fence, check other neighboring arrangements and form joint arrangements
-        let mut arrangements: Vec<(Vec<usize>, usize)> = Vec::new();
-
-        if available_fences == 0 {
-            return arrangements;
-        }
-
-        let candidate_pasture_spaces = self.candidate_pasture_spaces();
-        for idx in 0..NUM_FARMYARD_SPACES {
-            let mut can_use = 0;
-
-            if !candidate_pasture_spaces[idx] {
-                continue;
-            }
-
-            // This space can be fenced
-            match self.farmyard_spaces[idx] {
-                FarmyardSpace::Empty
-                | FarmyardSpace::UnfencedStable(_)
-                | FarmyardSpace::FencedPasture(_, _) => {
-                    // Check how many neighboring spaces are fenced already
-                    can_use = self.surrounding_fences(idx);
-                    assert!(can_use < 4);
+    fn mark_fenced_spaces(&self) -> [bool; NUM_FARMYARD_SPACES] {
+        let mut fenced_spaces: [bool; NUM_FARMYARD_SPACES] = [true; NUM_FARMYARD_SPACES];
+        // Start at the room space 5
+        let mut queue: VecDeque<usize> = VecDeque::new();
+        queue.push_back(5);
+        while !queue.is_empty() {
+            let top = queue.pop_front();
+            if let Some(idx) = top {
+                if !fenced_spaces[idx] {
+                    continue;
                 }
-                _ => (),
-            }
+                fenced_spaces[idx] = false;
 
-            // If available_fences are not enough for this single pasture
-            if can_use + available_fences < 4 {
-                continue;
-            }
-
-            // Find joint fence arrangements with arrangements found earlier
-            let mut new_arrangements: Vec<(Vec<usize>, usize)> = Vec::new();
-
-            // Check other arrangements for joint fencing
-            for (other, w) in &arrangements {
-                let mut connected_sides: usize = 0;
-                for (ni, opt_nidx) in NEIGHBOR_SPACES[idx].iter().enumerate() {
-                    if let Some(nidx) = opt_nidx {
-                        // If fence is not present and present in the neighbor, it's a connecting side
-                        if !self.fences[FENCE_INDICES[idx][ni]] && other.contains(nidx) {
-                            connected_sides += 1;
+                for i in 0..4 {
+                    if let Some(nidx) = NEIGHBOR_SPACES[idx][i] {
+                        if !self.fences[FENCE_INDICES[idx][i]] {
+                            queue.push_back(nidx);
                         }
                     }
                 }
-
-                // Connected sides need not be fenced
-                if connected_sides > 0 {
-                    if *w + 4 < can_use + 2 * connected_sides {
-                        println!("{:?}", self.farmyard_spaces);
-                        println!("Was checking for idx {idx} Can use {can_use} Conn {connected_sides} Arr {:?}", other);
-                    }
-                    assert!(*w + 4 >= can_use + 2 * connected_sides);
-                    let mut joint_idxs = other.clone();
-                    joint_idxs.push(idx);
-                    let joint_num_wood = *w + 4 - can_use - 2 * connected_sides;
-
-                    if joint_num_wood <= available_fences {
-                        new_arrangements.push((joint_idxs, joint_num_wood))
-                    }
-                }
-            }
-
-            arrangements.push((vec![idx], 4 - can_use));
-            if !new_arrangements.is_empty() {
-                arrangements.append(&mut new_arrangements);
             }
         }
-
-        let mut scores: Vec<i32> = Vec::new();
-        let mut best_scores_by_num_pastures: [i32; NUM_FARMYARD_SPACES] =
-            [i32::MIN; NUM_FARMYARD_SPACES];
-        let mut best_scores_by_num_wood: [i32; MAX_FENCES] = [i32::MIN; MAX_FENCES];
-
-        for (arr, w) in &arrangements {
-            let mut score: i32 = 0;
-
-            for x in arr {
-                score += self.pasture_position_score(*x);
-            }
-
-            scores.push(score);
-
-            best_scores_by_num_pastures[arr.len()] =
-                score.max(best_scores_by_num_pastures[arr.len()]);
-            best_scores_by_num_wood[*w] = score.max(best_scores_by_num_wood[*w]);
-        }
-
-        let mut best_arrangements: Vec<(Vec<usize>, usize)> = Vec::new();
-
-        for (i, (arr, w)) in arrangements.iter().enumerate() {
-            if scores[i] == best_scores_by_num_pastures[arr.len()]
-                || scores[i] == best_scores_by_num_wood[*w]
-            {
-                best_arrangements.push(arrangements[i].clone());
-            }
-        }
-
-        //println!("{:?}", best_arrangements);
-        best_arrangements
+        fenced_spaces
     }
 
-    pub fn fence_spaces(&mut self, spaces: &Vec<usize>) {
-        for space in spaces {
-            for (i, opt_nidx) in NEIGHBOR_SPACES[*space].iter().enumerate() {
-                if let Some(nidx) = opt_nidx {
-                    if !spaces.contains(nidx) {
-                        self.fences[FENCE_INDICES[*space][i]] = true;
-                    }
-                } else {
-                    self.fences[FENCE_INDICES[*space][i]] = true;
-                }
-            }
+    pub fn fence_spaces(&mut self, fence_spots: &Vec<usize>) {
+        for spot in fence_spots {
+            self.fences[*spot] = true;
+        }
 
-            let space_type = self.farmyard_spaces[*space];
-            match space_type {
+        let fenced_farmyard_spaces = self.mark_fenced_spaces();
+
+        for idx in 0..NUM_FARMYARD_SPACES {
+            if !fenced_farmyard_spaces[idx] {
+                continue;
+            }
+            match self.farmyard_spaces[idx] {
                 FarmyardSpace::Empty => {
-                    self.farmyard_spaces[*space] = FarmyardSpace::FencedPasture(None, false)
+                    self.farmyard_spaces[idx] = FarmyardSpace::FencedPasture(None, false)
                 }
                 FarmyardSpace::UnfencedStable(animal) => {
-                    self.farmyard_spaces[*space] = FarmyardSpace::FencedPasture(animal, true)
-                }
-                FarmyardSpace::FencedPasture(animal, has_stable) => {
-                    self.farmyard_spaces[*space] = FarmyardSpace::FencedPasture(animal, has_stable)
+                    self.farmyard_spaces[idx] = FarmyardSpace::FencedPasture(animal, true)
                 }
                 _ => (),
             }
@@ -737,17 +802,27 @@ mod tests {
 
     #[test]
     fn test_fencing_options() {
-        let farm = Farm::new();
+        let mut farm = Farm::new();
         let fenc_opt = farm.fencing_options(3);
         assert_eq!(fenc_opt.len(), 0);
         let fenc_opt = farm.fencing_options(4);
-        assert_eq!(fenc_opt.len(), 2);
+        assert_eq!(fenc_opt.len(), 13);
         let fenc_opt = farm.fencing_options(6);
-        assert_eq!(fenc_opt.len(), 6);
+        assert_eq!(fenc_opt.len(), 31);
         let fenc_opt = farm.fencing_options(8);
-        assert_eq!(fenc_opt.len(), 9);
+        assert_eq!(fenc_opt.len(), 73);
         let fenc_opt = farm.fencing_options(MAX_FENCES);
-        assert_eq!(fenc_opt.len(), 21);
+        assert_eq!(fenc_opt.len(), 762);
+
+        farm.fence_spaces(&vec![9, 19, 21, 31]);
+        let fenc_opt = farm.fencing_options(5);
+        println!("{fenc_opt:?}");
+        assert_eq!(fenc_opt.len(), 6);
+
+        farm = Farm::new();
+        farm.fence_spaces(&vec![9, 19, 21, 41, 43, 53]);
+        let fenc_opt = farm.fencing_options(1);
+        assert_eq!(fenc_opt.len(), 1);
     }
 
     #[test]
@@ -768,15 +843,6 @@ mod tests {
         farm.farmyard_spaces[3] = FarmyardSpace::FencedPasture(None, false);
         farm.farmyard_spaces[4] = FarmyardSpace::FencedPasture(None, false);
         farm.farmyard_spaces[9] = FarmyardSpace::FencedPasture(None, false);
-
-        let surrounding_fences = farm.surrounding_fences(3);
-        assert_eq!(surrounding_fences, 4);
-
-        let surrounding_fences = farm.surrounding_fences(4);
-        assert_eq!(surrounding_fences, 3);
-
-        let surrounding_fences = farm.surrounding_fences(9);
-        assert_eq!(surrounding_fences, 3);
 
         let fences_used = farm.total_fences_used();
         assert_eq!(fences_used, 9);
@@ -801,8 +867,8 @@ mod tests {
     #[test]
     fn test_pastures_and_capacities() {
         let mut farm = Farm::new();
-        farm.fence_spaces(&vec![3, 4, 8, 9]);
-        farm.fence_spaces(&vec![8]);
+        farm.fence_spaces(&vec![7, 9, 17, 21, 39, 43, 51, 53]);
+        farm.fence_spaces(&vec![29, 39, 41, 51]);
         farm.build_stable(4);
         farm.build_stable(8);
         let pac = farm.pastures_and_capacities();
@@ -817,8 +883,8 @@ mod tests {
     fn test_reorg_animals() {
         let mut farm = Farm::new();
         let mut res: Resources = new_res();
-        farm.fence_spaces(&vec![3, 4, 8, 9]);
-        farm.fence_spaces(&vec![8]);
+        farm.fence_spaces(&vec![7, 9, 17, 21, 39, 43, 51, 53]);
+        farm.fence_spaces(&vec![29, 39, 41, 51]);
         farm.build_stable(13);
         farm.build_stable(3);
         res[Resource::Sheep] = 4;
