@@ -9,9 +9,10 @@ The project is written entirely in Rust and thus greatly benefits from Rust's me
 ## System Design
 
 Here is a brief explanation of the several entities in the game. 
-- Game : this is the struct representing the game state.
-- Player : the struct representing the Player state. Several of these structs are part of the game state. Some parts of this struct should be hidden from other Players.
-- ActionSpaces : Spaces on the board where a Player can place one of its workers (i.e., family members) - Agricola is part of a large number of tbs games that categorize themselves as worker-placement games.
+- State : This is the struct representing the game state.
+- Player : The struct representing the Player state. Several of these structs are part of the game state. Some parts of this struct should be hidden from other Players.
+- Action Spaces : Spaces on the board where a Player can place one of its workers (i.e., family members) - Agricola is part of a large number of tbs games that categorize themselves as worker-placement games.
+- Actions : An action is a function that takes in a Game State and alters it.
 
 ## AI techniques
 
@@ -28,7 +29,7 @@ Agricola is also an 'imperfect information' game, where certain information abou
 To run the release version (assuming you have Rust installed), from the parent directory run 
 
 ```
-cargo run --release
+cargo run --release --bin cli
 ```
 
 
@@ -76,16 +77,13 @@ Fitness [-17, 8, -8, -16]
 
 ## TODO
 
-- Enable Human player(s)
-- Display Resources
-- Display action choices and action taken
+- Display action taken
 - Allow MCTS params to be changed from UI
 - Implement OCCs
 - Implement Minors
 - Unit Tests
 - Refactor such that indeterminate states are absent
 - Enable WASM target
-- Fix mismatched style vs cartesian coordinate system in visual layout
 
 ### MCTS Strategy
 
