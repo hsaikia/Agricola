@@ -374,7 +374,7 @@ impl Player {
     pub fn display_resources(&self) -> String {
         let res = &self.resources;
         let mut ret = format!(
-            "{:2} {}   ",
+            "\n\n\n\n{:2} {}   ",
             res[Resource::Wood],
             RESOURCE_EMOJIS[Resource::Wood as usize]
         );
@@ -424,19 +424,19 @@ impl Player {
             res[Resource::Cattle],
             RESOURCE_EMOJIS[Resource::Cattle as usize]
         );
+        ret = format!("{ret}\n\n{:2} 👤   ", self.adults);
+        ret = format!("{ret}{:2} 👶", self.children);
 
         ret = format!("{ret}\n\n{}", MajorImprovement::display(&self.major_cards));
         ret = format!("{ret}\n\n{}", Occupation::display(&self.occupations));
         ret
     }
 
-    pub fn display_farm(&self) -> String {
+    pub fn display_farm(&self) -> (String, String) {
         const SX: usize = 5;
         const SY: usize = 3;
-
-        const NEWLINE: &str = "\n";
-        let mut ret = String::from(NEWLINE);
-        let mut extras = String::from(NEWLINE);
+        let mut ret = String::from("\n\n\n");
+        let mut stuff = String::from("\n\n\n");
         for ii in 0..2 * SY + 1 {
             for jj in 0..2 * SX + 1 {
                 let fidx = ii * (2 * SX + 1) + jj;
@@ -446,13 +446,17 @@ impl Player {
                     if self.farm.fences[fidx] {
                         if ii % 2 == 0 {
                             ret = format!("{ret} ━━ ");
+                            stuff = format!("{stuff} ━━ ");
                         } else {
                             ret = format!("{ret}┃");
+                            stuff = format!("{stuff}┃");
                         }
                     } else if ii % 2 == 0 {
                         ret = format!("{ret}    ");
+                        stuff = format!("{stuff}    ");
                     } else {
                         ret = format!("{ret} ");
+                        stuff = format!("{stuff} ");
                     }
                 } else if ii % 2 == 1 && jj % 2 == 1 {
                     // Farmyard space
@@ -460,37 +464,37 @@ impl Player {
                     match self.farm.farmyard_spaces[idx] {
                         FarmyardSpace::Empty => {
                             ret = format!("{ret} 🔲 ");
+                            stuff = format!("{stuff} 🔲 ");
                         }
-                        FarmyardSpace::Room => match self.house {
-                            House::Wood => ret = format!("{ret} 🛖 "),
-                            House::Clay => ret = format!("{ret} 🏠 "),
-                            House::Stone => ret = format!("{ret} 🏰 "),
-                        },
+                        FarmyardSpace::Room => {
+                            match self.house {
+                                House::Wood => ret = format!("{ret} 🛖 "),
+                                House::Clay => ret = format!("{ret} 🏠 "),
+                                House::Stone => ret = format!("{ret} 🏰 "),
+                            }
+                            stuff = format!("{stuff} 🔲 ");
+                        }
                         FarmyardSpace::Field(opt_seed) => {
                             ret = format!("{ret} 🟩 ");
                             if let Some((seed, amt)) = opt_seed {
                                 match seed {
-                                    Seed::Grain => extras = format!("{extras} | {idx} -> {amt} 🌾"),
-                                    Seed::Vegetable => {
-                                        extras = format!("{extras} | {idx} -> {amt} 🎃")
-                                    }
+                                    Seed::Grain => stuff = format!("{stuff}{amt} 🌾"),
+                                    Seed::Vegetable => stuff = format!("{stuff}{amt} 🎃"),
                                 }
+                            } else {
+                                stuff = format!("{stuff} 🔲 ");
                             }
                         }
                         FarmyardSpace::UnfencedStable(opt_animal) => {
                             ret = format!("{ret} 🔶 ");
                             if let Some((animal, amt)) = opt_animal {
                                 match animal {
-                                    Animal::Sheep => {
-                                        extras = format!("{extras} | {idx} -> {amt} 🐑")
-                                    }
-                                    Animal::Pigs => {
-                                        extras = format!("{extras} | {idx} -> {amt} 🐖")
-                                    }
-                                    Animal::Cattle => {
-                                        extras = format!("{extras} | {idx} -> {amt} 🐄")
-                                    }
+                                    Animal::Sheep => stuff = format!("{stuff}{amt} 🐑"),
+                                    Animal::Pigs => stuff = format!("{stuff}{amt} 🐖"),
+                                    Animal::Cattle => stuff = format!("{stuff}{amt} 🐄"),
                                 }
+                            } else {
+                                stuff = format!("{stuff} 🔲 ");
                             }
                         }
                         FarmyardSpace::FencedPasture(opt_animal, has_stable) => {
@@ -501,27 +505,23 @@ impl Player {
                             }
                             if let Some((animal, amt)) = opt_animal {
                                 match animal {
-                                    Animal::Sheep => {
-                                        extras = format!("{extras} | {idx} -> {amt} 🐑")
-                                    }
-                                    Animal::Pigs => {
-                                        extras = format!("{extras} | {idx} -> {amt} 🐖")
-                                    }
-                                    Animal::Cattle => {
-                                        extras = format!("{extras} | {idx} -> {amt} 🐄")
-                                    }
+                                    Animal::Sheep => stuff = format!("{stuff}{amt} 🐑"),
+                                    Animal::Pigs => stuff = format!("{stuff}{amt} 🐖"),
+                                    Animal::Cattle => stuff = format!("{stuff}{amt} 🐄"),
                                 }
+                            } else {
+                                stuff = format!("{stuff} 🔲 ");
                             }
                         }
                     }
                 } else {
                     ret = format!("{ret}+");
+                    stuff = format!("{stuff}+");
                 }
             }
-            ret = format!("{}{}", ret, NEWLINE);
+            ret = format!("{}\n", ret);
+            stuff = format!("{}\n", stuff);
         }
-
-        ret = format!("{}{}{}{}", ret, NEWLINE, NEWLINE, extras);
-        ret
+        (ret, stuff)
     }
 }

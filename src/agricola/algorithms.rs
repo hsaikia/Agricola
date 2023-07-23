@@ -3,9 +3,8 @@ use super::mcts::GameRecord;
 use super::state::State;
 use rand::Rng;
 use std::collections::HashMap;
-use std::io;
 
-const NUM_GAMES_TO_SIMULATE: usize = 10000;
+const NUM_GAMES_TO_SIMULATE: usize = 1000;
 
 struct SimulationRecord {
     games: u32,
@@ -22,10 +21,11 @@ pub enum PlayerType {
 }
 
 impl PlayerType {
-    fn play_human(state: &State, debug: bool) -> Option<Action> {
+    fn play_human(state: &mut State, debug: bool) {
         let choices = Action::next_choices(state);
         if choices.is_empty() {
-            return None;
+            state.player_move_and_thought_progression = (None, 1, 1);
+            return;
         }
 
         // Only one choice, play it
@@ -33,41 +33,18 @@ impl PlayerType {
             if debug {
                 choices[0].display();
             }
-            return Some(choices[0].clone());
+            state.player_move_and_thought_progression = (Some(choices[0].clone()), 1, 1);
+            return;
         }
-
-        print!(
-            "\nEnter an action index between 0 and {} inclusive : ",
-            choices.len() - 1
-        );
-
-        let stdin = io::stdin();
-        let mut user_input = String::new();
-        let _res = stdin.read_line(&mut user_input);
-
-        match user_input.trim().parse::<usize>() {
-            Ok(input_int) => {
-                println!("Your input [{input_int}]");
-
-                if input_int >= choices.len() {
-                    println!("Invalid action .. quitting");
-                    return None;
-                }
-
-                if debug {
-                    choices[input_int].display();
-                }
-                //choices[input_int].apply_choice(state);
-                Some(choices[input_int].clone())
-            }
-            Err(_e) => Self::play_human(state, debug), // parsing failed - try again
-        }
+        // For human players, the move has to be set from outside this function
+        // So nothing more needs to be done here
     }
 
-    fn play_random(state: &State, debug: bool) -> Option<Action> {
+    fn play_random(state: &mut State, debug: bool) {
         let choices = Action::next_choices(state);
         if choices.is_empty() {
-            return None;
+            state.player_move_and_thought_progression = (None, 1, 1);
+            return;
         }
 
         // Only one choice, play it
@@ -75,7 +52,8 @@ impl PlayerType {
             if debug {
                 choices[0].display();
             }
-            return Some(choices[0].clone());
+            state.player_move_and_thought_progression = (Some(choices[0].clone()), 1, 1);
+            return;
         }
 
         // Chose a random action
@@ -84,14 +62,15 @@ impl PlayerType {
             choices[action_idx].display();
         }
         //choices[action_idx].apply_choice(state);
-        Some(choices[action_idx].clone())
+        state.player_move_and_thought_progression = (Some(choices[action_idx].clone()), 1, 1);
     }
 
     #[allow(clippy::cast_precision_loss)]
-    fn play_machine_uniform(state: &State, debug: bool) -> Option<Action> {
+    fn play_machine_uniform(state: &mut State, debug: bool) {
         let choices = Action::next_choices(state);
         if choices.is_empty() {
-            return None;
+            state.player_move_and_thought_progression = (None, 1, 1);
+            return;
         }
 
         // Only one choice, play it
@@ -99,7 +78,8 @@ impl PlayerType {
             if debug {
                 choices[0].display();
             }
-            return Some(choices[0].clone());
+            state.player_move_and_thought_progression = (Some(choices[0].clone()), 1, 1);
+            return;
         }
 
         // 1. Simulate n games from each action with each player replaced by a random move AI.
@@ -122,7 +102,7 @@ impl PlayerType {
                 // Replace all players with a random move AI
                 tmp_game.replace_all_players_with_random_bots();
                 // Play the game out until the end
-                tmp_game.play(false);
+                tmp_game.play();
                 // Sum resultant values
                 sum += tmp_game.fitness()[state.current_player_idx];
             }
@@ -142,13 +122,18 @@ impl PlayerType {
         }
         //choices[best_action_idx].apply_choice(state);
         //true
-        Some(choices[best_action_idx].clone())
+        state.player_move_and_thought_progression = (
+            Some(choices[best_action_idx].clone()),
+            NUM_GAMES_TO_SIMULATE,
+            NUM_GAMES_TO_SIMULATE,
+        )
     }
 
-    fn play_machine_mcts(state: &State, debug: bool) -> Option<Action> {
+    fn play_machine_mcts(state: &mut State, debug: bool) {
         let choices = Action::next_choices(state);
         if choices.is_empty() {
-            return None;
+            state.player_move_and_thought_progression = (None, 1, 1);
+            return;
         }
 
         // Only one choice, play it
@@ -156,7 +141,8 @@ impl PlayerType {
             if debug {
                 choices[0].display();
             }
-            return Some(choices[0].clone());
+            state.player_move_and_thought_progression = (Some(choices[0].clone()), 1, 1);
+            return;
         }
 
         let mut action_hashes: Vec<u64> = vec![];
@@ -170,7 +156,9 @@ impl PlayerType {
         // Initialize cache
         let mut mcts_cache: HashMap<u64, GameRecord> = HashMap::new();
 
-        for _g in 0..NUM_GAMES_TO_SIMULATE {
+        for g in 0..NUM_GAMES_TO_SIMULATE {
+            state.player_move_and_thought_progression = (None, g, NUM_GAMES_TO_SIMULATE);
+
             let sample_idx =
                 GameRecord::choose_uct(state.current_player_idx, &action_hashes, &mcts_cache);
             let mut tmp_game = state.clone();
@@ -217,7 +205,7 @@ impl PlayerType {
             // Replace all players with a random move AI
             tmp_game.replace_all_players_with_random_bots();
             // Play the game out until the end
-            tmp_game.play(false);
+            tmp_game.play();
             // Calculate result and backpropagate to the root
             let res = tmp_game.fitness();
             for node in &path {
@@ -270,15 +258,19 @@ impl PlayerType {
         }
         // choices[best_action_idx].apply_choice(state);
         // true
-        Some(choices[best_action_idx].clone())
+        state.player_move_and_thought_progression = (
+            Some(choices[best_action_idx].clone()),
+            NUM_GAMES_TO_SIMULATE,
+            NUM_GAMES_TO_SIMULATE,
+        )
     }
 
-    pub fn best_action(&self, state: &State, debug: bool) -> Option<Action> {
+    pub fn determine_best_action(&self, state: &mut State, debug: bool) {
         match self {
-            PlayerType::Human => PlayerType::play_human(state, debug),
             PlayerType::RandomMachine => PlayerType::play_random(state, debug),
             PlayerType::UniformMachine => PlayerType::play_machine_uniform(state, debug),
             PlayerType::MCTSMachine => PlayerType::play_machine_mcts(state, debug),
+            PlayerType::Human => PlayerType::play_human(state, debug),
         }
     }
 }

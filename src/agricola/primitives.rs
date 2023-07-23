@@ -23,7 +23,7 @@ pub const RESOURCE_EMOJIS: [&str; NUM_RESOURCES] = [
     "\u{1faa8}",
     "\u{1f344}",
     "\u{1f33e}",
-    "\u{1f966}",
+    "🎃",
     "\u{1f411}",
     "\u{1f416}",
     "\u{1f404}",

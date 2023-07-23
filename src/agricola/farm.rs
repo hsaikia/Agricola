@@ -76,7 +76,7 @@ const NEIGHBOR_SPACES: [[Option<usize>; 4]; NUM_FARMYARD_SPACES] = [
 // 66  67  68  69  70  71  72  73  74  75  76
 
 // Order : NEWS
-const FENCE_INDICES: [[usize; 4]; NUM_FARMYARD_SPACES] = [
+pub const FENCE_INDICES: [[usize; 4]; NUM_FARMYARD_SPACES] = [
     [1, 13, 11, 23],
     [3, 15, 13, 25],
     [5, 17, 15, 27],
@@ -114,7 +114,8 @@ impl Farm {
         }
     }
 
-    pub fn display_fence_layout(layout: &Vec<usize>) {
+    pub fn format_fence_layout(layout: &Vec<usize>) -> String {
+        let mut ret: String = String::new();
         let l = 2 * L + 1;
         let w = 2 * W + 1;
         for i in 0..w {
@@ -122,29 +123,30 @@ impl Farm {
                 let idx = i * l + j;
                 if i % 2 == 0 {
                     if j % 2 == 0 {
-                        print!("+");
+                        ret = format!("{ret}+");
                     } else {
                         if layout.contains(&idx) {
-                            print!(" - ");
+                            ret = format!("{ret} - ");
                         } else {
-                            print!("   ");
+                            ret = format!("{ret}   ");
                         }
                     }
                 } else {
                     if j % 2 == 0 {
                         if layout.contains(&idx) {
-                            print!("|");
+                            ret = format!("{ret}|");
                         } else {
-                            print!(" ");
+                            ret = format!("{ret} ");
                         }
                     } else {
-                        print!("   ");
+                        ret = format!("{ret}   ");
                     }
                 }
             }
-            print!("\n");
+            ret = format!("{ret}\n");
         }
-        print!("\n\n");
+        ret = format!("{ret}\n\n");
+        ret
     }
 
     fn available_fence_spots(&self) -> [bool; NUM_FENCE_INDICES] {
@@ -221,12 +223,45 @@ impl Farm {
         ret
     }
 
+    pub fn fencing_option_score(&self) -> [i32; NUM_FENCE_INDICES] {
+        let mut ret = [0; NUM_FENCE_INDICES];
+        let mut count = [0; NUM_FENCE_INDICES];
+        for idx in 0..NUM_FARMYARD_SPACES {
+            match self.farmyard_spaces[idx] {
+                FarmyardSpace::Empty
+                | FarmyardSpace::UnfencedStable(_)
+                | FarmyardSpace::FencedPasture(_, _) => {
+                    for i in 0..4 {
+                        ret[FENCE_INDICES[idx][i]] += 1;
+                        count[FENCE_INDICES[idx][i]] += 1;
+                    }
+                }
+                FarmyardSpace::Room | FarmyardSpace::Field(_) => {
+                    for i in 0..4 {
+                        ret[FENCE_INDICES[idx][i]] -= 1;
+                        count[FENCE_INDICES[idx][i]] += 1;
+                    }
+                }
+            }
+        }
+        //println!("{count:?}");
+        for idx in 0..NUM_FENCE_INDICES {
+            ret[idx] += 3 * (count[idx] % 2);
+            // if ret[idx] != 0 {
+            //     print!("{idx} => {} | ", ret[idx]);
+            // }
+        }
+        //println!("{ret:?}");
+        ret
+    }
+
     // Starts a BFS from nodes (corners of farmyard spaces) and outputs all paths that end at terminal nodes (nodes that are connected to at least one fence)
     pub fn fencing_options(&self, wood: usize) -> Vec<Vec<usize>> {
         let graph = Self::fence_graph();
         let available_fence_spots = self.available_fence_spots();
         let total_fences_used = self.total_fences_used();
         let available_wood = wood.min(MAX_FENCES - total_fences_used);
+        let fencing_option_scores = self.fencing_option_score();
 
         //println!("{graph:?}");
         //println!("Total fences used {}", self.total_fences_used());
@@ -269,7 +304,9 @@ impl Farm {
             }
         }
 
-        let mut arrangements: Vec<Vec<usize>> = Vec::new();
+        // Map of wood -> (arrangement, score)
+        let mut best_arrangements: HashMap<usize, (Vec<Vec<usize>>, i32)> = HashMap::new();
+
         while !queue.is_empty() {
             let top = queue.pop_front();
             if let Some((idx1, v)) = top {
@@ -302,10 +339,21 @@ impl Farm {
                 if !arr.is_empty() {
                     arr.sort();
 
-                    if arrangements.contains(&arr) {
-                        continue;
+                    // score the arrangement
+                    let score = arr.iter().map(|&x| fencing_option_scores[x]).sum();
+                    //println!("Arr {arr:?} scored {score}");
+
+                    let w: usize = arr.len();
+
+                    if let Some(val) = best_arrangements.get_mut(&w) {
+                        if val.1 == score && !val.0.contains(&arr) {
+                            val.0.push(arr);
+                        } else if val.1 < score {
+                            best_arrangements.insert(w, (vec![arr], score));
+                        }
+                    } else {
+                        best_arrangements.insert(w, (vec![arr], score));
                     }
-                    arrangements.push(arr);
                 } else {
                     if let Some((last_idx, e)) = v.last() {
                         for neighbors in &graph[last_idx] {
@@ -332,6 +380,14 @@ impl Farm {
                 }
             }
         }
+
+        // Add all the best arrangements
+        let mut arrangements: Vec<Vec<usize>> = Vec::new();
+        for (_, v) in best_arrangements {
+            arrangements.extend(v.0);
+        }
+
+        arrangements.sort();
         arrangements
     }
 
@@ -768,7 +824,7 @@ impl Farm {
         let opt_empty_field = self
             .farmyard_spaces
             .iter_mut()
-            .find(|f| matches!(f, FarmyardSpace::Field(_)));
+            .find(|f| matches!(f, FarmyardSpace::Field(None)));
         if let Some(field) = opt_empty_field {
             match *seed {
                 Seed::Grain => *field = FarmyardSpace::Field(Some((Seed::Grain, 3))),

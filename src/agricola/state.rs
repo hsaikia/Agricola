@@ -33,6 +33,7 @@ pub struct State {
     pub last_action: Action,
     pub start_round_events: Vec<Event>,
     pub available_occupations: Vec<Occupation>,
+    pub player_move_and_thought_progression: (Option<Action>, usize, usize), // Move to play, steps thought, total steps to think
 }
 
 impl State {
@@ -66,6 +67,7 @@ impl State {
             last_action: Action::StartGame,
             start_round_events: vec![],
             available_occupations: Occupation::all(),
+            player_move_and_thought_progression: (Some(Action::StartGame), 1, 1),
         };
         state.init_players(players, first_player_idx);
         //println!("New Game Started");
@@ -128,10 +130,15 @@ impl State {
         s.finish()
     }
 
-    pub fn play(&mut self, debug: bool) {
+    pub fn determine_best_action(&mut self, debug: bool) {
+        self.player_type().determine_best_action(self, debug);
+    }
+
+    pub fn play(&mut self) {
         loop {
-            let opt_action = self.player_type().best_action(self, debug);
-            if let Some(action) = opt_action {
+            self.player_type().determine_best_action(self, false);
+            if let Some(action) = &self.player_move_and_thought_progression.0 {
+                let action = action.clone();
                 action.apply_choice(self);
             } else {
                 break;

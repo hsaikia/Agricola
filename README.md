@@ -77,6 +77,11 @@ Fitness [-17, 8, -8, -16]
 
 ## TODO
 
+- Display Pet
+- Add AI thinking
+- Add action to choose stable placement
+- Debug why square fence (8 wood) isn't available
+- Enable fencing multiple pastures at once
 - Display action taken
 - Allow MCTS params to be changed from UI
 - Implement OCCs

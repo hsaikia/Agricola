@@ -3,7 +3,7 @@ use std::{error::Error, io};
 
 use agricola_game::agricola::scoring;
 use agricola_game::agricola::state::State;
-use agricola_game::agricola::{actions::Action, algorithms::PlayerType};
+use agricola_game::agricola::{actions::Action, algorithms::PlayerType, farm::Farm};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
@@ -41,8 +41,7 @@ struct App {
     state: Option<State>,
     menu_active: bool,
     num_selections_y: usize,
-    game_over: bool,
-    human_chose: bool,
+    progression_to_next_move: f32,
 }
 
 impl App {
@@ -54,8 +53,7 @@ impl App {
             state: None,
             menu_active: false,
             num_selections_y: 1,
-            game_over: false,
-            human_chose: false,
+            progression_to_next_move: 0.0,
         }
     }
 
@@ -108,14 +106,33 @@ impl App {
         ret
     }
 
-    fn on_tick(&mut self) {
-        let chosen_action = self.play();
-        self.human_chose = false;
-        if chosen_action.is_some() {
-            if let Some(action) = &chosen_action {
-                if let Some(state) = &mut self.state {
-                    action.apply_choice(state);
+    fn play_human(&mut self) {
+        if let Some(state) = &mut self.state {
+            match state.player_type() {
+                PlayerType::Human => {
+                    let actions = Action::next_choices(state);
+                    state.player_move_and_thought_progression =
+                        (Some(actions[self.selection_y].clone()), 1, 1);
                 }
+                _ => (),
+            }
+        }
+    }
+
+    fn on_tick(&mut self) {
+        if self.menu_active {
+            return;
+        }
+
+        if let Some(state) = &mut self.state {
+            let actions = Action::next_choices(state);
+            self.num_selections_y = actions.len();
+            let status = &state.player_move_and_thought_progression;
+            if status.0.is_some() {
+                status.0.clone().unwrap().apply_choice(state);
+                state.determine_best_action(false);
+            } else {
+                self.progression_to_next_move = status.1 as f32 / status.2 as f32;
             }
         }
     }
@@ -139,6 +156,7 @@ impl App {
 
     pub fn format_next_actions(&self) -> String {
         let mut ret: String = String::new();
+        let mut additional_stuff: String = String::new();
         if let Some(state) = &self.state {
             let actions = Action::next_choices(state);
             if actions.is_empty() {
@@ -147,44 +165,22 @@ impl App {
                 for (i, action) in actions.iter().enumerate() {
                     if i == self.selection_y && matches!(state.player_type(), PlayerType::Human) {
                         ret = format!("{}\n>> {:?}", ret, action);
+
+                        match action {
+                            Action::Fence(spaces) => {
+                                additional_stuff = Farm::format_fence_layout(&spaces);
+                            }
+                            _ => (),
+                        }
                     } else {
                         ret = format!("{}\n{:?}", ret, action);
                     }
                 }
             }
+
+            ret = format!("{ret}\n\n\n{}", additional_stuff);
         }
         ret
-    }
-
-    fn play(&mut self) -> Option<Action> {
-        if let Some(state) = &mut self.state {
-            let actions = Action::next_choices(state);
-            if !actions.is_empty() {
-                if actions.len() == 1 {
-                    return Some(actions[0].clone());
-                } else {
-                    let action = match state.player_type() {
-                        PlayerType::Human => {
-                            self.num_selections_y = Action::next_choices(state).len();
-                            if !self.human_chose {
-                                return None;
-                            }
-
-                            if self.selection_y < self.num_selections_y {
-                                Some(actions[self.selection_y].clone())
-                            } else {
-                                None
-                            }
-                        }
-                        _ => state.player_type().best_action(state, false),
-                    };
-
-                    return action;
-                }
-            }
-            self.game_over = true;
-        }
-        None
     }
 }
 
@@ -251,13 +247,14 @@ fn run_app<B: Backend>(
                         app.menu_active = !app.menu_active;
                         if app.menu_active {
                             app.num_selections_y = PLAYER_TYPES.len();
+                            app.selection_y = 0;
                         }
                     }
                     KeyCode::Enter => {
                         if app.menu_active {
                             app.start_new_game();
                         } else {
-                            app.human_chose = true;
+                            app.play_human();
                         }
                     }
                     _ => {}
@@ -336,6 +333,11 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                 title_string = format!("{title_string} | Turn ");
             }
 
+            title_string = format!(
+                "{title_string} | Progression to Next Move {}% ",
+                app.progression_to_next_move * 100.0
+            );
+
             let farm = Block::default().title(title_string).borders(Borders::ALL);
 
             f.render_widget(farm, farm_areas[2 * i]);
@@ -344,33 +346,26 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                 .direction(Direction::Horizontal)
                 .constraints(
                     [
-                        Constraint::Percentage(2),
-                        Constraint::Percentage(68),
-                        Constraint::Percentage(2),
-                        Constraint::Percentage(28),
+                        Constraint::Percentage(30),
+                        Constraint::Percentage(30),
+                        Constraint::Percentage(40),
                     ]
                     .as_ref(),
                 )
                 .split(farm_areas[2 * i]);
 
-            let farm_display = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([
-                    Constraint::Percentage(20),
-                    Constraint::Percentage(70),
-                    Constraint::Percentage(10),
-                ])
-                .split(displays[1]);
-
-            let text = Paragraph::new(p.display_farm().to_string()).style(Style::default());
-            f.render_widget(text, farm_display[1]);
+            let farm_strings = p.display_farm();
+            let main_farm = Paragraph::new(farm_strings.0.to_string())
+                .style(Style::default())
+                .alignment(ratatui::layout::Alignment::Center);
+            let farm_artifacts = Paragraph::new(farm_strings.1.to_string())
+                .style(Style::default())
+                .alignment(ratatui::layout::Alignment::Center);
+            f.render_widget(main_farm, displays[0]);
+            f.render_widget(farm_artifacts, displays[1]);
 
             let resource_text = Paragraph::new(p.display_resources());
-            let resource_display = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Percentage(33); 3])
-                .split(displays[3]);
-            f.render_widget(resource_text, resource_display[1]);
+            f.render_widget(resource_text, displays[2]);
         }
 
         // Actions
