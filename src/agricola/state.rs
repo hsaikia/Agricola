@@ -33,7 +33,6 @@ pub struct State {
     pub last_action: Action,
     pub start_round_events: Vec<Event>,
     pub available_occupations: Vec<Occupation>,
-    pub player_move_and_thought_progression: (Option<Action>, usize, usize), // Move to play, steps thought, total steps to think
 }
 
 impl State {
@@ -67,7 +66,6 @@ impl State {
             last_action: Action::StartGame,
             start_round_events: vec![],
             available_occupations: Occupation::all(),
-            player_move_and_thought_progression: (Some(Action::StartGame), 1, 1),
         };
         state.init_players(players, first_player_idx);
         //println!("New Game Started");
@@ -130,30 +128,27 @@ impl State {
         s.finish()
     }
 
-    pub fn determine_best_action(&mut self, debug: bool) {
-        self.player_type().determine_best_action(self, debug);
-    }
-
-    pub fn play(&mut self) {
+    pub fn play_random(&mut self) {
         loop {
-            self.player_type().determine_best_action(self, false);
-            if let Some(action) = &self.player_move_and_thought_progression.0 {
-                let action = action.clone();
-                action.apply_choice(self);
-            } else {
+            let choices = Action::next_choices(self);
+            if choices.is_empty() {
                 break;
             }
+
+            // Only one choice, play it
+            if choices.len() == 1 {
+                choices[0].apply_choice(self);
+                continue;
+            }
+
+            // Chose a random action
+            let action_idx = rand::thread_rng().gen_range(0..choices.len());
+            choices[action_idx].apply_choice(self);
         }
     }
 
     pub fn player_type(&self) -> PlayerType {
         self.players[self.current_player_idx].player_type()
-    }
-
-    pub fn replace_all_players_with_random_bots(&mut self) {
-        for p in &mut self.players {
-            p.player_type = PlayerType::RandomMachine;
-        }
     }
 
     pub fn fitness(&self) -> Vec<i32> {

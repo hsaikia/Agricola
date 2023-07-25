@@ -3,7 +3,11 @@ use std::{error::Error, io};
 
 use agricola_game::agricola::scoring;
 use agricola_game::agricola::state::State;
-use agricola_game::agricola::{actions::Action, algorithms::PlayerType, farm::Farm};
+use agricola_game::agricola::{
+    actions::Action,
+    algorithms::{PlayerType, AI},
+    farm::Farm,
+};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
@@ -17,20 +21,18 @@ use ratatui::{
     Frame, Terminal,
 };
 
+const NUM_GAMES_TO_SIMULATE: usize = 100;
+
 #[derive(Clone, Copy, Debug)]
 enum PlayerSelection {
     Empty,
     Human,
-    RandomAI,
-    UniformAI,
     MctsAI,
 }
 
-const PLAYER_TYPES: [PlayerSelection; 5] = [
+const PLAYER_TYPES: [PlayerSelection; 3] = [
     PlayerSelection::Empty,
     PlayerSelection::Human,
-    PlayerSelection::RandomAI,
-    PlayerSelection::UniformAI,
     PlayerSelection::MctsAI,
 ];
 
@@ -41,7 +43,8 @@ struct App {
     state: Option<State>,
     menu_active: bool,
     num_selections_y: usize,
-    progression_to_next_move: f32,
+    move_selected: bool,
+    ai: AI,
 }
 
 impl App {
@@ -53,7 +56,8 @@ impl App {
             state: None,
             menu_active: false,
             num_selections_y: 1,
-            progression_to_next_move: 0.0,
+            move_selected: false,
+            ai: AI::new(),
         }
     }
 
@@ -106,19 +110,6 @@ impl App {
         ret
     }
 
-    fn play_human(&mut self) {
-        if let Some(state) = &mut self.state {
-            match state.player_type() {
-                PlayerType::Human => {
-                    let actions = Action::next_choices(state);
-                    state.player_move_and_thought_progression =
-                        (Some(actions[self.selection_y].clone()), 1, 1);
-                }
-                _ => (),
-            }
-        }
-    }
-
     fn on_tick(&mut self) {
         if self.menu_active {
             return;
@@ -126,13 +117,37 @@ impl App {
 
         if let Some(state) = &mut self.state {
             let actions = Action::next_choices(state);
+
+            if actions.is_empty() {
+                return;
+            }
+
+            if actions.len() == 1 {
+                actions[0].apply_choice(state);
+                return;
+            }
+
             self.num_selections_y = actions.len();
-            let status = &state.player_move_and_thought_progression;
-            if status.0.is_some() {
-                status.0.clone().unwrap().apply_choice(state);
-                state.determine_best_action(false);
-            } else {
-                self.progression_to_next_move = status.1 as f32 / status.2 as f32;
+            match state.player_type() {
+                PlayerType::Human => {
+                    if !self.move_selected {
+                        return;
+                    }
+                    actions[self.selection_y].apply_choice(state);
+                    self.move_selected = false;
+                }
+                PlayerType::MCTSMachine => {
+                    if !self.move_selected && self.ai.num_games_sampled < NUM_GAMES_TO_SIMULATE {
+                        self.ai.sample_once(state);
+                        return;
+                    }
+                    //self.ai.sample_once(state);
+                    actions[self.ai.records[0].action_idx].apply_choice(state);
+                    self.ai.records.clear();
+                    self.ai.num_games_sampled = 0;
+                    //self.ai.sample_once(state);
+                    self.move_selected = false;
+                }
             }
         }
     }
@@ -143,8 +158,6 @@ impl App {
             match player_selection {
                 PlayerSelection::Human => players.push(PlayerType::Human),
                 PlayerSelection::MctsAI => players.push(PlayerType::MCTSMachine),
-                PlayerSelection::RandomAI => players.push(PlayerType::RandomMachine),
-                PlayerSelection::UniformAI => players.push(PlayerType::UniformMachine),
                 _ => (),
             }
         }
@@ -162,22 +175,47 @@ impl App {
             if actions.is_empty() {
                 ret = "GAME OVER!".to_string();
             } else {
-                for (i, action) in actions.iter().enumerate() {
-                    if i == self.selection_y && matches!(state.player_type(), PlayerType::Human) {
-                        ret = format!("{}\n>> {:?}", ret, action);
+                match state.player_type() {
+                    PlayerType::Human => {
+                        for (i, action) in actions.iter().enumerate() {
+                            if i == self.selection_y {
+                                ret = format!("{}\n>> {:?}", ret, action);
 
-                        match action {
-                            Action::Fence(spaces) => {
-                                additional_stuff = Farm::format_fence_layout(&spaces);
+                                match action {
+                                    Action::Fence(spaces) => {
+                                        additional_stuff = Farm::format_fence_layout(&spaces);
+                                    }
+                                    _ => (),
+                                }
+                            } else {
+                                ret = format!("{}\n{:?}", ret, action);
                             }
-                            _ => (),
                         }
-                    } else {
-                        ret = format!("{}\n{:?}", ret, action);
+                    }
+                    PlayerType::MCTSMachine => {
+                        for (i, rec) in self.ai.records.iter().enumerate() {
+                            if i == 0 {
+                                ret = format!(
+                                    "{}\n>> {:?} [{} / {}]",
+                                    ret, actions[rec.action_idx], rec.fitness, rec.games
+                                );
+
+                                match &actions[rec.action_idx] {
+                                    Action::Fence(spaces) => {
+                                        additional_stuff = Farm::format_fence_layout(spaces);
+                                    }
+                                    _ => (),
+                                }
+                            } else {
+                                ret = format!(
+                                    "{}\n{:?} [{} / {}]",
+                                    ret, actions[rec.action_idx], rec.fitness, rec.games
+                                );
+                            }
+                        }
                     }
                 }
             }
-
             ret = format!("{ret}\n\n\n{}", additional_stuff);
         }
         ret
@@ -193,7 +231,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     // create app and run it
-    let tick_rate = Duration::from_millis(250);
+    let tick_rate = Duration::from_millis(100);
     let app = App::new();
     let res = run_app(&mut terminal, app, tick_rate);
 
@@ -254,7 +292,7 @@ fn run_app<B: Backend>(
                         if app.menu_active {
                             app.start_new_game();
                         } else {
-                            app.play_human();
+                            app.move_selected = true;
                         }
                     }
                     _ => {}
@@ -332,11 +370,6 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
             if i == state.current_player_idx {
                 title_string = format!("{title_string} | Turn ");
             }
-
-            title_string = format!(
-                "{title_string} | Progression to Next Move {}% ",
-                app.progression_to_next_move * 100.0
-            );
 
             let farm = Block::default().title(title_string).borders(Borders::ALL);
 

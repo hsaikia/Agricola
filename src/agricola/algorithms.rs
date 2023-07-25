@@ -1,276 +1,132 @@
 use super::actions::Action;
 use super::mcts::GameRecord;
 use super::state::State;
-use rand::Rng;
 use std::collections::HashMap;
-
-const NUM_GAMES_TO_SIMULATE: usize = 1000;
-
-struct SimulationRecord {
-    games: u32,
-    fitness: f32,
-    action_idx: usize,
-}
 
 #[derive(Debug, Clone, Hash, PartialEq)]
 pub enum PlayerType {
     Human,
-    RandomMachine,
-    UniformMachine,
     MCTSMachine,
 }
+pub struct SimulationRecord {
+    pub games: u32,
+    pub fitness: f32,
+    pub action_idx: usize,
+}
+pub struct AI {
+    pub num_games_sampled: usize,
+    cache: HashMap<u64, GameRecord>,
+    pub records: Vec<SimulationRecord>,
+}
 
-impl PlayerType {
-    fn play_human(state: &mut State, debug: bool) {
-        let choices = Action::next_choices(state);
-        if choices.is_empty() {
-            state.player_move_and_thought_progression = (None, 1, 1);
-            return;
+impl AI {
+    pub fn new() -> Self {
+        Self {
+            num_games_sampled: 0,
+            cache: HashMap::new(),
+            records: Vec::new(),
         }
-
-        // Only one choice, play it
-        if choices.len() == 1 {
-            if debug {
-                choices[0].display();
-            }
-            state.player_move_and_thought_progression = (Some(choices[0].clone()), 1, 1);
-            return;
-        }
-        // For human players, the move has to be set from outside this function
-        // So nothing more needs to be done here
     }
 
-    fn play_random(state: &mut State, debug: bool) {
+    pub fn sample_once(&mut self, state: &State) {
         let choices = Action::next_choices(state);
-        if choices.is_empty() {
-            state.player_move_and_thought_progression = (None, 1, 1);
-            return;
-        }
-
-        // Only one choice, play it
-        if choices.len() == 1 {
-            if debug {
-                choices[0].display();
-            }
-            state.player_move_and_thought_progression = (Some(choices[0].clone()), 1, 1);
-            return;
-        }
-
-        // Chose a random action
-        let action_idx = rand::thread_rng().gen_range(0..choices.len());
-        if debug {
-            choices[action_idx].display();
-        }
-        //choices[action_idx].apply_choice(state);
-        state.player_move_and_thought_progression = (Some(choices[action_idx].clone()), 1, 1);
-    }
-
-    #[allow(clippy::cast_precision_loss)]
-    fn play_machine_uniform(state: &mut State, debug: bool) {
-        let choices = Action::next_choices(state);
-        if choices.is_empty() {
-            state.player_move_and_thought_progression = (None, 1, 1);
-            return;
-        }
-
-        // Only one choice, play it
-        if choices.len() == 1 {
-            if debug {
-                choices[0].display();
-            }
-            state.player_move_and_thought_progression = (Some(choices[0].clone()), 1, 1);
-            return;
-        }
-
-        // 1. Simulate n games from each action with each player replaced by a random move AI.
-        // 2. Compute the average score for each action from the n playouts.
-        // 3. Select the move that gives rise to the maximum average score.
-        let mut best_action_idx: usize = 0;
-        let mut best_average: f32 = f32::NEG_INFINITY;
-
-        let num_games_per_action: usize = NUM_GAMES_TO_SIMULATE / choices.len();
-
-        //println!();
-        // Play n simulated games for each action
-        for (i, action) in choices.iter().enumerate() {
-            let mut sum = 0;
-            for _ in 0..num_games_per_action {
-                // Clone the current game state
-                let mut tmp_game = state.clone();
-                // Play the current action
-                action.apply_choice(&mut tmp_game);
-                // Replace all players with a random move AI
-                tmp_game.replace_all_players_with_random_bots();
-                // Play the game out until the end
-                tmp_game.play();
-                // Sum resultant values
-                sum += tmp_game.fitness()[state.current_player_idx];
-            }
-            let avg = sum as f32 / num_games_per_action as f32;
-
-            print!(
-                "\nAvg score from {num_games_per_action} simulated playouts for Action {action:?} is {avg}."
-            );
-
-            if avg > best_average {
-                best_average = avg;
-                best_action_idx = i;
-            }
-        }
-        if debug {
-            choices[best_action_idx].display();
-        }
-        //choices[best_action_idx].apply_choice(state);
-        //true
-        state.player_move_and_thought_progression = (
-            Some(choices[best_action_idx].clone()),
-            NUM_GAMES_TO_SIMULATE,
-            NUM_GAMES_TO_SIMULATE,
-        )
-    }
-
-    fn play_machine_mcts(state: &mut State, debug: bool) {
-        let choices = Action::next_choices(state);
-        if choices.is_empty() {
-            state.player_move_and_thought_progression = (None, 1, 1);
-            return;
-        }
-
-        // Only one choice, play it
-        if choices.len() == 1 {
-            if debug {
-                choices[0].display();
-            }
-            state.player_move_and_thought_progression = (Some(choices[0].clone()), 1, 1);
+        if choices.len() < 2 {
             return;
         }
 
         let mut action_hashes: Vec<u64> = vec![];
+        let mut tmp_game: State;
+
         // Add the child node hashes
         for action in &choices {
-            let mut tmp_game = state.clone();
+            tmp_game = state.clone();
             action.apply_choice(&mut tmp_game);
             action_hashes.push(tmp_game.get_hash());
         }
 
-        // Initialize cache
-        let mut mcts_cache: HashMap<u64, GameRecord> = HashMap::new();
+        let sample_idx =
+            GameRecord::choose_uct(state.current_player_idx, &action_hashes, &self.cache);
+        tmp_game = state.clone();
+        choices[sample_idx].apply_choice(&mut tmp_game);
 
-        for g in 0..NUM_GAMES_TO_SIMULATE {
-            state.player_move_and_thought_progression = (None, g, NUM_GAMES_TO_SIMULATE);
+        //print!("\nGame {}", g);
+        let mut expand_node_hash = tmp_game.get_hash();
+        let mut path: Vec<u64> = vec![expand_node_hash];
 
-            let sample_idx =
-                GameRecord::choose_uct(state.current_player_idx, &action_hashes, &mcts_cache);
-            let mut tmp_game = state.clone();
-            choices[sample_idx].apply_choice(&mut tmp_game);
+        // Expand along the tree
+        while self.cache.contains_key(&expand_node_hash) {
+            // In Agricola - since the future board state changes randomly
+            // get_all_available_actions can return different actions for the same current game state.
+            let sub_choices = Action::next_choices(&tmp_game);
 
-            //print!("\nGame {}", g);
-            let mut expand_node_hash = tmp_game.get_hash();
-            let mut path: Vec<u64> = vec![expand_node_hash];
-
-            // Expand along the tree
-            while mcts_cache.contains_key(&expand_node_hash) {
-                // In Agricola - since the future board state changes randomly
-                // get_all_available_actions can return different actions for the same current game state.
-                let sub_choices = Action::next_choices(&tmp_game);
-
-                if sub_choices.is_empty() {
-                    break;
-                }
-
-                // Generate all child hashes
-                let mut sub_action_hashes: Vec<u64> = vec![];
-                for sub_action in &sub_choices {
-                    let mut tmp_game2 = tmp_game.clone();
-                    sub_action.apply_choice(&mut tmp_game2);
-                    sub_action_hashes.push(tmp_game2.get_hash());
-                }
-                let chosen_idx = GameRecord::choose_uct(
-                    tmp_game.current_player_idx,
-                    &sub_action_hashes,
-                    &mcts_cache,
-                );
-                sub_choices[chosen_idx].apply_choice(&mut tmp_game);
-                expand_node_hash = tmp_game.get_hash();
-                path.push(tmp_game.get_hash());
+            if sub_choices.is_empty() {
+                break;
             }
 
-            // Add node to cache
-            if let std::collections::hash_map::Entry::Vacant(e) = mcts_cache.entry(expand_node_hash)
-            {
-                e.insert(GameRecord::new(tmp_game.players.len()));
+            // Generate all child hashes
+            let mut sub_action_hashes: Vec<u64> = vec![];
+            for sub_action in &sub_choices {
+                let mut tmp_game2 = tmp_game.clone();
+                sub_action.apply_choice(&mut tmp_game2);
+                sub_action_hashes.push(tmp_game2.get_hash());
             }
-
-            // Perform playout
-            // Replace all players with a random move AI
-            tmp_game.replace_all_players_with_random_bots();
-            // Play the game out until the end
-            tmp_game.play();
-            // Calculate result and backpropagate to the root
-            let res = tmp_game.fitness();
-            for node in &path {
-                let mut state = mcts_cache[node].clone();
-                state.add_fitness(&res);
-                mcts_cache.insert(*node, state);
-            }
+            let chosen_idx = GameRecord::choose_uct(
+                tmp_game.current_player_idx,
+                &sub_action_hashes,
+                &self.cache,
+            );
+            sub_choices[chosen_idx].apply_choice(&mut tmp_game);
+            expand_node_hash = tmp_game.get_hash();
+            path.push(tmp_game.get_hash());
         }
 
-        print!("\nCache has {} entries", mcts_cache.len());
+        // Add node to cache
+        if let std::collections::hash_map::Entry::Vacant(e) = self.cache.entry(expand_node_hash) {
+            e.insert(GameRecord::new(tmp_game.players.len()));
+        }
 
-        let mut records: Vec<SimulationRecord> = Vec::new();
+        // Perform playout - play the game out until the end
+        tmp_game.play_random();
+        // Calculate result and backpropagate to the root
+        let res = tmp_game.fitness();
+        for node in &path {
+            let mut state = self.cache[node].clone();
+            state.add_fitness(&res);
+            self.cache.insert(*node, state);
+        }
+
+        self.records.clear();
 
         // Choose the best move again according to UCT
-        let mut best_action_idx: usize = 0;
         let mut best_fitness: f32 = f32::NEG_INFINITY;
-        let mut total_games = 0;
         for (action_idx, action) in choices.iter().enumerate() {
-            let mut tmp_game = state.clone();
+            tmp_game = state.clone();
             action.apply_choice(&mut tmp_game);
             let action_hash = tmp_game.get_hash();
-
-            let games: u32 = mcts_cache[&action_hash].total_games;
-            total_games += games;
-            let fitness: f32 = mcts_cache[&action_hash].average_fitness[state.current_player_idx];
+            let games: u32 = if self.cache.contains_key(&action_hash) {
+                self.cache[&action_hash].total_games
+            } else {
+                0
+            };
+            let fitness: f32 = if self.cache.contains_key(&action_hash) {
+                self.cache[&action_hash].average_fitness[state.current_player_idx]
+            } else {
+                0.0
+            };
             if fitness > best_fitness {
                 best_fitness = fitness;
-                best_action_idx = action_idx;
             }
 
-            records.push(SimulationRecord {
+            self.records.push(SimulationRecord {
                 games,
                 fitness,
                 action_idx,
             });
         }
 
-        records.sort_by(|a, b| b.fitness.partial_cmp(&a.fitness).unwrap());
+        self.records
+            .sort_by(|a, b| b.fitness.partial_cmp(&a.fitness).unwrap());
 
-        for r in records {
-            print!(
-                "\nFitness from {} simulated playouts for Action {:?} is {:.2}.",
-                r.games, choices[r.action_idx], r.fitness
-            );
-        }
-
-        print!("\nTotal Games simulated {total_games}.");
-        if debug {
-            choices[best_action_idx].display();
-        }
-        // choices[best_action_idx].apply_choice(state);
-        // true
-        state.player_move_and_thought_progression = (
-            Some(choices[best_action_idx].clone()),
-            NUM_GAMES_TO_SIMULATE,
-            NUM_GAMES_TO_SIMULATE,
-        )
-    }
-
-    pub fn determine_best_action(&self, state: &mut State, debug: bool) {
-        match self {
-            PlayerType::RandomMachine => PlayerType::play_random(state, debug),
-            PlayerType::UniformMachine => PlayerType::play_machine_uniform(state, debug),
-            PlayerType::MCTSMachine => PlayerType::play_machine_mcts(state, debug),
-            PlayerType::Human => PlayerType::play_human(state, debug),
-        }
+        self.num_games_sampled += 1;
     }
 }
