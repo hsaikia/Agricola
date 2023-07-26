@@ -77,18 +77,15 @@ Fitness [-17, 8, -8, -16]
 
 ## TODO
 
-- Display Pet
-- Add AI thinking
-- Add action to choose stable placement
+- Add action to choose stable placement, also room placement is not ideal (blocks fields)
 - Debug why square fence (8 wood) isn't available
 - Enable fencing multiple pastures at once
-- Display action taken
+- Display action taken and people placed
 - Allow MCTS params to be changed from UI
 - Implement OCCs
 - Implement Minors
 - Unit Tests
 - Refactor such that indeterminate states are absent
-- Enable WASM target
 
 ### MCTS Strategy
 
