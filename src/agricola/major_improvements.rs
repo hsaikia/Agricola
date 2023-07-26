@@ -1,18 +1,9 @@
 use super::primitives::{can_pay_for_resource, new_res, Resource, ResourceExchange, Resources};
 
 #[derive(Clone, Debug, Hash, PartialEq)]
-pub struct Cheaper(pub bool);
-
-impl Cheaper {
-    pub fn other(&self) -> Self {
-        Self(!self.0)
-    }
-}
-
-#[derive(Clone, Debug, Hash, PartialEq)]
 pub enum MajorImprovement {
-    Fireplace(Cheaper),
-    CookingHearth(Cheaper),
+    Fireplace(bool),
+    CookingHearth(bool),
     Well,
     ClayOven,
     StoneOven,
@@ -30,17 +21,17 @@ impl MajorImprovement {
         for card in majors_on_board {
             match card {
                 Self::Fireplace(cheaper) => {
-                    if !majors_owned.contains(&Self::Fireplace(cheaper.other()))
+                    if !majors_owned.contains(&Self::Fireplace(!cheaper))
                         && can_pay_for_resource(&card.cost(), resources)
                     {
                         return true;
                     }
                 }
                 Self::CookingHearth(cheaper) => {
-                    if (majors_owned.contains(&Self::Fireplace(cheaper.clone()))
-                        || majors_owned.contains(&Self::Fireplace(cheaper.other()))
+                    if (majors_owned.contains(&Self::Fireplace(*cheaper))
+                        || majors_owned.contains(&Self::Fireplace(!cheaper))
                         || can_pay_for_resource(&card.cost(), resources))
-                        && !majors_owned.contains(&Self::CookingHearth(cheaper.other()))
+                        && !majors_owned.contains(&Self::CookingHearth(!cheaper))
                     {
                         return true;
                     }
@@ -66,17 +57,17 @@ impl MajorImprovement {
         for card in majors_on_board {
             match card {
                 Self::Fireplace(cheaper) => {
-                    if !majors_owned.contains(&Self::Fireplace(cheaper.other()))
+                    if !majors_owned.contains(&Self::Fireplace(!cheaper))
                         && can_pay_for_resource(&card.cost(), resources)
                     {
                         available.push(card.clone());
                     }
                 }
                 Self::CookingHearth(cheaper) => {
-                    if (majors_owned.contains(&Self::Fireplace(cheaper.clone()))
-                        || majors_owned.contains(&Self::Fireplace(cheaper.other()))
+                    if (majors_owned.contains(&Self::Fireplace(*cheaper))
+                        || majors_owned.contains(&Self::Fireplace(!cheaper))
                         || can_pay_for_resource(&card.cost(), resources))
-                        && !majors_owned.contains(&Self::CookingHearth(cheaper.other()))
+                        && !majors_owned.contains(&Self::CookingHearth(!cheaper))
                     {
                         available.push(card.clone());
                     }
@@ -192,12 +183,12 @@ impl MajorImprovement {
         match self {
             Self::Fireplace(cheaper) => {
                 let mut res = new_res();
-                res[Resource::Clay] = if cheaper.0 { 2 } else { 3 };
+                res[Resource::Clay] = if *cheaper { 2 } else { 3 };
                 res
             }
             Self::CookingHearth(cheaper) => {
                 let mut res = new_res();
-                res[Resource::Clay] = if cheaper.0 { 4 } else { 5 };
+                res[Resource::Clay] = if *cheaper { 4 } else { 5 };
                 res
             }
             Self::Well => {

@@ -1,12 +1,11 @@
 use super::algorithms::PlayerType;
 use super::farm::{Animal, Farm, FarmyardSpace, House, Seed};
-use super::major_improvements::{Cheaper, MajorImprovement};
+use super::major_improvements::MajorImprovement;
 use super::occupations::Occupation;
 use super::primitives::{
     can_pay_for_resource, new_res, pay_for_resource, Resource, ResourceExchange, Resources,
     RESOURCE_EMOJIS,
 };
-use rand::seq::SliceRandom;
 
 const MAX_FAMILY_MEMBERS: usize = 5;
 const STARTING_PEOPLE: usize = 2;
@@ -98,18 +97,18 @@ impl Player {
 
         if self
             .major_cards
-            .contains(&MajorImprovement::CookingHearth(Cheaper(true)))
+            .contains(&MajorImprovement::CookingHearth(true))
             || self
                 .major_cards
-                .contains(&MajorImprovement::CookingHearth(Cheaper(false)))
+                .contains(&MajorImprovement::CookingHearth(false))
         {
             self.resources[Resource::Food] += 2 * sheep + 3 * pigs + 4 * cattle;
         } else if self
             .major_cards
-            .contains(&MajorImprovement::Fireplace(Cheaper(true)))
+            .contains(&MajorImprovement::Fireplace(true))
             || self
                 .major_cards
-                .contains(&MajorImprovement::Fireplace(Cheaper(false)))
+                .contains(&MajorImprovement::Fireplace(false))
         {
             self.resources[Resource::Food] += 2 * sheep + 2 * pigs + 3 * cattle;
         }
@@ -120,16 +119,16 @@ impl Player {
         // And at least one grain in supply
         if (self
             .major_cards
-            .contains(&MajorImprovement::Fireplace(Cheaper(true)))
+            .contains(&MajorImprovement::Fireplace(true))
             || self
                 .major_cards
-                .contains(&MajorImprovement::Fireplace(Cheaper(false)))
+                .contains(&MajorImprovement::Fireplace(false))
             || self
                 .major_cards
-                .contains(&MajorImprovement::CookingHearth(Cheaper(true)))
+                .contains(&MajorImprovement::CookingHearth(true))
             || self
                 .major_cards
-                .contains(&MajorImprovement::CookingHearth(Cheaper(false)))
+                .contains(&MajorImprovement::CookingHearth(false))
             || self.major_cards.contains(&MajorImprovement::ClayOven)
             || self.major_cards.contains(&MajorImprovement::StoneOven))
             && self.resources[Resource::Grain] > 0
@@ -233,11 +232,8 @@ impl Player {
     }
 
     // Builds a single room
-    pub fn build_room(&mut self) {
-        assert!(self.can_build_room());
+    pub fn build_room(&mut self, idx : &usize) {
         pay_for_resource(&self.build_room_cost, &mut self.resources);
-        let positions = self.farm.best_room_positions();
-        let idx = positions.choose(&mut rand::thread_rng()).unwrap();
         self.farm.build_room(*idx);
 
         match self.house {
@@ -247,39 +243,32 @@ impl Player {
         }
     }
 
-    pub fn can_build_room(&self) -> bool {
-        if self.farm.best_room_positions().is_empty() {
-            return false;
-        }
-        can_pay_for_resource(&self.build_room_cost, &self.resources)
-    }
-
     // Builds a single stable
-    pub fn build_stable(&mut self) {
-        assert!(self.can_build_stable());
+    pub fn build_stable(&mut self, idx : &usize) {
         pay_for_resource(&self.build_stable_cost, &mut self.resources);
-        let positions = self.farm.best_stable_positions();
-        let idx = positions.choose(&mut rand::thread_rng()).unwrap();
         self.farm.build_stable(*idx);
     }
 
-    pub fn can_build_stable(&self) -> bool {
-        if !self.farm.can_build_stable() {
-            return false;
-        }
-
-        can_pay_for_resource(&self.build_stable_cost, &self.resources)
-    }
-
-    pub fn add_new_field(&mut self) {
-        let idxs = self.farm.best_field_positions();
-        assert!(!idxs.is_empty());
-        let idx = idxs.choose(&mut rand::thread_rng()).unwrap();
+    pub fn add_new_field(&mut self, idx: &usize) {
         self.farm.add_field(*idx);
     }
 
-    pub fn can_add_new_field(&self) -> bool {
-        !self.farm.best_field_positions().is_empty()
+    pub fn room_options(&self) -> Vec<usize> {
+        if can_pay_for_resource(&self.build_room_cost, &self.resources) {
+            return self.farm.best_room_positions();
+        }
+        Vec::new()
+    }
+
+    pub fn stable_options(&self) -> Vec<usize> {
+        if can_pay_for_resource(&self.build_stable_cost, &self.resources) && self.farm.can_build_stable() {
+            return self.farm.best_stable_positions();
+        }
+        Vec::new()
+    }
+
+    pub fn field_options(&self) -> Vec<usize> {
+        self.farm.best_field_positions()
     }
 
     pub fn reset_for_next_round(&mut self) {
@@ -320,16 +309,16 @@ impl Player {
 
     pub fn has_cooking_improvement(&self) -> bool {
         self.major_cards
-            .contains(&MajorImprovement::Fireplace(Cheaper(true)))
+            .contains(&MajorImprovement::Fireplace(true))
             | self
                 .major_cards
-                .contains(&MajorImprovement::Fireplace(Cheaper(false)))
+                .contains(&MajorImprovement::Fireplace(false))
             | self
                 .major_cards
-                .contains(&MajorImprovement::CookingHearth(Cheaper(true)))
+                .contains(&MajorImprovement::CookingHearth(true))
             | self
                 .major_cards
-                .contains(&MajorImprovement::CookingHearth(Cheaper(false)))
+                .contains(&MajorImprovement::CookingHearth(false))
     }
 
     pub fn has_resources_to_cook(&self) -> bool {
@@ -522,6 +511,15 @@ impl Player {
             ret = format!("{}\n", ret);
             stuff = format!("{}\n", stuff);
         }
+
+        if let Some(pet) = self.farm.pet {
+            match pet.0 {
+                Animal::Sheep => stuff = format!("{stuff}\nPet {} 🐑", pet.1),
+                Animal::Pigs => stuff = format!("{stuff}\nPet {} 🐖", pet.1),
+                Animal::Cattle => stuff = format!("{stuff}\nPet {} 🐄", pet.1),
+            }
+        }
+
         (ret, stuff)
     }
 }

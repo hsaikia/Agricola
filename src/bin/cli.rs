@@ -45,6 +45,7 @@ struct App {
     num_selections_y: usize,
     move_selected: bool,
     ai: AI,
+    current_actions: Vec<Action>,
 }
 
 impl App {
@@ -58,6 +59,7 @@ impl App {
             num_selections_y: 1,
             move_selected: false,
             ai: AI::new(),
+            current_actions: Vec::new(),
         }
     }
 
@@ -114,41 +116,41 @@ impl App {
         if self.menu_active {
             return;
         }
+        if self.current_actions.is_empty() {
+            return;
+        }
 
         if let Some(state) = &mut self.state {
-            let actions = Action::next_choices(state);
-
-            if actions.is_empty() {
-                return;
-            }
-
-            if actions.len() == 1 {
-                actions[0].apply_choice(state);
-                return;
-            }
-
-            self.num_selections_y = actions.len();
-            match state.player_type() {
-                PlayerType::Human => {
-                    if !self.move_selected {
-                        return;
+            if self.current_actions.len() == 1 {
+                self.current_actions[0].apply_choice(state);
+            } else {
+                match state.player_type() {
+                    PlayerType::Human => {
+                        if !self.move_selected {
+                            return;
+                        }
+                        self.current_actions[self.selection_y].apply_choice(state);
+                        self.move_selected = false;
                     }
-                    actions[self.selection_y].apply_choice(state);
-                    self.move_selected = false;
-                }
-                PlayerType::MCTSMachine => {
-                    if !self.move_selected && self.ai.num_games_sampled < NUM_GAMES_TO_SIMULATE {
-                        self.ai.sample_once(state);
-                        return;
+                    PlayerType::MCTSMachine => {
+                        if self.ai.num_games_sampled == 0 {
+                            self.ai.init_records(&self.current_actions, state);
+                        }
+
+                        if !self.move_selected && self.ai.num_games_sampled < NUM_GAMES_TO_SIMULATE
+                        {
+                            self.ai.sample_once(state, false);
+                            return;
+                        }
+                        let records = self.ai.sorted_records();
+                        records[0].action.apply_choice(state);
+                        self.ai.reset();
+                        self.move_selected = false;
                     }
-                    //self.ai.sample_once(state);
-                    actions[self.ai.records[0].action_idx].apply_choice(state);
-                    self.ai.records.clear();
-                    self.ai.num_games_sampled = 0;
-                    //self.ai.sample_once(state);
-                    self.move_selected = false;
                 }
             }
+            self.current_actions = Action::next_choices(state);
+            self.num_selections_y = self.current_actions.len();
         }
     }
 
@@ -162,60 +164,73 @@ impl App {
             }
         }
         self.state = State::new(&players);
-        if self.state.is_some() && self.menu_active {
-            self.menu_active = false;
+        if let Some(state) = &self.state {
+            if self.menu_active {
+                self.menu_active = false;
+            }
+
+            self.current_actions = Action::next_choices(state);
         }
     }
 
     pub fn format_next_actions(&self) -> String {
+
+        if self.current_actions.is_empty() {
+            return "GAME OVER!".to_string();
+        }
+
         let mut ret: String = String::new();
         let mut additional_stuff: String = String::new();
         if let Some(state) = &self.state {
-            let actions = Action::next_choices(state);
-            if actions.is_empty() {
-                ret = "GAME OVER!".to_string();
-            } else {
-                match state.player_type() {
-                    PlayerType::Human => {
-                        for (i, action) in actions.iter().enumerate() {
-                            if i == self.selection_y {
-                                ret = format!("{}\n>> {:?}", ret, action);
+            match state.player_type() {
+                PlayerType::Human => {
+                    for (i, action) in self.current_actions.iter().enumerate() {
+                        if i == self.selection_y {
+                            ret = format!("{}\n>> {:?}", ret, action);
 
-                                match action {
-                                    Action::Fence(spaces) => {
-                                        additional_stuff = Farm::format_fence_layout(&spaces);
-                                    }
-                                    _ => (),
+                            match action {
+                                Action::Fence(spaces) => {
+                                    additional_stuff = Farm::format_fence_layout(&spaces);
                                 }
-                            } else {
-                                ret = format!("{}\n{:?}", ret, action);
+                                _ => (),
                             }
+                        } else {
+                            ret = format!("{}\n{:?}", ret, action);
                         }
                     }
-                    PlayerType::MCTSMachine => {
-                        for (i, rec) in self.ai.records.iter().enumerate() {
-                            if i == 0 {
-                                ret = format!(
-                                    "{}\n>> {:?} [{} / {}]",
-                                    ret, actions[rec.action_idx], rec.fitness, rec.games
-                                );
+                }
+                PlayerType::MCTSMachine => {
+                        ret = format!(
+                            "{}/{} Games Simulated..\nCache Size {}\n",
+                            self.ai.num_games_sampled,
+                            NUM_GAMES_TO_SIMULATE,
+                            self.ai.cache.len()
+                        );
+                    
+                    let records = self.ai.sorted_records();
+                    for (i, rec) in records.iter().enumerate() {
+                        if i == 0 {
+                            ret = format!(
+                                "{}\n>> {:?} [{} / {}]",
+                                ret, rec.action, rec.fitness, rec.games
+                            );
 
-                                match &actions[rec.action_idx] {
-                                    Action::Fence(spaces) => {
-                                        additional_stuff = Farm::format_fence_layout(spaces);
-                                    }
-                                    _ => (),
+                            match &rec.action {
+                                Action::Fence(spaces) => {
+                                    additional_stuff = Farm::format_fence_layout(spaces);
                                 }
-                            } else {
-                                ret = format!(
-                                    "{}\n{:?} [{} / {}]",
-                                    ret, actions[rec.action_idx], rec.fitness, rec.games
-                                );
+                                _ => (),
                             }
+                        } else {
+                            ret = format!(
+                                "{}\n{:?} [{} / {}]",
+                                ret, rec.action, rec.fitness, rec.games
+                            );
                         }
                     }
                 }
             }
+
             ret = format!("{ret}\n\n\n{}", additional_stuff);
         }
         ret
@@ -312,8 +327,8 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         .constraints(
             [
                 Constraint::Percentage(20),
-                Constraint::Percentage(60),
-                Constraint::Percentage(20),
+                Constraint::Percentage(50),
+                Constraint::Percentage(30),
             ]
             .as_ref(),
         )

@@ -1,5 +1,5 @@
 use super::farm::Seed;
-use super::major_improvements::{Cheaper, MajorImprovement};
+use super::major_improvements::MajorImprovement;
 use super::occupations::Occupation;
 use super::player::Player;
 use super::primitives::{
@@ -36,7 +36,7 @@ pub struct UsedOven(bool);
 #[derive(Debug, Clone, Hash)]
 pub enum ConversionStage {
     Harvest,
-    BeforePlayOccupation(Cheaper),
+    BeforePlayOccupation(bool),
 }
 
 #[derive(Debug, Clone, Hash)]
@@ -61,7 +61,7 @@ pub enum Action {
     UseCattleMarket,
     UseFarmland,
     UseFarmExpansion,
-    UseLessons(Cheaper),
+    UseLessons(bool),
     UseGrainUtilization,
     UseFencing,
     UseImprovements,
@@ -72,8 +72,8 @@ pub enum Action {
     UseFarmRedevelopment, // TODO
     StartRound,
     PlaceWorker,
-    BuildRoom,
-    BuildStable,
+    BuildRoom(usize),
+    BuildStable(usize),
     BuildCard(MajorImprovement, ReturnFireplace),
     Harvest,
     EndTurn,
@@ -84,7 +84,7 @@ pub enum Action {
     Renovate(CalledFromHouseRedevelopment, CalledFromFarmRedevelopment),
     GrowFamily(WithRoom),
     Fence(Vec<usize>),
-    Plow(CalledFromCultivation),
+    Plow(CalledFromCultivation, usize),
     Convert(ResourceExchange, Option<MajorImprovement>, ConversionStage),
     PreHarvest,
     PayFoodOrBeg,
@@ -100,16 +100,24 @@ impl Action {
         let mut ret: Vec<Self> = Vec::new();
         match &state.last_action {
             Self::GetResourceFromChildless(_res) => vec![Self::PlaceWorker],
-            Self::UseLessons(cheaper) => Self::occupation_choices(state, cheaper.0),
+            Self::UseLessons(cheaper) => Self::occupation_choices(state, *cheaper),
             Self::EndGame => vec![],
             Self::StartGame => vec![Self::StartRound],
             Self::StartRound => vec![Self::PlaceWorker],
             Self::PlaceWorker => Self::place_worker_choices(state),
-            Self::UseFarmland => vec![Self::Plow(CalledFromCultivation(false))],
+            Self::UseFarmland => {
+                let field_opt = player.field_options();
+                if !field_opt.is_empty() {
+                    for opt in field_opt {
+                        ret.push(Self::Plow(CalledFromCultivation(true), opt));
+                    }
+                } 
+                ret
+            } 
             Self::UseFarmExpansion => Self::farm_expansion_choices(player),
             Self::UseFencing => Self::fencing_choices(player),
             Self::UseGrainUtilization => Self::grain_utilization_choices(player, false),
-            Self::BuildRoom | Self::BuildStable => {
+            Self::BuildRoom(_) | Self::BuildStable(_) => {
                 ret.extend(Self::farm_expansion_choices(player));
                 ret.push(Self::EndTurn);
                 ret
@@ -162,14 +170,17 @@ impl Action {
                     player,
                     &CalledFromGrainUtilization(false, true),
                 ));
-                if player.can_add_new_field() {
-                    ret.push(Self::Plow(CalledFromCultivation(true)));
+                let field_opt = player.field_options();
+                if !field_opt.is_empty() {
+                    for opt in field_opt {
+                        ret.push(Self::Plow(CalledFromCultivation(true), opt));
+                    }
                 } else {
                     ret.push(Self::EndTurn);
                 }
                 ret
             }
-            Self::Plow(from_cultivation) => {
+            Self::Plow(from_cultivation, _) => {
                 if from_cultivation.0 {
                     // using baked_bread = true, but this is irrelevant
                     ret.extend(Self::sow_choices(
@@ -205,7 +216,7 @@ impl Action {
                         ret.extend(Self::harvest_choices(player));
                     }
                     ConversionStage::BeforePlayOccupation(cheaper) => {
-                        ret.extend(Self::occupation_choices(state, cheaper.0));
+                        ret.extend(Self::occupation_choices(state, *cheaper));
                     }
                 }
                 ret
@@ -236,7 +247,7 @@ impl Action {
         if player.resources[Resource::Food] < required_food {
             ret.extend(Self::anytime_conversions(
                 player,
-                &ConversionStage::BeforePlayOccupation(Cheaper(cheaper)),
+                &ConversionStage::BeforePlayOccupation(cheaper),
             ));
         } else {
             for occ in &state.available_occupations {
@@ -248,8 +259,12 @@ impl Action {
 
     fn day_laborer_choices(player: &Player) -> Vec<Self> {
         let mut ret: Vec<Self> = Vec::new();
-        if player.can_add_new_field() && player.occupations.contains(&Occupation::AssistantTiller) {
-            ret.push(Self::Plow(CalledFromCultivation(false)));
+        let field_opt = player.field_options();
+        if !field_opt.is_empty() && player.occupations.contains(&Occupation::AssistantTiller) {
+            for opt in field_opt {
+                ret.push(Self::Plow(CalledFromCultivation(false), opt));
+            }
+            
         }
         ret.push(Self::EndTurn);
         ret
@@ -324,8 +339,8 @@ impl Action {
 
         for major in &player.major_cards {
             match major {
-                MajorImprovement::Fireplace(Cheaper(true | false))
-                | MajorImprovement::CookingHearth(Cheaper(true | false)) => {
+                MajorImprovement::Fireplace(true | false)
+                | MajorImprovement::CookingHearth(true | false) => {
                     for exchange in major.exchanges() {
                         if player.can_use_exchange(&exchange) {
                             ret.push(Self::Convert(exchange, None, stage.clone()));
@@ -378,11 +393,13 @@ impl Action {
 
     fn farm_expansion_choices(player: &Player) -> Vec<Self> {
         let mut ret: Vec<Self> = Vec::new();
-        if player.can_build_room() {
-            ret.push(Self::BuildRoom);
+        let room_options = player.room_options();
+        for idx in room_options {
+            ret.push(Self::BuildRoom(idx));
         }
-        if player.can_build_stable() {
-            ret.push(Self::BuildStable);
+        let stable_options = player.stable_options();
+        for idx in stable_options {
+            ret.push(Self::BuildStable(idx));
         }
         ret
     }
@@ -462,12 +479,12 @@ impl Action {
 
             match action {
                 Self::UseFarmland => {
-                    if !player.can_add_new_field() {
+                    if player.field_options().is_empty(){
                         continue;
                     }
                 }
                 Self::UseFarmExpansion => {
-                    if !player.can_build_room() && !player.can_build_stable() {
+                    if player.room_options().is_empty() && player.stable_options().is_empty() {
                         continue;
                     }
                 }
@@ -507,14 +524,14 @@ impl Action {
                     }
                 }
                 Self::UseCultivation => {
-                    if !player.can_sow() && !player.can_add_new_field() {
+                    if !player.can_sow() && player.field_options().is_empty() {
                         continue;
                     }
                 }
 
                 Self::UseLessons(cheaper) => {
                     if state.available_occupations.is_empty()
-                        || !player.can_play_occupation(cheaper.0)
+                        || !player.can_play_occupation(*cheaper)
                     {
                         continue;
                     }
@@ -527,26 +544,26 @@ impl Action {
         ret
     }
 
-    fn cooking_hearth_choices(player: &Player, cheaper: &Cheaper) -> Vec<Self> {
+    fn cooking_hearth_choices(player: &Player, cheaper: bool) -> Vec<Self> {
         let mut ret: Vec<Self> = Vec::new();
         if player
             .major_cards
-            .contains(&MajorImprovement::Fireplace(cheaper.clone()))
+            .contains(&MajorImprovement::Fireplace(cheaper))
             || player
                 .major_cards
-                .contains(&MajorImprovement::Fireplace(cheaper.other()))
+                .contains(&MajorImprovement::Fireplace(!cheaper))
         {
             ret.push(Self::BuildCard(
-                MajorImprovement::CookingHearth(cheaper.clone()),
+                MajorImprovement::CookingHearth(cheaper),
                 ReturnFireplace(true),
             ));
         }
         if can_pay_for_resource(
-            &MajorImprovement::CookingHearth(cheaper.clone()).cost(),
+            &MajorImprovement::CookingHearth(cheaper).cost(),
             &player.resources,
         ) {
             ret.push(Self::BuildCard(
-                MajorImprovement::CookingHearth(cheaper.clone()),
+                MajorImprovement::CookingHearth(cheaper),
                 ReturnFireplace(false),
             ));
         }
@@ -565,7 +582,7 @@ impl Action {
         for major in &majors_available {
             match major {
                 MajorImprovement::CookingHearth(cheaper) => {
-                    ret.extend(Self::cooking_hearth_choices(player, cheaper));
+                    ret.extend(Self::cooking_hearth_choices(player, *cheaper));
                 }
                 _ => ret.push(Self::BuildCard(major.clone(), ReturnFireplace(false))),
             }
@@ -697,8 +714,8 @@ impl Action {
             Self::UseMeetingPlace,
             Self::UseFarmland,
             Self::UseFarmExpansion,
-            Self::UseLessons(Cheaper(true)),
-            Self::UseLessons(Cheaper(false)),
+            Self::UseLessons(true),
+            Self::UseLessons(false),
         ]
     }
 
@@ -740,8 +757,8 @@ impl Action {
             Self::UseMeetingPlace => 11,
             Self::UseFarmland => 12,
             Self::UseFarmExpansion => 13,
-            Self::UseLessons(Cheaper(true)) => 14,
-            Self::UseLessons(Cheaper(false)) => 15,
+            Self::UseLessons(true) => 14,
+            Self::UseLessons(false) => 15,
             Self::UseGrainUtilization => 16,
             Self::UseFencing => 17,
             Self::UseSheepMarket => 18,
@@ -758,8 +775,8 @@ impl Action {
             Self::UseFarmRedevelopment => 29,
             Self::StartRound => 30,
             Self::PlaceWorker => 31,
-            Self::BuildRoom => 32,
-            Self::BuildStable => 33,
+            Self::BuildRoom(_) => 32,
+            Self::BuildStable(_) => 33,
             Self::BuildCard(_, _) => 34,
             Self::Harvest => 35,
             Self::EndTurn => 36,
@@ -770,7 +787,7 @@ impl Action {
             Self::Renovate(_, _) => 41,
             Self::GrowFamily(_) => 42,
             Self::Fence(_) => 43,
-            Self::Plow(_) => 44,
+            Self::Plow(_, _) => 44,
             Self::Convert(_, _, _) => 45,
             Self::PreHarvest => 46,
             Self::PayFoodOrBeg => 47,
@@ -802,21 +819,21 @@ impl Action {
                 state.available_occupations.retain(|x| x != occ);
                 player.resources[Resource::Food] -= food_cost;
             }
-            Self::Plow(_) => {
+            Self::Plow(_, pasture_idx) => {
                 let player = &mut state.players[state.current_player_idx];
-                player.add_new_field();
+                player.add_new_field(pasture_idx);
             }
             Self::Fence(pasture_indices) => {
                 let player = &mut state.players[state.current_player_idx];
                 player.fence(pasture_indices);
             }
-            Self::BuildRoom => {
+            Self::BuildRoom(pasture_idx) => {
                 let player = &mut state.players[state.current_player_idx];
-                player.build_room();
+                player.build_room(pasture_idx);
             }
-            Self::BuildStable => {
+            Self::BuildStable(pasture_idx) => {
                 let player = &mut state.players[state.current_player_idx];
-                player.build_stable();
+                player.build_stable(pasture_idx);
             }
             Self::Sow(_called_from_grain_util, seed) => {
                 let player = &mut state.players[state.current_player_idx];

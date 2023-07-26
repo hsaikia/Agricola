@@ -1,6 +1,6 @@
 use super::actions::{Action, NUM_RESOURCE_SPACES};
 use super::algorithms::PlayerType;
-use super::major_improvements::{Cheaper, MajorImprovement};
+use super::major_improvements::MajorImprovement;
 use super::occupations::Occupation;
 use super::player::Player;
 use super::primitives::{format_resources, pay_for_resource, Resource, Resources};
@@ -48,10 +48,10 @@ impl State {
             occupied_spaces: Vec::new(),
             hidden_spaces: Action::initial_hidden_spaces(),
             major_improvements: vec![
-                MajorImprovement::Fireplace(Cheaper(true)),
-                MajorImprovement::Fireplace(Cheaper(false)),
-                MajorImprovement::CookingHearth(Cheaper(true)),
-                MajorImprovement::CookingHearth(Cheaper(false)),
+                MajorImprovement::Fireplace(true),
+                MajorImprovement::Fireplace(false),
+                MajorImprovement::CookingHearth(true),
+                MajorImprovement::CookingHearth(false),
                 MajorImprovement::Well,
                 MajorImprovement::ClayOven,
                 MajorImprovement::StoneOven,
@@ -250,18 +250,18 @@ impl State {
         assert!(
             player
                 .major_cards
-                .contains(&MajorImprovement::Fireplace(Cheaper(true)))
+                .contains(&MajorImprovement::Fireplace(true))
                 || player
                     .major_cards
-                    .contains(&MajorImprovement::Fireplace(Cheaper(false)))
+                    .contains(&MajorImprovement::Fireplace(false))
         );
 
-        let mut returned_fireplace = MajorImprovement::Fireplace(Cheaper(true));
+        let mut returned_fireplace = MajorImprovement::Fireplace(true);
         if player
             .major_cards
-            .contains(&MajorImprovement::Fireplace(Cheaper(false)))
+            .contains(&MajorImprovement::Fireplace(false))
         {
-            returned_fireplace = MajorImprovement::Fireplace(Cheaper(false));
+            returned_fireplace = MajorImprovement::Fireplace(false);
         }
 
         self.major_improvements.retain(|x| x != major);
@@ -309,19 +309,19 @@ impl State {
                 player.resources[Resource::Food] += 4;
             } else if player
                 .major_cards
-                .contains(&MajorImprovement::CookingHearth(Cheaper(true)))
+                .contains(&MajorImprovement::CookingHearth(true))
                 || player
                     .major_cards
-                    .contains(&MajorImprovement::CookingHearth(Cheaper(false)))
+                    .contains(&MajorImprovement::CookingHearth(false))
             {
                 // Hearth converts one grain to 3 food.
                 player.resources[Resource::Food] += 3;
             } else if player
                 .major_cards
-                .contains(&MajorImprovement::Fireplace(Cheaper(true)))
+                .contains(&MajorImprovement::Fireplace(true))
                 || player
                     .major_cards
-                    .contains(&MajorImprovement::Fireplace(Cheaper(false)))
+                    .contains(&MajorImprovement::Fireplace(false))
             {
                 // Fireplace converts one grain to 2 food.
                 player.resources[Resource::Food] += 2;

@@ -8,14 +8,17 @@ pub enum PlayerType {
     Human,
     MCTSMachine,
 }
+#[derive(Clone)]
 pub struct SimulationRecord {
-    pub games: u32,
+    pub games: usize,
     pub fitness: f32,
-    pub action_idx: usize,
+    pub action: Action,
+    pub action_hash: u64,
 }
+
 pub struct AI {
     pub num_games_sampled: usize,
-    cache: HashMap<u64, GameRecord>,
+    pub cache: HashMap<u64, GameRecord>,
     pub records: Vec<SimulationRecord>,
 }
 
@@ -28,28 +31,36 @@ impl AI {
         }
     }
 
-    pub fn sample_once(&mut self, state: &State) {
-        let choices = Action::next_choices(state);
-        if choices.len() < 2 {
-            return;
-        }
+    pub fn reset(&mut self) {
+        self.num_games_sampled = 0;
+        self.records.clear();
+    }
 
-        let mut action_hashes: Vec<u64> = vec![];
-        let mut tmp_game: State;
-
-        // Add the child node hashes
-        for action in &choices {
-            tmp_game = state.clone();
+    pub fn init_records(&mut self, actions: &Vec<Action>, state: &State) {
+        self.reset();
+        for action in actions {
+            let mut tmp_game = state.clone();
             action.apply_choice(&mut tmp_game);
-            action_hashes.push(tmp_game.get_hash());
+            self.records.push(SimulationRecord { games: 0, fitness: 0.0, action: action.clone(), action_hash: tmp_game.get_hash() });
         }
+    }
 
-        let sample_idx =
-            GameRecord::choose_uct(state.current_player_idx, &action_hashes, &self.cache);
+    pub fn sorted_records(&self) -> Vec<SimulationRecord> {
+        let mut records = self.records.clone();
+        records.sort_by(|a, b| b.fitness.partial_cmp(&a.fitness).unwrap());
+        records
+    }
+
+    pub fn sample_once(&mut self, state: &State, debug : bool) {
+        let mut tmp_game: State;
+        let selected_action =
+            GameRecord::choose_uct(state.current_player_idx, &self.records, &self.cache);
         tmp_game = state.clone();
-        choices[sample_idx].apply_choice(&mut tmp_game);
+        selected_action.apply_choice(&mut tmp_game);
 
-        //print!("\nGame {}", g);
+        if debug {
+            print!("\nSample {} : {:?} | ", self.num_games_sampled, selected_action);
+        }
         let mut expand_node_hash = tmp_game.get_hash();
         let mut path: Vec<u64> = vec![expand_node_hash];
 
@@ -63,19 +74,32 @@ impl AI {
                 break;
             }
 
+            if sub_choices.len() == 1 {
+                sub_choices[0].apply_choice(&mut tmp_game);
+                expand_node_hash = tmp_game.get_hash();
+                path.push(tmp_game.get_hash());
+                continue;
+            }
+
             // Generate all child hashes
-            let mut sub_action_hashes: Vec<u64> = vec![];
+            let mut sub_records: Vec<SimulationRecord> = Vec::new();
+
             for sub_action in &sub_choices {
                 let mut tmp_game2 = tmp_game.clone();
                 sub_action.apply_choice(&mut tmp_game2);
-                sub_action_hashes.push(tmp_game2.get_hash());
+                sub_records.push(SimulationRecord {
+                    games: 0,
+                    fitness: 0.0,
+                    action: sub_action.clone(),
+                    action_hash: tmp_game2.get_hash(),
+                });
             }
-            let chosen_idx = GameRecord::choose_uct(
-                tmp_game.current_player_idx,
-                &sub_action_hashes,
-                &self.cache,
-            );
-            sub_choices[chosen_idx].apply_choice(&mut tmp_game);
+            let selected_sub_action =
+                GameRecord::choose_uct(tmp_game.current_player_idx, &sub_records, &self.cache);
+            if debug {
+                print!("{:?}", selected_sub_action);
+            }
+            selected_sub_action.apply_choice(&mut tmp_game);
             expand_node_hash = tmp_game.get_hash();
             path.push(tmp_game.get_hash());
         }
@@ -89,43 +113,23 @@ impl AI {
         tmp_game.play_random();
         // Calculate result and backpropagate to the root
         let res = tmp_game.fitness();
-        for node in &path {
-            let mut state = self.cache[node].clone();
-            state.add_fitness(&res);
-            self.cache.insert(*node, state);
+        if debug {
+            print!(": {}\n", res[state.current_player_idx]);
         }
 
-        self.records.clear();
+        for node in &path {
+            if let Some(game_record) = self.cache.get_mut(&node) {
+                game_record.add_fitness(&res);
+            }
+        }
 
         // Choose the best move again according to UCT
-        let mut best_fitness: f32 = f32::NEG_INFINITY;
-        for (action_idx, action) in choices.iter().enumerate() {
-            tmp_game = state.clone();
-            action.apply_choice(&mut tmp_game);
-            let action_hash = tmp_game.get_hash();
-            let games: u32 = if self.cache.contains_key(&action_hash) {
-                self.cache[&action_hash].total_games
-            } else {
-                0
-            };
-            let fitness: f32 = if self.cache.contains_key(&action_hash) {
-                self.cache[&action_hash].average_fitness[state.current_player_idx]
-            } else {
-                0.0
-            };
-            if fitness > best_fitness {
-                best_fitness = fitness;
+        for rec in &mut self.records {
+            if let Some(entry) = self.cache.get(&rec.action_hash) {
+                rec.games = entry.total_games;
+                rec.fitness = entry.average_fitness[state.current_player_idx];
             }
-
-            self.records.push(SimulationRecord {
-                games,
-                fitness,
-                action_idx,
-            });
         }
-
-        self.records
-            .sort_by(|a, b| b.fitness.partial_cmp(&a.fitness).unwrap());
 
         self.num_games_sampled += 1;
     }

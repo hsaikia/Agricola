@@ -10,6 +10,12 @@ const PASTURE_CAPACITY: usize = 2;
 const STABLE_MULTIPLIER: usize = 2;
 const NUM_FENCE_INDICES: usize = 77; // (5 + 6) * (3 + 4)
 
+// struct PastureIndex(usize);
+
+// #[derive(PartialEq)]
+// struct FenceIndex(usize);
+
+
 #[derive(Copy, Clone, Hash)]
 pub enum House {
     Wood,
@@ -244,14 +250,9 @@ impl Farm {
                 }
             }
         }
-        //println!("{count:?}");
         for idx in 0..NUM_FENCE_INDICES {
             ret[idx] += 3 * (count[idx] % 2);
-            // if ret[idx] != 0 {
-            //     print!("{idx} => {} | ", ret[idx]);
-            // }
         }
-        //println!("{ret:?}");
         ret
     }
 
