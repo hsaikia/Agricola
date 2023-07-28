@@ -109,11 +109,11 @@ impl Action {
                 let field_opt = player.field_options();
                 if !field_opt.is_empty() {
                     for opt in field_opt {
-                        ret.push(Self::Plow(CalledFromCultivation(true), opt));
+                        ret.push(Self::Plow(CalledFromCultivation(false), opt));
                     }
-                } 
+                }
                 ret
-            } 
+            }
             Self::UseFarmExpansion => Self::farm_expansion_choices(player),
             Self::UseFencing => Self::fencing_choices(player),
             Self::UseGrainUtilization => Self::grain_utilization_choices(player, false),
@@ -264,7 +264,6 @@ impl Action {
             for opt in field_opt {
                 ret.push(Self::Plow(CalledFromCultivation(false), opt));
             }
-            
         }
         ret.push(Self::EndTurn);
         ret
@@ -479,7 +478,7 @@ impl Action {
 
             match action {
                 Self::UseFarmland => {
-                    if player.field_options().is_empty(){
+                    if player.field_options().is_empty() {
                         continue;
                     }
                 }

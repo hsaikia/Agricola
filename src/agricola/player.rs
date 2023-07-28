@@ -232,7 +232,7 @@ impl Player {
     }
 
     // Builds a single room
-    pub fn build_room(&mut self, idx : &usize) {
+    pub fn build_room(&mut self, idx: &usize) {
         pay_for_resource(&self.build_room_cost, &mut self.resources);
         self.farm.build_room(*idx);
 
@@ -244,7 +244,7 @@ impl Player {
     }
 
     // Builds a single stable
-    pub fn build_stable(&mut self, idx : &usize) {
+    pub fn build_stable(&mut self, idx: &usize) {
         pay_for_resource(&self.build_stable_cost, &mut self.resources);
         self.farm.build_stable(*idx);
     }
@@ -261,7 +261,9 @@ impl Player {
     }
 
     pub fn stable_options(&self) -> Vec<usize> {
-        if can_pay_for_resource(&self.build_stable_cost, &self.resources) && self.farm.can_build_stable() {
+        if can_pay_for_resource(&self.build_stable_cost, &self.resources)
+            && self.farm.can_build_stable()
+        {
             return self.farm.best_stable_positions();
         }
         Vec::new()

@@ -77,7 +77,6 @@ Fitness [-17, 8, -8, -16]
 
 ## TODO
 
-- Add action to choose stable placement, also room placement is not ideal (blocks fields)
 - Debug why square fence (8 wood) isn't available
 - Enable fencing multiple pastures at once
 - Display action taken and people placed

@@ -128,8 +128,12 @@ impl State {
         s.finish()
     }
 
-    pub fn play_random(&mut self) {
+    pub fn play_random(&mut self, path: &mut Vec<u64>, depth: usize) {
+        let mut d : usize = 0;
         loop {
+            if d == depth {
+                break;
+            }
             let choices = Action::next_choices(self);
             if choices.is_empty() {
                 break;
@@ -141,9 +145,12 @@ impl State {
                 continue;
             }
 
+            d += 1;
+
             // Chose a random action
             let action_idx = rand::thread_rng().gen_range(0..choices.len());
             choices[action_idx].apply_choice(self);
+            path.push(self.get_hash());
         }
     }
 
@@ -151,7 +158,7 @@ impl State {
         self.players[self.current_player_idx].player_type()
     }
 
-    pub fn fitness(&self) -> Vec<i32> {
+    pub fn fitness(&self) -> Vec<f32> {
         let scores = self.scores();
 
         if scores.len() == 1 {
@@ -162,7 +169,7 @@ impl State {
         let mut sorted_scores = scores;
 
         // Sort in decreasing order
-        sorted_scores.sort_by_key(|k| -k);
+        sorted_scores.sort_by(|a, b| b.partial_cmp(a).unwrap());
 
         // Fitness of winner is defined by the margin of victory = so difference from own score and second best score
         // Fitness of losers are defined by the margin of defeat = so difference from own score and best score
@@ -177,10 +184,10 @@ impl State {
         fitness
     }
 
-    pub fn scores(&self) -> Vec<i32> {
-        let mut scores: Vec<i32> = Vec::new();
+    pub fn scores(&self) -> Vec<f32> {
+        let mut scores: Vec<f32> = Vec::new();
         for p in &self.players {
-            scores.push(scoring::score(p));
+            scores.push(scoring::score(p) as f32);
         }
         scores
     }

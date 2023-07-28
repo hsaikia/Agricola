@@ -3,6 +3,8 @@ use super::mcts::GameRecord;
 use super::state::State;
 use std::collections::HashMap;
 
+const DEPTH : usize = 10;
+
 #[derive(Debug, Clone, Hash, PartialEq)]
 pub enum PlayerType {
     Human,
@@ -20,6 +22,12 @@ pub struct AI {
     pub num_games_sampled: usize,
     pub cache: HashMap<u64, GameRecord>,
     pub records: Vec<SimulationRecord>,
+}
+
+impl Default for AI {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AI {
@@ -41,7 +49,12 @@ impl AI {
         for action in actions {
             let mut tmp_game = state.clone();
             action.apply_choice(&mut tmp_game);
-            self.records.push(SimulationRecord { games: 0, fitness: 0.0, action: action.clone(), action_hash: tmp_game.get_hash() });
+            self.records.push(SimulationRecord {
+                games: 0,
+                fitness: 0.0,
+                action: action.clone(),
+                action_hash: tmp_game.get_hash(),
+            });
         }
     }
 
@@ -51,7 +64,7 @@ impl AI {
         records
     }
 
-    pub fn sample_once(&mut self, state: &State, debug : bool) {
+    pub fn sample_once(&mut self, state: &State, debug: bool) {
         let mut tmp_game: State;
         let selected_action =
             GameRecord::choose_uct(state.current_player_idx, &self.records, &self.cache);
@@ -59,7 +72,10 @@ impl AI {
         selected_action.apply_choice(&mut tmp_game);
 
         if debug {
-            print!("\nSample {} : {:?} | ", self.num_games_sampled, selected_action);
+            print!(
+                "\nSample {} : {:?} | ",
+                self.num_games_sampled, selected_action
+            );
         }
         let mut expand_node_hash = tmp_game.get_hash();
         let mut path: Vec<u64> = vec![expand_node_hash];
@@ -68,58 +84,58 @@ impl AI {
         while self.cache.contains_key(&expand_node_hash) {
             // In Agricola - since the future board state changes randomly
             // get_all_available_actions can return different actions for the same current game state.
-            let sub_choices = Action::next_choices(&tmp_game);
 
+            let sub_choices = Action::next_choices(&tmp_game);
             if sub_choices.is_empty() {
                 break;
-            }
-
-            if sub_choices.len() == 1 {
+            } else if sub_choices.len() == 1 {
                 sub_choices[0].apply_choice(&mut tmp_game);
-                expand_node_hash = tmp_game.get_hash();
-                path.push(tmp_game.get_hash());
-                continue;
+            } else {
+                // Generate all child hashes
+                let mut sub_records: Vec<SimulationRecord> = Vec::new();
+
+                for sub_action in &sub_choices {
+                    let mut tmp_game2 = tmp_game.clone();
+                    sub_action.apply_choice(&mut tmp_game2);
+                    let child_hash = tmp_game2.get_hash();
+                    sub_records.push(SimulationRecord {
+                        games: 0,
+                        fitness: 0.0,
+                        action: sub_action.clone(),
+                        action_hash: child_hash,
+                    });
+                }
+                let selected_sub_action =
+                    GameRecord::choose_uct(tmp_game.current_player_idx, &sub_records, &self.cache);
+                if debug {
+                    print!("{:?}", selected_sub_action);
+                }
+                selected_sub_action.apply_choice(&mut tmp_game);
             }
 
-            // Generate all child hashes
-            let mut sub_records: Vec<SimulationRecord> = Vec::new();
-
-            for sub_action in &sub_choices {
-                let mut tmp_game2 = tmp_game.clone();
-                sub_action.apply_choice(&mut tmp_game2);
-                sub_records.push(SimulationRecord {
-                    games: 0,
-                    fitness: 0.0,
-                    action: sub_action.clone(),
-                    action_hash: tmp_game2.get_hash(),
-                });
-            }
-            let selected_sub_action =
-                GameRecord::choose_uct(tmp_game.current_player_idx, &sub_records, &self.cache);
-            if debug {
-                print!("{:?}", selected_sub_action);
-            }
-            selected_sub_action.apply_choice(&mut tmp_game);
             expand_node_hash = tmp_game.get_hash();
-            path.push(tmp_game.get_hash());
-        }
-
-        // Add node to cache
-        if let std::collections::hash_map::Entry::Vacant(e) = self.cache.entry(expand_node_hash) {
-            e.insert(GameRecord::new(tmp_game.players.len()));
+            path.push(expand_node_hash);
         }
 
         // Perform playout - play the game out until the end
-        tmp_game.play_random();
+        tmp_game.play_random(&mut path, DEPTH);
         // Calculate result and backpropagate to the root
         let res = tmp_game.fitness();
         if debug {
-            print!(": {}\n", res[state.current_player_idx]);
+            println!(": {}", res[state.current_player_idx]);
         }
 
         for node in &path {
-            if let Some(game_record) = self.cache.get_mut(&node) {
+            if let Some(game_record) = self.cache.get_mut(node) {
                 game_record.add_fitness(&res);
+            } else {
+                self.cache.insert(
+                    *node,
+                    GameRecord {
+                        average_fitness: res.clone(),
+                        total_games: 1,
+                    },
+                );
             }
         }
 

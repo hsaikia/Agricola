@@ -21,7 +21,7 @@ use ratatui::{
     Frame, Terminal,
 };
 
-const NUM_GAMES_TO_SIMULATE: usize = 100;
+const NUM_GAMES_TO_SIMULATE: usize = 200;
 
 #[derive(Clone, Copy, Debug)]
 enum PlayerSelection {
@@ -163,6 +163,8 @@ impl App {
                 _ => (),
             }
         }
+        self.ai.cache.clear();
+        self.ai.reset();
         self.state = State::new(&players);
         if let Some(state) = &self.state {
             if self.menu_active {
@@ -174,7 +176,6 @@ impl App {
     }
 
     pub fn format_next_actions(&self) -> String {
-
         if self.current_actions.is_empty() {
             return "GAME OVER!".to_string();
         }
@@ -187,12 +188,8 @@ impl App {
                     for (i, action) in self.current_actions.iter().enumerate() {
                         if i == self.selection_y {
                             ret = format!("{}\n>> {:?}", ret, action);
-
-                            match action {
-                                Action::Fence(spaces) => {
-                                    additional_stuff = Farm::format_fence_layout(&spaces);
-                                }
-                                _ => (),
+                            if let Action::Fence(spaces) = action {
+                                additional_stuff = Farm::format_fence_layout(spaces);
                             }
                         } else {
                             ret = format!("{}\n{:?}", ret, action);
@@ -200,13 +197,13 @@ impl App {
                     }
                 }
                 PlayerType::MCTSMachine => {
-                        ret = format!(
-                            "{}/{} Games Simulated..\nCache Size {}\n",
-                            self.ai.num_games_sampled,
-                            NUM_GAMES_TO_SIMULATE,
-                            self.ai.cache.len()
-                        );
-                    
+                    ret = format!(
+                        "{}/{} Games Simulated..\nCache Size {}\n",
+                        self.ai.num_games_sampled,
+                        NUM_GAMES_TO_SIMULATE,
+                        self.ai.cache.len()
+                    );
+
                     let records = self.ai.sorted_records();
                     for (i, rec) in records.iter().enumerate() {
                         if i == 0 {
@@ -215,11 +212,8 @@ impl App {
                                 ret, rec.action, rec.fitness, rec.games
                             );
 
-                            match &rec.action {
-                                Action::Fence(spaces) => {
-                                    additional_stuff = Farm::format_fence_layout(spaces);
-                                }
-                                _ => (),
+                            if let Action::Fence(spaces) = &rec.action {
+                                additional_stuff = Farm::format_fence_layout(spaces);
                             }
                         } else {
                             ret = format!(
@@ -246,7 +240,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     // create app and run it
-    let tick_rate = Duration::from_millis(100);
+    let tick_rate = Duration::from_millis(50);
     let app = App::new();
     let res = run_app(&mut terminal, app, tick_rate);
 

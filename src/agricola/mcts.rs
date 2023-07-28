@@ -19,12 +19,12 @@ impl GameRecord {
     }
 
     #[allow(clippy::cast_precision_loss)]
-    pub fn add_fitness(&mut self, fitness: &Vec<i32>) {
+    pub fn add_fitness(&mut self, fitness: &Vec<f32>) {
         assert!(fitness.len() == self.average_fitness.len());
 
         for it in fitness.iter().zip(self.average_fitness.iter_mut()) {
             let (a, b) = it;
-            *b = (*b * self.total_games as f32 + *a as f32) / (self.total_games + 1) as f32;
+            *b = (*b * self.total_games as f32 + *a) / (self.total_games + 1) as f32;
         }
         self.total_games += 1;
     }

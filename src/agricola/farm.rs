@@ -10,12 +10,6 @@ const PASTURE_CAPACITY: usize = 2;
 const STABLE_MULTIPLIER: usize = 2;
 const NUM_FENCE_INDICES: usize = 77; // (5 + 6) * (3 + 4)
 
-// struct PastureIndex(usize);
-
-// #[derive(PartialEq)]
-// struct FenceIndex(usize);
-
-
 #[derive(Copy, Clone, Hash)]
 pub enum House {
     Wood,
@@ -107,6 +101,12 @@ pub struct Farm {
     pub pet: Option<(Animal, usize)>,
 }
 
+impl Default for Farm {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Farm {
     pub fn new() -> Self {
         let mut farmyard_spaces = [FarmyardSpace::Empty; NUM_FARMYARD_SPACES];
@@ -120,7 +120,7 @@ impl Farm {
         }
     }
 
-    pub fn format_fence_layout(layout: &Vec<usize>) -> String {
+    pub fn format_fence_layout(layout: &[usize]) -> String {
         let mut ret: String = String::new();
         let l = 2 * L + 1;
         let w = 2 * W + 1;
@@ -130,23 +130,19 @@ impl Farm {
                 if i % 2 == 0 {
                     if j % 2 == 0 {
                         ret = format!("{ret}+");
-                    } else {
-                        if layout.contains(&idx) {
-                            ret = format!("{ret} - ");
-                        } else {
-                            ret = format!("{ret}   ");
-                        }
-                    }
-                } else {
-                    if j % 2 == 0 {
-                        if layout.contains(&idx) {
-                            ret = format!("{ret}|");
-                        } else {
-                            ret = format!("{ret} ");
-                        }
+                    } else if layout.contains(&idx) {
+                        ret = format!("{ret} - ");
                     } else {
                         ret = format!("{ret}   ");
                     }
+                } else if j % 2 == 0 {
+                    if layout.contains(&idx) {
+                        ret = format!("{ret}|");
+                    } else {
+                        ret = format!("{ret} ");
+                    }
+                } else {
+                    ret = format!("{ret}   ");
                 }
             }
             ret = format!("{ret}\n");
@@ -158,8 +154,8 @@ impl Farm {
     fn available_fence_spots(&self) -> [bool; NUM_FENCE_INDICES] {
         // Mark all to false
         let mut available_fence_spots = [false; NUM_FENCE_INDICES];
-        for i in 0..NUM_FARMYARD_SPACES {
-            match self.farmyard_spaces[i] {
+        for (i, space) in self.farmyard_spaces.iter().enumerate() {
+            match space {
                 FarmyardSpace::Empty
                 | FarmyardSpace::FencedPasture(_, _)
                 | FarmyardSpace::UnfencedStable(_) => {
@@ -355,28 +351,26 @@ impl Farm {
                     } else {
                         best_arrangements.insert(w, (vec![arr], score));
                     }
-                } else {
-                    if let Some((last_idx, e)) = v.last() {
-                        for neighbors in &graph[last_idx] {
-                            if !available_fence_spots[neighbors.1] {
-                                continue;
-                            }
-
-                            // Skip if edge is the same
-                            if *e == neighbors.1 {
-                                continue;
-                            }
-
-                            // Don't proceed if node was already seen in the sequence
-                            if v.iter().any(|&x| x.0 == neighbors.0) {
-                                continue;
-                            }
-
-                            // Add the node to the sequence to make a new sequence
-                            let mut vv = v.clone();
-                            vv.push(*neighbors);
-                            queue.push_back((idx1, vv));
+                } else if let Some((last_idx, e)) = v.last() {
+                    for neighbors in &graph[last_idx] {
+                        if !available_fence_spots[neighbors.1] {
+                            continue;
                         }
+
+                        // Skip if edge is the same
+                        if *e == neighbors.1 {
+                            continue;
+                        }
+
+                        // Don't proceed if node was already seen in the sequence
+                        if v.iter().any(|&x| x.0 == neighbors.0) {
+                            continue;
+                        }
+
+                        // Add the node to the sequence to make a new sequence
+                        let mut vv = v.clone();
+                        vv.push(*neighbors);
+                        queue.push_back((idx1, vv));
                     }
                 }
             }
@@ -428,8 +422,8 @@ impl Farm {
 
         let fenced_farmyard_spaces = self.mark_fenced_spaces();
 
-        for idx in 0..NUM_FARMYARD_SPACES {
-            if !fenced_farmyard_spaces[idx] {
+        for (idx, space) in fenced_farmyard_spaces.iter().enumerate() {
+            if !space {
                 continue;
             }
             match self.farmyard_spaces[idx] {
