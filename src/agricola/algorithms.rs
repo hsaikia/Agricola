@@ -3,7 +3,7 @@ use super::mcts::GameRecord;
 use super::state::State;
 use std::collections::HashMap;
 
-const DEPTH : usize = 10;
+const DEPTH : usize = 100;
 
 #[derive(Debug, Clone, Hash, PartialEq)]
 pub enum PlayerType {
