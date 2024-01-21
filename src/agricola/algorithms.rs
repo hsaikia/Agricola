@@ -3,8 +3,6 @@ use super::mcts::GameRecord;
 use super::state::State;
 use std::collections::HashMap;
 
-const DEPTH : usize = 100;
-
 #[derive(Debug, Clone, Hash, PartialEq)]
 pub enum PlayerType {
     Human,
@@ -64,7 +62,7 @@ impl AI {
         records
     }
 
-    pub fn sample_once(&mut self, state: &State, debug: bool) {
+    pub fn sample_once(&mut self, state: &State, opt_depth: Option<usize>, debug: bool) {
         let mut tmp_game: State;
         let selected_action =
             GameRecord::choose_uct(state.current_player_idx, &self.records, &self.cache);
@@ -118,7 +116,7 @@ impl AI {
         }
 
         // Perform playout - play the game out until the end
-        tmp_game.play_random(&mut path, DEPTH);
+        tmp_game.play_random(&mut path, opt_depth);
         // Calculate result and backpropagate to the root
         let res = tmp_game.fitness();
         if debug {

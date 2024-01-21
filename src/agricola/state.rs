@@ -128,11 +128,13 @@ impl State {
         s.finish()
     }
 
-    pub fn play_random(&mut self, path: &mut Vec<u64>, depth: usize) {
-        let mut d : usize = 0;
+    pub fn play_random(&mut self, path: &mut Vec<u64>, opt_depth: Option<usize>) {
+        let mut d: usize = 0;
         loop {
-            if d == depth {
-                break;
+            if let Some(depth) = opt_depth {
+                if d == depth {
+                    break;
+                }
             }
             let choices = Action::next_choices(self);
             if choices.is_empty() {
@@ -417,5 +419,13 @@ impl State {
             ret = format!("{}\n{major:?}", ret);
         }
         ret
+    }
+
+    pub fn player(&self) -> &Player {
+        &self.players[self.current_player_idx]
+    }
+
+    pub fn player_mut(&mut self) -> &mut Player {
+        &mut self.players[self.current_player_idx]
     }
 }

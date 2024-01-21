@@ -139,7 +139,7 @@ impl App {
 
                         if !self.move_selected && self.ai.num_games_sampled < NUM_GAMES_TO_SIMULATE
                         {
-                            self.ai.sample_once(state, false);
+                            self.ai.sample_once(state, Some(100), false);
                             return;
                         }
                         let records = self.ai.sorted_records();
@@ -362,7 +362,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         }
         let farm_areas = Layout::default()
             .direction(Direction::Vertical)
-            .constraints(constraints.as_ref())
+            .constraints(constraints)
             .split(chunks[1]);
         for (i, p) in state.players.iter().enumerate() {
             let mut title_string = format!(

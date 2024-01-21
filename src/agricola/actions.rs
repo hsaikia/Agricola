@@ -96,7 +96,7 @@ pub enum Action {
 impl Action {
     #[allow(clippy::too_many_lines)]
     pub fn next_choices(state: &State) -> Vec<Self> {
-        let player = &state.players[state.current_player_idx];
+        let player = state.player();
         let mut ret: Vec<Self> = Vec::new();
         match &state.last_action {
             Self::GetResourceFromChildless(_res) => vec![Self::PlaceWorker],
@@ -231,7 +231,7 @@ impl Action {
     }
 
     fn occupation_choices(state: &State, cheaper: bool) -> Vec<Self> {
-        let player = &state.players[state.current_player_idx];
+        let player = state.player();
         let mut required_food = if cheaper { 1 } else { 2 };
         // First Occ on L1 = 0 else 1. So 0, 1, 1, 1, ..
         // First two Occs on L2 = 1 else 2. So 1, 1, 2, 2, 2, ..
@@ -289,7 +289,7 @@ impl Action {
         from_house_redev: &CalledFromHouseRedevelopment,
         from_farm_redev: &CalledFromFarmRedevelopment,
     ) -> Vec<Self> {
-        let player = &state.players[state.current_player_idx];
+        let player = state.player();
         let mut ret: Vec<Self> = Vec::new();
         if from_house_redev.0
             && MajorImprovement::can_build_major(
@@ -455,7 +455,7 @@ impl Action {
     }
 
     fn place_worker_choices(state: &State) -> Vec<Self> {
-        let player = &state.players[state.current_player_idx];
+        let player = state.player();
         let mut ret: Vec<Self> = Vec::new();
 
         // At the start of each round, if you have at least 3 rooms but only 2 people, you get 1 food and 1 crop of your choice (grain or vegetable).
@@ -570,7 +570,7 @@ impl Action {
     }
 
     fn build_major_choices(state: &State) -> Vec<Self> {
-        let player = &state.players[state.current_player_idx];
+        let player = state.player();
         let mut ret: Vec<Self> = Vec::new();
 
         let majors_available = MajorImprovement::available_majors_to_build(
@@ -801,10 +801,9 @@ impl Action {
         match self {
             Self::GetResourceFromChildless(res) => {
                 // At the start of each round, if you have at least 3 rooms but only 2 people, you get 1 food and 1 crop of your choice (grain or vegetable).
-                let player = &mut state.players[state.current_player_idx];
-                player.resources[res.clone()] += 1;
-                player.resources[Resource::Food] += 1;
-                player.before_round_start = false;
+                state.player_mut().resources[res.clone()] += 1;
+                state.player_mut().resources[Resource::Food] += 1;
+                state.player_mut().before_round_start = false;
             }
             Self::StartRound => {
                 state.init_new_round();
@@ -813,30 +812,24 @@ impl Action {
                 state.starting_player_idx = state.current_player_idx;
             }
             Self::PlayOccupation(occ, food_cost) => {
-                let player = &mut state.players[state.current_player_idx];
-                player.occupations.push(occ.clone());
+                state.player_mut().occupations.push(occ.clone());
                 state.available_occupations.retain(|x| x != occ);
-                player.resources[Resource::Food] -= food_cost;
+                state.player_mut().resources[Resource::Food] -= food_cost;
             }
             Self::Plow(_, pasture_idx) => {
-                let player = &mut state.players[state.current_player_idx];
-                player.add_new_field(pasture_idx);
+                state.player_mut().add_new_field(pasture_idx);
             }
             Self::Fence(pasture_indices) => {
-                let player = &mut state.players[state.current_player_idx];
-                player.fence(pasture_indices);
+                state.player_mut().fence(pasture_indices);
             }
             Self::BuildRoom(pasture_idx) => {
-                let player = &mut state.players[state.current_player_idx];
-                player.build_room(pasture_idx);
+                state.player_mut().build_room(pasture_idx);
             }
             Self::BuildStable(pasture_idx) => {
-                let player = &mut state.players[state.current_player_idx];
-                player.build_stable(pasture_idx);
+                state.player_mut().build_stable(pasture_idx);
             }
             Self::Sow(_called_from_grain_util, seed) => {
-                let player = &mut state.players[state.current_player_idx];
-                player.sow_field(seed);
+                state.player_mut().sow_field(seed);
             }
             Self::BuildCard(major, return_fireplace) => {
                 state.build_major(major, return_fireplace.0);
@@ -851,10 +844,12 @@ impl Action {
             Self::EndTurn => state.end_turn(),
             Self::PreHarvest => state.pre_harvest(),
             Self::Convert(res_ex, opt_major, _) => {
-                let player = &mut state.players[state.current_player_idx];
-                player.use_exchange(res_ex);
+                state.player_mut().use_exchange(res_ex);
                 if let Some(major) = opt_major {
-                    player.majors_used_for_harvest.push(major.clone());
+                    state
+                        .player_mut()
+                        .majors_used_for_harvest
+                        .push(major.clone());
                 }
             }
             Self::PayFoodOrBeg => state.pay_food_or_beg(),

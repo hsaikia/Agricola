@@ -253,6 +253,10 @@ impl Player {
         self.farm.add_field(*idx);
     }
 
+    pub fn can_build_room(&self) -> bool {
+        !self.room_options().is_empty()
+    }
+
     pub fn room_options(&self) -> Vec<usize> {
         if can_pay_for_resource(&self.build_room_cost, &self.resources) {
             return self.farm.best_room_positions();

@@ -22,17 +22,21 @@ fn main() {
 
         if actions.len() == 1 {
             actions[0].apply_choice(&mut state);
-            println!("{:?}", actions[0]);
+            //println!("{:?}", actions[0]);
             continue;
         }
 
         ai_agent.init_records(&actions, &state);
         for _ in 0..NUM_GAMES_TO_SIMULATE {
-            ai_agent.sample_once(&state, true);
+            ai_agent.sample_once(&state, Some(10), false);
         }
 
+        println!("Scores {:?}", state.scores());
         let records = ai_agent.sorted_records();
         records[0].action.apply_choice(&mut state);
-        println!("{:?}", records[0].action);
+        println!(
+            "Player {} choose action [{:?}]",
+            state.current_player_idx, records[0].action
+        );
     }
 }
