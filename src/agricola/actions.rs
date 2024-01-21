@@ -2,9 +2,7 @@ use super::farm::Seed;
 use super::major_improvements::MajorImprovement;
 use super::occupations::Occupation;
 use super::player::Player;
-use super::primitives::{
-    can_pay_for_resource, new_res, take_resource, Resource, ResourceExchange, Resources,
-};
+use super::primitives::*;
 use super::state::State;
 pub const NUM_RESOURCE_SPACES: usize = 18;
 
@@ -90,7 +88,7 @@ pub enum Action {
     PayFoodOrBeg,
     StartGame,
     PlayOccupation(Occupation, usize),
-    GetResourceFromChildless(Resource),
+    GetResourceFromChildless(usize), // index of Grain or Vegetable
 }
 
 impl Action {
@@ -244,7 +242,7 @@ impl Action {
 
         let mut ret: Vec<Self> = Vec::new();
 
-        if player.resources[Resource::Food] < required_food {
+        if player.resources[Food.index()] < required_food {
             ret.extend(Self::anytime_conversions(
                 player,
                 &ConversionStage::BeforePlayOccupation(cheaper),
@@ -310,11 +308,11 @@ impl Action {
 
     fn anytime_conversions(player: &Player, stage: &ConversionStage) -> Vec<Self> {
         let mut ret: Vec<Self> = Vec::new();
-        if player.resources[Resource::Grain] > 0 {
+        if player.resources[Grain.index()] > 0 {
             ret.push(Self::Convert(
                 ResourceExchange {
-                    from: Resource::Grain,
-                    to: Resource::Food,
+                    from: Grain.index(),
+                    to: Food.index(),
                     num_from: 1,
                     num_to: 1,
                 },
@@ -323,11 +321,11 @@ impl Action {
             ));
         }
 
-        if player.resources[Resource::Vegetable] > 0 {
+        if player.resources[Vegetable.index()] > 0 {
             ret.push(Self::Convert(
                 ResourceExchange {
-                    from: Resource::Vegetable,
-                    to: Resource::Food,
+                    from: Vegetable.index(),
+                    to: Food.index(),
                     num_from: 1,
                     num_to: 1,
                 },
@@ -414,10 +412,10 @@ impl Action {
 
     fn sow_choices(player: &Player, from_grain_util: &CalledFromGrainUtilization) -> Vec<Self> {
         let mut ret: Vec<Self> = Vec::new();
-        if player.can_sow() && player.resources[Resource::Grain] > 0 {
+        if player.can_sow() && player.resources[Grain.index()] > 0 {
             ret.push(Self::Sow(from_grain_util.clone(), Seed::Grain));
         }
-        if player.can_sow() && player.resources[Resource::Vegetable] > 0 {
+        if player.can_sow() && player.resources[Vegetable.index()] > 0 {
             ret.push(Self::Sow(from_grain_util.clone(), Seed::Vegetable));
         }
         ret
@@ -425,7 +423,7 @@ impl Action {
 
     fn baking_choices(player: &Player, from_grain_util: bool) -> Vec<Self> {
         let mut ret: Vec<Self> = Vec::new();
-        if player.resources[Resource::Grain] > 1
+        if player.resources[Grain.index()] > 1
             && player.major_cards.contains(&MajorImprovement::StoneOven)
         {
             ret.push(Self::BakeBread(
@@ -462,8 +460,8 @@ impl Action {
         if player.before_round_start && player.occupations.contains(&Occupation::Childless) {
             let people = player.adults + player.children; // children should always be zero (grown into adults) at this point
             if people == 2 && people < player.farm.room_indices().len() {
-                ret.push(Self::GetResourceFromChildless(Resource::Grain));
-                ret.push(Self::GetResourceFromChildless(Resource::Vegetable));
+                ret.push(Self::GetResourceFromChildless(Grain.index()));
+                ret.push(Self::GetResourceFromChildless(Vegetable.index()));
             }
         }
 
@@ -591,17 +589,17 @@ impl Action {
 
     pub fn update_resources_on_accumulation_spaces(&self, res: &mut Resources) {
         match self {
-            Self::UseCopse => res[Resource::Wood] += 1,
-            Self::UseGrove => res[Resource::Wood] += 2,
-            Self::UseForest => res[Resource::Wood] += 3,
-            Self::UseHollow => res[Resource::Clay] += 2,
-            Self::UseClayPit => res[Resource::Clay] += 1,
-            Self::UseReedBank => res[Resource::Reed] += 1,
-            Self::UseTravelingPlayers | Self::UseFishing => res[Resource::Food] += 1,
-            Self::UseWesternQuarry | Self::UseEasternQuarry => res[Resource::Stone] += 1,
-            Self::UseSheepMarket => res[Resource::Sheep] += 1,
-            Self::UsePigMarket => res[Resource::Pigs] += 1,
-            Self::UseCattleMarket => res[Resource::Cattle] += 1,
+            Self::UseCopse => res[Wood.index()] += 1,
+            Self::UseGrove => res[Wood.index()] += 2,
+            Self::UseForest => res[Wood.index()] += 3,
+            Self::UseHollow => res[Clay.index()] += 2,
+            Self::UseClayPit => res[Clay.index()] += 1,
+            Self::UseReedBank => res[Reed.index()] += 1,
+            Self::UseTravelingPlayers | Self::UseFishing => res[Food.index()] += 1,
+            Self::UseWesternQuarry | Self::UseEasternQuarry => res[Stone.index()] += 1,
+            Self::UseSheepMarket => res[Sheep.index()] += 1,
+            Self::UsePigMarket => res[Boar.index()] += 1,
+            Self::UseCattleMarket => res[Cow.index()] += 1,
             _ => (),
         }
     }
@@ -665,29 +663,29 @@ impl Action {
         let mut resource_map = [new_res(); NUM_RESOURCE_SPACES];
         resource_map[Self::UseResourceMarket.resource_map_idx().unwrap()] = {
             let mut res = new_res();
-            res[Resource::Food] = 1;
-            res[Resource::Stone] = 1;
-            res[Resource::Reed] = 1;
+            res[Food.index()] = 1;
+            res[Stone.index()] = 1;
+            res[Reed.index()] = 1;
             res
         };
         resource_map[Self::UseDayLaborer.resource_map_idx().unwrap()] = {
             let mut res = new_res();
-            res[Resource::Food] = 2;
+            res[Food.index()] = 2;
             res
         };
         resource_map[Self::UseGrainSeeds.resource_map_idx().unwrap()] = {
             let mut res = new_res();
-            res[Resource::Grain] = 1;
+            res[Grain.index()] = 1;
             res
         };
         resource_map[Self::UseVegetableSeeds.resource_map_idx().unwrap()] = {
             let mut res = new_res();
-            res[Resource::Vegetable] = 1;
+            res[Vegetable.index()] = 1;
             res
         };
         resource_map[Self::UseMeetingPlace.resource_map_idx().unwrap()] = {
             let mut res = new_res();
-            res[Resource::Food] = 1;
+            res[Food.index()] = 1;
             res
         };
         resource_map
@@ -801,8 +799,8 @@ impl Action {
         match self {
             Self::GetResourceFromChildless(res) => {
                 // At the start of each round, if you have at least 3 rooms but only 2 people, you get 1 food and 1 crop of your choice (grain or vegetable).
-                state.player_mut().resources[res.clone()] += 1;
-                state.player_mut().resources[Resource::Food] += 1;
+                state.player_mut().resources[*res] += 1;
+                state.player_mut().resources[Food.index()] += 1;
                 state.player_mut().before_round_start = false;
             }
             Self::StartRound => {
@@ -814,7 +812,7 @@ impl Action {
             Self::PlayOccupation(occ, food_cost) => {
                 state.player_mut().occupations.push(occ.clone());
                 state.available_occupations.retain(|x| x != occ);
-                state.player_mut().resources[Resource::Food] -= food_cost;
+                state.player_mut().resources[Food.index()] -= food_cost;
             }
             Self::Plow(_, pasture_idx) => {
                 state.player_mut().add_new_field(pasture_idx);

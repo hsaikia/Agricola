@@ -1,4 +1,4 @@
-use super::primitives::{can_pay_for_resource, new_res, Resource, ResourceExchange, Resources};
+use super::primitives::*;
 
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub enum MajorImprovement {
@@ -87,26 +87,26 @@ impl MajorImprovement {
             Self::Fireplace(_) => {
                 let ret: Vec<ResourceExchange> = vec![
                     ResourceExchange {
-                        from: Resource::Sheep,
-                        to: Resource::Food,
+                        from: Sheep.index(),
+                        to: Food.index(),
                         num_from: 1,
                         num_to: 2,
                     },
                     ResourceExchange {
-                        from: Resource::Pigs,
-                        to: Resource::Food,
+                        from: Boar.index(),
+                        to: Food.index(),
                         num_from: 1,
                         num_to: 2,
                     },
                     ResourceExchange {
-                        from: Resource::Vegetable,
-                        to: Resource::Food,
+                        from: Vegetable.index(),
+                        to: Food.index(),
                         num_from: 1,
                         num_to: 2,
                     },
                     ResourceExchange {
-                        from: Resource::Cattle,
-                        to: Resource::Food,
+                        from: Cow.index(),
+                        to: Food.index(),
                         num_from: 1,
                         num_to: 3,
                     },
@@ -116,26 +116,26 @@ impl MajorImprovement {
             Self::CookingHearth(_) => {
                 let ret: Vec<ResourceExchange> = vec![
                     ResourceExchange {
-                        from: Resource::Sheep,
-                        to: Resource::Food,
+                        from: Sheep.index(),
+                        to: Food.index(),
                         num_from: 1,
                         num_to: 2,
                     },
                     ResourceExchange {
-                        from: Resource::Pigs,
-                        to: Resource::Food,
+                        from: Boar.index(),
+                        to: Food.index(),
                         num_from: 1,
                         num_to: 3,
                     },
                     ResourceExchange {
-                        from: Resource::Vegetable,
-                        to: Resource::Food,
+                        from: Vegetable.index(),
+                        to: Food.index(),
                         num_from: 1,
                         num_to: 3,
                     },
                     ResourceExchange {
-                        from: Resource::Cattle,
-                        to: Resource::Food,
+                        from: Cow.index(),
+                        to: Food.index(),
                         num_from: 1,
                         num_to: 4,
                     },
@@ -144,24 +144,24 @@ impl MajorImprovement {
             }
             Self::Joinery => {
                 vec![ResourceExchange {
-                    from: Resource::Wood,
-                    to: Resource::Food,
+                    from: Wood.index(),
+                    to: Food.index(),
                     num_from: 1,
                     num_to: 2,
                 }]
             }
             Self::Pottery => {
                 vec![ResourceExchange {
-                    from: Resource::Clay,
-                    to: Resource::Food,
+                    from: Clay.index(),
+                    to: Food.index(),
                     num_from: 1,
                     num_to: 2,
                 }]
             }
             Self::BasketmakersWorkshop => {
                 vec![ResourceExchange {
-                    from: Resource::Reed,
-                    to: Resource::Food,
+                    from: Reed.index(),
+                    to: Food.index(),
                     num_from: 1,
                     num_to: 3,
                 }]
@@ -183,48 +183,48 @@ impl MajorImprovement {
         match self {
             Self::Fireplace(cheaper) => {
                 let mut res = new_res();
-                res[Resource::Clay] = if *cheaper { 2 } else { 3 };
+                res[Clay.index()] = if *cheaper { 2 } else { 3 };
                 res
             }
             Self::CookingHearth(cheaper) => {
                 let mut res = new_res();
-                res[Resource::Clay] = if *cheaper { 4 } else { 5 };
+                res[Clay.index()] = if *cheaper { 4 } else { 5 };
                 res
             }
             Self::Well => {
                 let mut res = new_res();
-                res[Resource::Wood] = 1;
-                res[Resource::Stone] = 3;
+                res[Wood.index()] = 1;
+                res[Stone.index()] = 3;
                 res
             }
             Self::ClayOven => {
                 let mut res = new_res();
-                res[Resource::Clay] = 3;
-                res[Resource::Stone] = 1;
+                res[Clay.index()] = 3;
+                res[Stone.index()] = 1;
                 res
             }
             Self::StoneOven => {
                 let mut res = new_res();
-                res[Resource::Clay] = 1;
-                res[Resource::Stone] = 3;
+                res[Clay.index()] = 1;
+                res[Stone.index()] = 3;
                 res
             }
             Self::Joinery => {
                 let mut res = new_res();
-                res[Resource::Wood] = 2;
-                res[Resource::Stone] = 2;
+                res[Wood.index()] = 2;
+                res[Stone.index()] = 2;
                 res
             }
             Self::Pottery => {
                 let mut res = new_res();
-                res[Resource::Clay] = 2;
-                res[Resource::Stone] = 2;
+                res[Clay.index()] = 2;
+                res[Stone.index()] = 2;
                 res
             }
             Self::BasketmakersWorkshop => {
                 let mut res = new_res();
-                res[Resource::Reed] = 2;
-                res[Resource::Stone] = 2;
+                res[Reed.index()] = 2;
+                res[Stone.index()] = 2;
                 res
             }
         }

@@ -1,7 +1,7 @@
 use super::farm::{Animal, FarmyardSpace, House, Seed};
 use super::major_improvements::MajorImprovement;
 use super::player::Player;
-use super::primitives::{Resource, Resources};
+use super::primitives::*;
 
 const FIELD_SCORE: [i32; 6] = [-1, -1, 1, 2, 3, 4];
 const PASTURE_SCORE: [i32; 5] = [-1, 1, 2, 3, 4];
@@ -38,17 +38,17 @@ fn score_farm(player: &Player) -> i32 {
                 }
                 if let Some(animal) = opt_animal {
                     match animal.0 {
-                        Animal::Sheep => res[Resource::Sheep] += 1,
-                        Animal::Pigs => res[Resource::Pigs] += 1,
-                        Animal::Cattle => res[Resource::Cattle] += 1,
+                        Animal::Sheep => res[Sheep.index()] += 1,
+                        Animal::Boar => res[Boar.index()] += 1,
+                        Animal::Cow => res[Cow.index()] += 1,
                     }
                 }
             }
             FarmyardSpace::Field(Some((seed, amt))) => {
                 num_fields += 1;
                 match seed {
-                    Seed::Grain => res[Resource::Grain] += amt,
-                    Seed::Vegetable => res[Resource::Vegetable] += amt,
+                    Seed::Grain => res[Grain.index()] += amt,
+                    Seed::Vegetable => res[Vegetable.index()] += amt,
                 }
             }
             _ => (),
@@ -57,11 +57,11 @@ fn score_farm(player: &Player) -> i32 {
 
     score += PASTURE_SCORE[num_pastures.min(PASTURE_SCORE.len() - 1)];
     score += FIELD_SCORE[num_fields.min(FIELD_SCORE.len() - 1)];
-    score += GRAIN_SCORE[res[Resource::Grain].min(GRAIN_SCORE.len() - 1)];
-    score += VEGETABLE_SCORE[res[Resource::Vegetable].min(VEGETABLE_SCORE.len() - 1)];
-    score += SHEEP_SCORE[res[Resource::Sheep].min(SHEEP_SCORE.len() - 1)];
-    score += PIGS_SCORE[res[Resource::Sheep].min(PIGS_SCORE.len() - 1)];
-    score += CATTLE_SCORE[res[Resource::Sheep].min(CATTLE_SCORE.len() - 1)];
+    score += GRAIN_SCORE[res[Grain.index()].min(GRAIN_SCORE.len() - 1)];
+    score += VEGETABLE_SCORE[res[Vegetable.index()].min(VEGETABLE_SCORE.len() - 1)];
+    score += SHEEP_SCORE[res[Sheep.index()].min(SHEEP_SCORE.len() - 1)];
+    score += PIGS_SCORE[res[Sheep.index()].min(PIGS_SCORE.len() - 1)];
+    score += CATTLE_SCORE[res[Sheep.index()].min(CATTLE_SCORE.len() - 1)];
 
     score
 }
@@ -74,29 +74,29 @@ fn score_cards(player: &Player) -> i32 {
         ret += major.points() as i32;
         match major {
             MajorImprovement::Joinery => {
-                if player.resources[Resource::Wood] >= 7 {
+                if player.resources[Wood.index()] >= 7 {
                     ret += 3;
-                } else if player.resources[Resource::Wood] >= 5 {
+                } else if player.resources[Wood.index()] >= 5 {
                     ret += 2;
-                } else if player.resources[Resource::Wood] >= 3 {
+                } else if player.resources[Wood.index()] >= 3 {
                     ret += 1;
                 }
             }
             MajorImprovement::Pottery => {
-                if player.resources[Resource::Clay] >= 7 {
+                if player.resources[Clay.index()] >= 7 {
                     ret += 3;
-                } else if player.resources[Resource::Clay] >= 5 {
+                } else if player.resources[Clay.index()] >= 5 {
                     ret += 2;
-                } else if player.resources[Resource::Clay] >= 3 {
+                } else if player.resources[Clay.index()] >= 3 {
                     ret += 1;
                 }
             }
             MajorImprovement::BasketmakersWorkshop => {
-                if player.resources[Resource::Reed] >= 5 {
+                if player.resources[Reed.index()] >= 5 {
                     ret += 3;
-                } else if player.resources[Resource::Reed] >= 4 {
+                } else if player.resources[Reed.index()] >= 4 {
                     ret += 2;
-                } else if player.resources[Resource::Reed] >= 2 {
+                } else if player.resources[Reed.index()] >= 2 {
                     ret += 1;
                 }
             }

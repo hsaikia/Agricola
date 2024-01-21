@@ -1,4 +1,4 @@
-use super::primitives::{Resource, Resources};
+use super::primitives::*;
 use std::{collections::HashMap, collections::VecDeque, hash::Hash};
 
 const L: usize = 5;
@@ -26,8 +26,8 @@ pub enum Seed {
 #[derive(Copy, Clone, Debug, Hash, PartialEq)]
 pub enum Animal {
     Sheep,
-    Pigs,
-    Cattle,
+    Boar,
+    Cow,
 }
 
 type ContainsStable = bool;
@@ -191,12 +191,8 @@ impl Farm {
                 let idx_from = i * l + j;
                 let idx_to = i * l + j + 2;
 
-                ret.entry(idx_from)
-                    .or_insert_with(Vec::new)
-                    .push((idx_to, edge_idx));
-                ret.entry(idx_to)
-                    .or_insert_with(Vec::new)
-                    .push((idx_from, edge_idx));
+                ret.entry(idx_from).or_default().push((idx_to, edge_idx));
+                ret.entry(idx_to).or_default().push((idx_from, edge_idx));
             }
         }
 
@@ -214,12 +210,8 @@ impl Farm {
                 let idx_from = i * l + j;
                 let idx_to = (i + 2) * l + j;
 
-                ret.entry(idx_from)
-                    .or_insert_with(Vec::new)
-                    .push((idx_to, edge_idx));
-                ret.entry(idx_to)
-                    .or_insert_with(Vec::new)
-                    .push((idx_from, edge_idx));
+                ret.entry(idx_from).or_default().push((idx_to, edge_idx));
+                ret.entry(idx_to).or_default().push((idx_from, edge_idx));
             }
         }
         ret
@@ -470,7 +462,7 @@ impl Farm {
             if *pi == i32::MAX {
                 continue;
             }
-            let values = pastures.entry(*pi).or_insert(Vec::new());
+            let values = pastures.entry(*pi).or_default();
             values.push(i);
         }
 
@@ -502,9 +494,9 @@ impl Farm {
         // Add Pet
         if let Some((pet, amount)) = self.pet {
             match pet {
-                Animal::Sheep => res[Resource::Sheep] += amount,
-                Animal::Pigs => res[Resource::Pigs] += amount,
-                Animal::Cattle => res[Resource::Cattle] += amount,
+                Animal::Sheep => res[Sheep.index()] += amount,
+                Animal::Boar => res[Boar.index()] += amount,
+                Animal::Cow => res[Cow.index()] += amount,
             }
         }
 
@@ -517,9 +509,9 @@ impl Farm {
                 | FarmyardSpace::FencedPasture(animals, _) => {
                     if let Some((animal, amt)) = animals {
                         match *animal {
-                            Animal::Sheep => res[Resource::Sheep] += *amt,
-                            Animal::Pigs => res[Resource::Pigs] += *amt,
-                            Animal::Cattle => res[Resource::Cattle] += *amt,
+                            Animal::Sheep => res[Sheep.index()] += *amt,
+                            Animal::Boar => res[Boar.index()] += *amt,
+                            Animal::Cow => res[Cow.index()] += *amt,
                         }
                         *animals = None
                     }
@@ -533,9 +525,9 @@ impl Farm {
         self.farm_animals_to_resources(res);
 
         let mut animal_count = vec![
-            (Animal::Sheep, res[Resource::Sheep]),
-            (Animal::Pigs, res[Resource::Pigs]),
-            (Animal::Cattle, res[Resource::Cattle]),
+            (Animal::Sheep, res[Sheep.index()]),
+            (Animal::Boar, res[Boar.index()]),
+            (Animal::Cow, res[Cow.index()]),
         ];
 
         if breed {
@@ -595,9 +587,9 @@ impl Farm {
         // Leftovers are put back in the resources array
         for (animal, amt) in animal_count {
             match animal {
-                Animal::Sheep => res[Resource::Sheep] = amt,
-                Animal::Pigs => res[Resource::Pigs] = amt,
-                Animal::Cattle => res[Resource::Cattle] = amt,
+                Animal::Sheep => res[Sheep.index()] = amt,
+                Animal::Boar => res[Boar.index()] = amt,
+                Animal::Cow => res[Cow.index()] = amt,
             }
         }
     }
@@ -938,15 +930,15 @@ mod tests {
         farm.fence_spaces(&vec![29, 39, 41, 51]);
         farm.build_stable(13);
         farm.build_stable(3);
-        res[Resource::Sheep] = 4;
+        res[Sheep.index()] = 4;
         farm.reorg_animals(&mut res, false);
-        assert_eq!(res[Resource::Sheep], 0);
+        assert_eq!(res[Sheep.index()], 0);
         println!("{:?}", farm);
-        res[Resource::Sheep] = 0;
-        res[Resource::Cattle] = 14;
+        res[Sheep.index()] = 0;
+        res[Cow.index()] = 14;
         farm.reorg_animals(&mut res, false);
         println!("{:?}", farm);
-        assert_eq!(res[Resource::Cattle], 1);
-        assert_eq!(res[Resource::Sheep], 1);
+        assert_eq!(res[Cow.index()], 1);
+        assert_eq!(res[Sheep.index()], 1);
     }
 }

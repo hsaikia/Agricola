@@ -2,10 +2,7 @@ use super::algorithms::PlayerType;
 use super::farm::{Animal, Farm, FarmyardSpace, House, Seed};
 use super::major_improvements::MajorImprovement;
 use super::occupations::Occupation;
-use super::primitives::{
-    can_pay_for_resource, new_res, pay_for_resource, Resource, ResourceExchange, Resources,
-    RESOURCE_EMOJIS,
-};
+use super::primitives::*;
 
 const MAX_FAMILY_MEMBERS: usize = 5;
 const STARTING_PEOPLE: usize = 2;
@@ -34,18 +31,18 @@ pub struct Player {
 impl Player {
     pub fn create_new(food: usize, player_type: PlayerType) -> Self {
         let mut res = new_res();
-        res[Resource::Food] = food;
+        res[Food.index()] = food;
 
         let mut room_cost = new_res();
-        room_cost[Resource::Wood] = 5;
-        room_cost[Resource::Reed] = 2;
+        room_cost[Wood.index()] = 5;
+        room_cost[Reed.index()] = 2;
 
         let mut stable_cost = new_res();
-        stable_cost[Resource::Wood] = 2;
+        stable_cost[Wood.index()] = 2;
 
         let mut reno_cost = new_res();
-        reno_cost[Resource::Clay] = 2;
-        reno_cost[Resource::Reed] = 1;
+        reno_cost[Clay.index()] = 2;
+        reno_cost[Reed.index()] = 1;
 
         Player {
             player_type,
@@ -71,14 +68,14 @@ impl Player {
         let crops = self.farm.harvest_fields();
         for crop in crops {
             match crop {
-                Seed::Grain => self.resources[Resource::Grain] += 1,
-                Seed::Vegetable => self.resources[Resource::Vegetable] += 1,
+                Seed::Grain => self.resources[Grain.index()] += 1,
+                Seed::Vegetable => self.resources[Vegetable.index()] += 1,
             }
         }
     }
 
     pub fn got_enough_food(&self) -> bool {
-        2 * self.adults + self.children <= self.resources[Resource::Food]
+        2 * self.adults + self.children <= self.resources[Food.index()]
     }
 
     pub fn player_type(&self) -> PlayerType {
@@ -88,12 +85,12 @@ impl Player {
     pub fn reorg_animals(&mut self, breed: bool) {
         self.farm.reorg_animals(&mut self.resources, breed);
 
-        let sheep = self.resources[Resource::Sheep];
-        self.resources[Resource::Sheep] = 0;
-        let pigs = self.resources[Resource::Pigs];
-        self.resources[Resource::Pigs] = 0;
-        let cattle = self.resources[Resource::Cattle];
-        self.resources[Resource::Cattle] = 0;
+        let sheep = self.resources[Sheep.index()];
+        self.resources[Sheep.index()] = 0;
+        let pigs = self.resources[Boar.index()];
+        self.resources[Boar.index()] = 0;
+        let cattle = self.resources[Cow.index()];
+        self.resources[Cow.index()] = 0;
 
         if self
             .major_cards
@@ -102,7 +99,7 @@ impl Player {
                 .major_cards
                 .contains(&MajorImprovement::CookingHearth(false))
         {
-            self.resources[Resource::Food] += 2 * sheep + 3 * pigs + 4 * cattle;
+            self.resources[Food.index()] += 2 * sheep + 3 * pigs + 4 * cattle;
         } else if self
             .major_cards
             .contains(&MajorImprovement::Fireplace(true))
@@ -110,7 +107,7 @@ impl Player {
                 .major_cards
                 .contains(&MajorImprovement::Fireplace(false))
         {
-            self.resources[Resource::Food] += 2 * sheep + 2 * pigs + 3 * cattle;
+            self.resources[Food.index()] += 2 * sheep + 2 * pigs + 3 * cattle;
         }
     }
 
@@ -131,7 +128,7 @@ impl Player {
                 .contains(&MajorImprovement::CookingHearth(false))
             || self.major_cards.contains(&MajorImprovement::ClayOven)
             || self.major_cards.contains(&MajorImprovement::StoneOven))
-            && self.resources[Resource::Grain] > 0
+            && self.resources[Grain.index()] > 0
         {
             return true;
         }
@@ -141,19 +138,19 @@ impl Player {
     pub fn sow_field(&mut self, seed: &Seed) {
         self.farm.sow_field(seed);
         match seed {
-            Seed::Grain => self.resources[Resource::Grain] -= 1,
-            Seed::Vegetable => self.resources[Resource::Vegetable] -= 1,
+            Seed::Grain => self.resources[Grain.index()] -= 1,
+            Seed::Vegetable => self.resources[Vegetable.index()] -= 1,
         }
     }
 
     pub fn can_sow(&self) -> bool {
-        (self.resources[Resource::Grain] > 0 || self.resources[Resource::Vegetable] > 0)
+        (self.resources[Grain.index()] > 0 || self.resources[Vegetable.index()] > 0)
             && self.farm.can_sow()
     }
 
     pub fn fencing_choices(&self) -> Vec<Vec<usize>> {
         let mut ret: Vec<Vec<usize>> = Vec::new();
-        let fencing_arrangements = self.farm.fencing_options(self.resources[Resource::Wood]);
+        let fencing_arrangements = self.farm.fencing_options(self.resources[Wood.index()]);
         for idxs in fencing_arrangements {
             ret.push(idxs);
         }
@@ -162,22 +159,22 @@ impl Player {
 
     pub fn fence(&mut self, fence_indices: &Vec<usize>) {
         assert!(self.can_fence());
-        let fencing_options = self.farm.fencing_options(self.resources[Resource::Wood]);
+        let fencing_options = self.farm.fencing_options(self.resources[Wood.index()]);
         let mut wood = 0;
-        for (_i, fo) in fencing_options.iter().enumerate() {
+        for fo in fencing_options.iter() {
             if fo == fence_indices {
                 wood = fo.len();
             }
         }
 
         self.farm.fence_spaces(fence_indices);
-        self.resources[Resource::Wood] -= wood;
+        self.resources[Wood.index()] -= wood;
     }
 
     pub fn can_fence(&self) -> bool {
         !self
             .farm
-            .fencing_options(self.resources[Resource::Wood])
+            .fencing_options(self.resources[Wood.index()])
             .is_empty()
     }
 
@@ -210,15 +207,15 @@ impl Player {
         match current_type {
             House::Wood => {
                 self.house = House::Clay;
-                self.build_room_cost[Resource::Wood] = 0;
-                self.build_room_cost[Resource::Clay] = 5;
-                self.renovation_cost[Resource::Stone] = rooms;
-                self.renovation_cost[Resource::Clay] = 0;
+                self.build_room_cost[Wood.index()] = 0;
+                self.build_room_cost[Clay.index()] = 5;
+                self.renovation_cost[Stone.index()] = rooms;
+                self.renovation_cost[Clay.index()] = 0;
             }
             House::Clay => {
                 self.house = House::Stone;
-                self.build_room_cost[Resource::Clay] = 0;
-                self.build_room_cost[Resource::Stone] = 5;
+                self.build_room_cost[Clay.index()] = 0;
+                self.build_room_cost[Stone.index()] = 5;
             }
             House::Stone => (),
         }
@@ -237,8 +234,8 @@ impl Player {
         self.farm.build_room(*idx);
 
         match self.house {
-            House::Wood => self.renovation_cost[Resource::Clay] += 1,
-            House::Clay => self.renovation_cost[Resource::Stone] += 1,
+            House::Wood => self.renovation_cost[Clay.index()] += 1,
+            House::Clay => self.renovation_cost[Stone.index()] += 1,
             House::Stone => (),
         }
     }
@@ -304,13 +301,13 @@ impl Player {
     }
 
     pub fn can_use_exchange(&self, res_ex: &ResourceExchange) -> bool {
-        self.resources[res_ex.from.clone()] >= res_ex.num_from
+        self.resources[res_ex.from] >= res_ex.num_from
     }
 
     pub fn use_exchange(&mut self, res_ex: &ResourceExchange) {
         assert!(self.can_use_exchange(res_ex));
-        self.resources[res_ex.from.clone()] -= res_ex.num_from;
-        self.resources[res_ex.to.clone()] += res_ex.num_to;
+        self.resources[res_ex.from] -= res_ex.num_from;
+        self.resources[res_ex.to] += res_ex.num_to;
     }
 
     pub fn has_cooking_improvement(&self) -> bool {
@@ -328,10 +325,10 @@ impl Player {
     }
 
     pub fn has_resources_to_cook(&self) -> bool {
-        self.resources[Resource::Sheep]
-            + self.resources[Resource::Pigs]
-            + self.resources[Resource::Cattle]
-            + self.resources[Resource::Vegetable]
+        self.resources[Sheep.index()]
+            + self.resources[Boar.index()]
+            + self.resources[Cow.index()]
+            + self.resources[Vegetable.index()]
             > 0
     }
 
@@ -345,15 +342,14 @@ impl Player {
         }
 
         // If can pay directly
-        if required_food <= self.resources[Resource::Food] {
+        if required_food <= self.resources[Food.index()] {
             return true;
         }
 
         // If cannot pay directly, but can convert some resources
-        required_food -= self.resources[Resource::Food];
+        required_food -= self.resources[Food.index()];
 
-        let raw_grain_and_veg =
-            self.resources[Resource::Grain] + self.resources[Resource::Vegetable];
+        let raw_grain_and_veg = self.resources[Grain.index()] + self.resources[Vegetable.index()];
         if required_food <= raw_grain_and_veg {
             return true;
         }
@@ -370,54 +366,54 @@ impl Player {
         let res = &self.resources;
         let mut ret = format!(
             "\n\n\n\n{:2} {}   ",
-            res[Resource::Wood],
-            RESOURCE_EMOJIS[Resource::Wood as usize]
+            res[Wood.index()],
+            RESOURCE_EMOJIS[Wood.index()]
         );
         ret = format!(
             "{ret}{:2} {}   ",
-            res[Resource::Clay],
-            RESOURCE_EMOJIS[Resource::Clay as usize]
+            res[Clay.index()],
+            RESOURCE_EMOJIS[Clay.index()]
         );
         ret = format!(
             "{ret}{:2} {}   ",
-            res[Resource::Stone],
-            RESOURCE_EMOJIS[Resource::Stone as usize]
+            res[Stone.index()],
+            RESOURCE_EMOJIS[Stone.index()]
         );
         ret = format!(
             "{ret}{:2} {}",
-            res[Resource::Reed],
-            RESOURCE_EMOJIS[Resource::Reed as usize]
+            res[Reed.index()],
+            RESOURCE_EMOJIS[Reed.index()]
         );
         ret = format!(
             "{ret}\n{:2} {}   ",
-            res[Resource::Grain],
-            RESOURCE_EMOJIS[Resource::Grain as usize]
+            res[Grain.index()],
+            RESOURCE_EMOJIS[Grain.index()]
         );
         ret = format!(
             "{ret}{:2} {}   ",
-            res[Resource::Vegetable],
-            RESOURCE_EMOJIS[Resource::Vegetable as usize]
+            res[Vegetable.index()],
+            RESOURCE_EMOJIS[Vegetable.index()]
         );
         ret = format!(
             "{ret}{:2} {}   ",
-            res[Resource::Food],
-            RESOURCE_EMOJIS[Resource::Food as usize]
+            res[Food.index()],
+            RESOURCE_EMOJIS[Food.index()]
         );
         ret = format!("{ret}{:2} \u{1f37d}", self.begging_tokens);
         ret = format!(
             "{ret}\n{:2} {}   ",
-            res[Resource::Sheep],
-            RESOURCE_EMOJIS[Resource::Sheep as usize]
+            res[Sheep.index()],
+            RESOURCE_EMOJIS[Sheep.index()]
         );
         ret = format!(
             "{ret}{:2} {}   ",
-            res[Resource::Pigs],
-            RESOURCE_EMOJIS[Resource::Pigs as usize]
+            res[Boar.index()],
+            RESOURCE_EMOJIS[Boar.index()]
         );
         ret = format!(
             "{ret}{:2} {}",
-            res[Resource::Cattle],
-            RESOURCE_EMOJIS[Resource::Cattle as usize]
+            res[Cow.index()],
+            RESOURCE_EMOJIS[Cow.index()]
         );
         ret = format!("{ret}\n\n{:2} 👤   ", self.adults);
         ret = format!("{ret}{:2} 👶", self.children);
@@ -485,8 +481,8 @@ impl Player {
                             if let Some((animal, amt)) = opt_animal {
                                 match animal {
                                     Animal::Sheep => stuff = format!("{stuff}{amt} 🐑"),
-                                    Animal::Pigs => stuff = format!("{stuff}{amt} 🐖"),
-                                    Animal::Cattle => stuff = format!("{stuff}{amt} 🐄"),
+                                    Animal::Boar => stuff = format!("{stuff}{amt} 🐖"),
+                                    Animal::Cow => stuff = format!("{stuff}{amt} 🐄"),
                                 }
                             } else {
                                 stuff = format!("{stuff} 🔲 ");
@@ -501,8 +497,8 @@ impl Player {
                             if let Some((animal, amt)) = opt_animal {
                                 match animal {
                                     Animal::Sheep => stuff = format!("{stuff}{amt} 🐑"),
-                                    Animal::Pigs => stuff = format!("{stuff}{amt} 🐖"),
-                                    Animal::Cattle => stuff = format!("{stuff}{amt} 🐄"),
+                                    Animal::Boar => stuff = format!("{stuff}{amt} 🐖"),
+                                    Animal::Cow => stuff = format!("{stuff}{amt} 🐄"),
                                 }
                             } else {
                                 stuff = format!("{stuff} 🔲 ");
@@ -521,8 +517,8 @@ impl Player {
         if let Some(pet) = self.farm.pet {
             match pet.0 {
                 Animal::Sheep => stuff = format!("{stuff}\nPet {} 🐑", pet.1),
-                Animal::Pigs => stuff = format!("{stuff}\nPet {} 🐖", pet.1),
-                Animal::Cattle => stuff = format!("{stuff}\nPet {} 🐄", pet.1),
+                Animal::Boar => stuff = format!("{stuff}\nPet {} 🐖", pet.1),
+                Animal::Cow => stuff = format!("{stuff}\nPet {} 🐄", pet.1),
             }
         }
 

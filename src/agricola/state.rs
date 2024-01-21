@@ -3,7 +3,7 @@ use super::algorithms::PlayerType;
 use super::major_improvements::MajorImprovement;
 use super::occupations::Occupation;
 use super::player::Player;
-use super::primitives::{format_resources, pay_for_resource, Resource, Resources};
+use super::primitives::*;
 use super::scoring;
 use rand::Rng;
 use std::collections::hash_map::DefaultHasher;
@@ -291,7 +291,7 @@ impl State {
             if matches!(major, MajorImprovement::Well) {
                 let current_round = self.current_round();
                 let func = |mut res: Resources| {
-                    res[Resource::Food] += 1;
+                    res[Food.index()] += 1;
                     res
                 };
                 for i in 1..=5 {
@@ -309,13 +309,13 @@ impl State {
         let player = &mut self.players[self.current_player_idx];
         if num_grain_to_bake == 1 {
             assert!(player.can_bake_bread());
-            player.resources[Resource::Grain] -= 1;
+            player.resources[Grain.index()] -= 1;
             if player.major_cards.contains(&MajorImprovement::ClayOven) {
                 // Clay Oven converts one grain to 5 food.
-                player.resources[Resource::Food] += 5;
+                player.resources[Food.index()] += 5;
             } else if player.major_cards.contains(&MajorImprovement::StoneOven) {
                 // Stone Oven converts upto two grain for 4 food each.
-                player.resources[Resource::Food] += 4;
+                player.resources[Food.index()] += 4;
             } else if player
                 .major_cards
                 .contains(&MajorImprovement::CookingHearth(true))
@@ -324,7 +324,7 @@ impl State {
                     .contains(&MajorImprovement::CookingHearth(false))
             {
                 // Hearth converts one grain to 3 food.
-                player.resources[Resource::Food] += 3;
+                player.resources[Food.index()] += 3;
             } else if player
                 .major_cards
                 .contains(&MajorImprovement::Fireplace(true))
@@ -333,27 +333,27 @@ impl State {
                     .contains(&MajorImprovement::Fireplace(false))
             {
                 // Fireplace converts one grain to 2 food.
-                player.resources[Resource::Food] += 2;
+                player.resources[Food.index()] += 2;
             }
         } else if num_grain_to_bake == 2 {
             assert!(
-                player.resources[Resource::Grain] > 1
+                player.resources[Grain.index()] > 1
                     && player.major_cards.contains(&MajorImprovement::StoneOven)
             );
             // Stone Oven converts upto two grain for 4 food each.
-            player.resources[Resource::Grain] -= 2;
-            player.resources[Resource::Food] += 8;
+            player.resources[Grain.index()] -= 2;
+            player.resources[Food.index()] += 8;
         }
     }
 
     pub fn pay_food_or_beg(&mut self) {
         let player = &mut self.players[self.current_player_idx];
         let food_required = 2 * player.adults + player.children;
-        if food_required > player.resources[Resource::Food] {
-            player.begging_tokens += food_required - player.resources[Resource::Food];
-            player.resources[Resource::Food] = 0;
+        if food_required > player.resources[Food.index()] {
+            player.begging_tokens += food_required - player.resources[Food.index()];
+            player.resources[Food.index()] = 0;
         } else {
-            player.resources[Resource::Food] -= food_required;
+            player.resources[Food.index()] -= food_required;
         }
 
         player.harvest_paid = true;
