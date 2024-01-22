@@ -113,7 +113,7 @@ impl Action {
                 ret
             }
             Self::UseFarmExpansion => Self::farm_expansion_choices(player),
-            Self::UseFencing => Self::fencing_choices(player),
+            Self::UseFencing | Self::Fence(_) => Self::fencing_choices(player),
             Self::UseGrainUtilization => Self::grain_utilization_choices(player, false),
             Self::BuildRoom(_) | Self::BuildStable(_) => {
                 ret.extend(Self::farm_expansion_choices(player));
@@ -407,6 +407,7 @@ impl Action {
         for ps in pasture_sizes {
             ret.push(Self::Fence(ps));
         }
+        ret.push(Self::EndTurn);
         ret
     }
 

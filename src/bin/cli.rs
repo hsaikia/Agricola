@@ -21,7 +21,7 @@ use ratatui::{
     Frame, Terminal,
 };
 
-const NUM_GAMES_TO_SIMULATE: usize = 200;
+const NUM_GAMES_TO_SIMULATE: usize = 10;
 
 #[derive(Clone, Copy, Debug)]
 enum PlayerSelection {
@@ -139,7 +139,7 @@ impl App {
 
                         if !self.move_selected && self.ai.num_games_sampled < NUM_GAMES_TO_SIMULATE
                         {
-                            self.ai.sample_once(state, Some(100), false);
+                            self.ai.sample_once(state, Some(50), false);
                             return;
                         }
                         let records = self.ai.sorted_records();

@@ -256,7 +256,7 @@ impl Player {
 
     pub fn room_options(&self) -> Vec<usize> {
         if can_pay_for_resource(&self.build_room_cost, &self.resources) {
-            return self.farm.best_room_positions();
+            return self.farm.possible_room_positions();
         }
         Vec::new()
     }
@@ -265,13 +265,13 @@ impl Player {
         if can_pay_for_resource(&self.build_stable_cost, &self.resources)
             && self.farm.can_build_stable()
         {
-            return self.farm.best_stable_positions();
+            return self.farm.possible_stable_positions();
         }
         Vec::new()
     }
 
     pub fn field_options(&self) -> Vec<usize> {
-        self.farm.best_field_positions()
+        self.farm.possible_field_positions()
     }
 
     pub fn reset_for_next_round(&mut self) {
