@@ -4,6 +4,7 @@ pub mod farm;
 pub mod major_improvements;
 pub mod mcts;
 pub mod occupations;
+pub mod paranoid_ai;
 pub mod player;
 pub mod primitives;
 pub mod scoring;
