@@ -27,7 +27,7 @@ pub enum Seed {
 pub enum Animal {
     Sheep,
     Boar,
-    Cow,
+    Cattle,
 }
 
 type ContainsStable = bool;
@@ -496,7 +496,7 @@ impl Farm {
             match pet {
                 Animal::Sheep => res[Sheep.index()] += amount,
                 Animal::Boar => res[Boar.index()] += amount,
-                Animal::Cow => res[Cow.index()] += amount,
+                Animal::Cattle => res[Cattle.index()] += amount,
             }
         }
 
@@ -511,7 +511,7 @@ impl Farm {
                         match *animal {
                             Animal::Sheep => res[Sheep.index()] += *amt,
                             Animal::Boar => res[Boar.index()] += *amt,
-                            Animal::Cow => res[Cow.index()] += *amt,
+                            Animal::Cattle => res[Cattle.index()] += *amt,
                         }
                         *animals = None
                     }
@@ -527,7 +527,7 @@ impl Farm {
         let mut animal_count = vec![
             (Animal::Sheep, res[Sheep.index()]),
             (Animal::Boar, res[Boar.index()]),
-            (Animal::Cow, res[Cow.index()]),
+            (Animal::Cattle, res[Cattle.index()]),
         ];
 
         if breed {
@@ -589,7 +589,7 @@ impl Farm {
             match animal {
                 Animal::Sheep => res[Sheep.index()] = amt,
                 Animal::Boar => res[Boar.index()] = amt,
-                Animal::Cow => res[Cow.index()] = amt,
+                Animal::Cattle => res[Cattle.index()] = amt,
             }
         }
     }
@@ -847,10 +847,10 @@ mod tests {
         assert_eq!(res[Sheep.index()], 0);
         println!("{:?}", farm);
         res[Sheep.index()] = 0;
-        res[Cow.index()] = 14;
+        res[Cattle.index()] = 14;
         farm.reorg_animals(&mut res, false);
         println!("{:?}", farm);
-        assert_eq!(res[Cow.index()], 1);
+        assert_eq!(res[Cattle.index()], 1);
         assert_eq!(res[Sheep.index()], 1);
     }
 }

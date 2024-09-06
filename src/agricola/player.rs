@@ -89,23 +89,23 @@ impl Player {
         self.resources[Sheep.index()] = 0;
         let pigs = self.resources[Boar.index()];
         self.resources[Boar.index()] = 0;
-        let cattle = self.resources[Cow.index()];
-        self.resources[Cow.index()] = 0;
+        let cattle = self.resources[Cattle.index()];
+        self.resources[Cattle.index()] = 0;
 
         if self
             .major_cards
-            .contains(&MajorImprovement::CookingHearth(true))
+            .contains(&MajorImprovement::CookingHearth { cheaper: true })
             || self
                 .major_cards
-                .contains(&MajorImprovement::CookingHearth(false))
+                .contains(&MajorImprovement::CookingHearth { cheaper: false })
         {
             self.resources[Food.index()] += 2 * sheep + 3 * pigs + 4 * cattle;
         } else if self
             .major_cards
-            .contains(&MajorImprovement::Fireplace(true))
+            .contains(&MajorImprovement::Fireplace { cheaper: true })
             || self
                 .major_cards
-                .contains(&MajorImprovement::Fireplace(false))
+                .contains(&MajorImprovement::Fireplace { cheaper: false })
         {
             self.resources[Food.index()] += 2 * sheep + 2 * pigs + 3 * cattle;
         }
@@ -116,19 +116,19 @@ impl Player {
         // And at least one grain in supply
         if (self
             .major_cards
-            .contains(&MajorImprovement::Fireplace(true))
+            .contains(&MajorImprovement::Fireplace { cheaper: true })
             || self
                 .major_cards
-                .contains(&MajorImprovement::Fireplace(false))
+                .contains(&MajorImprovement::Fireplace { cheaper: false }))
             || self
                 .major_cards
-                .contains(&MajorImprovement::CookingHearth(true))
+                .contains(&MajorImprovement::CookingHearth { cheaper: true })
             || self
                 .major_cards
-                .contains(&MajorImprovement::CookingHearth(false))
+                .contains(&MajorImprovement::CookingHearth { cheaper: false })
             || self.major_cards.contains(&MajorImprovement::ClayOven)
-            || self.major_cards.contains(&MajorImprovement::StoneOven))
-            && self.resources[Grain.index()] > 0
+            || self.major_cards.contains(&MajorImprovement::StoneOven)
+                && self.resources[Grain.index()] > 0
         {
             return true;
         }
@@ -312,22 +312,22 @@ impl Player {
 
     pub fn has_cooking_improvement(&self) -> bool {
         self.major_cards
-            .contains(&MajorImprovement::Fireplace(true))
+            .contains(&MajorImprovement::Fireplace { cheaper: true })
             | self
                 .major_cards
-                .contains(&MajorImprovement::Fireplace(false))
+                .contains(&MajorImprovement::Fireplace { cheaper: false })
             | self
                 .major_cards
-                .contains(&MajorImprovement::CookingHearth(true))
+                .contains(&MajorImprovement::CookingHearth { cheaper: true })
             | self
                 .major_cards
-                .contains(&MajorImprovement::CookingHearth(false))
+                .contains(&MajorImprovement::CookingHearth { cheaper: false })
     }
 
     pub fn has_resources_to_cook(&self) -> bool {
         self.resources[Sheep.index()]
             + self.resources[Boar.index()]
-            + self.resources[Cow.index()]
+            + self.resources[Cattle.index()]
             + self.resources[Vegetable.index()]
             > 0
     }
@@ -412,8 +412,8 @@ impl Player {
         );
         ret = format!(
             "{ret}{:2} {}",
-            res[Cow.index()],
-            RESOURCE_EMOJIS[Cow.index()]
+            res[Cattle.index()],
+            RESOURCE_EMOJIS[Cattle.index()]
         );
         ret = format!("{ret}\n\n{:2} 👤   ", self.adults);
         ret = format!("{ret}{:2} 👶", self.children);
@@ -482,7 +482,7 @@ impl Player {
                                 match animal {
                                     Animal::Sheep => stuff = format!("{stuff}{amt} 🐑"),
                                     Animal::Boar => stuff = format!("{stuff}{amt} 🐖"),
-                                    Animal::Cow => stuff = format!("{stuff}{amt} 🐄"),
+                                    Animal::Cattle => stuff = format!("{stuff}{amt} 🐄"),
                                 }
                             } else {
                                 stuff = format!("{stuff} 🔲 ");
@@ -498,7 +498,7 @@ impl Player {
                                 match animal {
                                     Animal::Sheep => stuff = format!("{stuff}{amt} 🐑"),
                                     Animal::Boar => stuff = format!("{stuff}{amt} 🐖"),
-                                    Animal::Cow => stuff = format!("{stuff}{amt} 🐄"),
+                                    Animal::Cattle => stuff = format!("{stuff}{amt} 🐄"),
                                 }
                             } else {
                                 stuff = format!("{stuff} 🔲 ");
@@ -518,7 +518,7 @@ impl Player {
             match pet.0 {
                 Animal::Sheep => stuff = format!("{stuff}\nPet {} 🐑", pet.1),
                 Animal::Boar => stuff = format!("{stuff}\nPet {} 🐖", pet.1),
-                Animal::Cow => stuff = format!("{stuff}\nPet {} 🐄", pet.1),
+                Animal::Cattle => stuff = format!("{stuff}\nPet {} 🐄", pet.1),
             }
         }
 

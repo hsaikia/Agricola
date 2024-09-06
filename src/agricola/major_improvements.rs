@@ -2,8 +2,8 @@ use super::primitives::*;
 
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub enum MajorImprovement {
-    Fireplace(bool),
-    CookingHearth(bool),
+    Fireplace { cheaper: bool },
+    CookingHearth { cheaper: bool },
     Well,
     ClayOven,
     StoneOven,
@@ -20,18 +20,18 @@ impl MajorImprovement {
     ) -> bool {
         for card in majors_on_board {
             match card {
-                Self::Fireplace(cheaper) => {
-                    if !majors_owned.contains(&Self::Fireplace(!cheaper))
+                Self::Fireplace { cheaper } => {
+                    if !majors_owned.contains(&Self::Fireplace { cheaper: !cheaper })
                         && can_pay_for_resource(&card.cost(), resources)
                     {
                         return true;
                     }
                 }
-                Self::CookingHearth(cheaper) => {
-                    if (majors_owned.contains(&Self::Fireplace(*cheaper))
-                        || majors_owned.contains(&Self::Fireplace(!cheaper))
+                Self::CookingHearth { cheaper } => {
+                    if (majors_owned.contains(&Self::Fireplace { cheaper: *cheaper })
+                        || majors_owned.contains(&Self::Fireplace { cheaper: !cheaper })
                         || can_pay_for_resource(&card.cost(), resources))
-                        && !majors_owned.contains(&Self::CookingHearth(!cheaper))
+                        && !majors_owned.contains(&Self::CookingHearth { cheaper: !cheaper })
                     {
                         return true;
                     }
@@ -56,18 +56,18 @@ impl MajorImprovement {
 
         for card in majors_on_board {
             match card {
-                Self::Fireplace(cheaper) => {
-                    if !majors_owned.contains(&Self::Fireplace(!cheaper))
+                Self::Fireplace { cheaper } => {
+                    if !majors_owned.contains(&Self::Fireplace { cheaper: !cheaper })
                         && can_pay_for_resource(&card.cost(), resources)
                     {
                         available.push(card.clone());
                     }
                 }
-                Self::CookingHearth(cheaper) => {
-                    if (majors_owned.contains(&Self::Fireplace(*cheaper))
-                        || majors_owned.contains(&Self::Fireplace(!cheaper))
+                Self::CookingHearth { cheaper } => {
+                    if (majors_owned.contains(&Self::Fireplace { cheaper: *cheaper })
+                        || majors_owned.contains(&Self::Fireplace { cheaper: !cheaper })
                         || can_pay_for_resource(&card.cost(), resources))
-                        && !majors_owned.contains(&Self::CookingHearth(!cheaper))
+                        && !majors_owned.contains(&Self::CookingHearth { cheaper: !cheaper })
                     {
                         available.push(card.clone());
                     }
@@ -84,7 +84,7 @@ impl MajorImprovement {
 
     pub fn exchanges(&self) -> Vec<ResourceExchange> {
         match self {
-            Self::Fireplace(_) => {
+            Self::Fireplace { cheaper: _ } => {
                 let ret: Vec<ResourceExchange> = vec![
                     ResourceExchange {
                         from: Sheep.index(),
@@ -105,7 +105,7 @@ impl MajorImprovement {
                         num_to: 2,
                     },
                     ResourceExchange {
-                        from: Cow.index(),
+                        from: Cattle.index(),
                         to: Food.index(),
                         num_from: 1,
                         num_to: 3,
@@ -113,7 +113,7 @@ impl MajorImprovement {
                 ];
                 ret
             }
-            Self::CookingHearth(_) => {
+            Self::CookingHearth { cheaper: _ } => {
                 let ret: Vec<ResourceExchange> = vec![
                     ResourceExchange {
                         from: Sheep.index(),
@@ -134,7 +134,7 @@ impl MajorImprovement {
                         num_to: 3,
                     },
                     ResourceExchange {
-                        from: Cow.index(),
+                        from: Cattle.index(),
                         to: Food.index(),
                         num_from: 1,
                         num_to: 4,
@@ -172,7 +172,7 @@ impl MajorImprovement {
 
     pub fn points(&self) -> u32 {
         match self {
-            Self::Fireplace(_) | Self::CookingHearth(_) => 1,
+            Self::Fireplace { cheaper: _ } | Self::CookingHearth { cheaper: _ } => 1,
             Self::ClayOven | Self::Joinery | Self::Pottery | Self::BasketmakersWorkshop => 2,
             Self::StoneOven => 3,
             Self::Well => 4,
@@ -181,12 +181,12 @@ impl MajorImprovement {
 
     pub fn cost(&self) -> Resources {
         match self {
-            Self::Fireplace(cheaper) => {
+            Self::Fireplace { cheaper } => {
                 let mut res = new_res();
                 res[Clay.index()] = if *cheaper { 2 } else { 3 };
                 res
             }
-            Self::CookingHearth(cheaper) => {
+            Self::CookingHearth { cheaper } => {
                 let mut res = new_res();
                 res[Clay.index()] = if *cheaper { 4 } else { 5 };
                 res

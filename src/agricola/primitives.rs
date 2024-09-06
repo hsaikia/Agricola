@@ -33,7 +33,7 @@ pub struct Sheep;
 pub struct Boar;
 
 #[derive(Clone, Debug, Hash)]
-pub struct Cow;
+pub struct Cattle;
 
 const NUM_RESOURCES: usize = 10;
 
@@ -91,7 +91,7 @@ impl Resource for Boar {
     }
 }
 
-impl Resource for Cow {
+impl Resource for Cattle {
     fn index(&self) -> usize {
         9
     }

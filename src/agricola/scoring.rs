@@ -40,7 +40,7 @@ fn score_farm(player: &Player) -> i32 {
                     match animal.0 {
                         Animal::Sheep => res[Sheep.index()] += 1,
                         Animal::Boar => res[Boar.index()] += 1,
-                        Animal::Cow => res[Cow.index()] += 1,
+                        Animal::Cattle => res[Cattle.index()] += 1,
                     }
                 }
             }

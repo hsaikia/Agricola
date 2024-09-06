@@ -333,8 +333,8 @@ impl Action {
 
         for major in &player.major_cards {
             match major {
-                MajorImprovement::Fireplace(true | false)
-                | MajorImprovement::CookingHearth(true | false) => {
+                MajorImprovement::Fireplace { cheaper: _ }
+                | MajorImprovement::CookingHearth { cheaper: _ } => {
                     for exchange in major.exchanges() {
                         if player.can_use_exchange(&exchange) {
                             ret.push(Self::Convert(exchange, None, stage.clone()));
@@ -543,22 +543,22 @@ impl Action {
         let mut ret: Vec<Self> = Vec::new();
         if player
             .major_cards
-            .contains(&MajorImprovement::Fireplace(cheaper))
+            .contains(&MajorImprovement::Fireplace { cheaper })
             || player
                 .major_cards
-                .contains(&MajorImprovement::Fireplace(!cheaper))
+                .contains(&MajorImprovement::Fireplace { cheaper: !cheaper })
         {
             ret.push(Self::BuildCard(
-                MajorImprovement::CookingHearth(cheaper),
+                MajorImprovement::CookingHearth { cheaper },
                 ReturnFireplace(true),
             ));
         }
         if can_pay_for_resource(
-            &MajorImprovement::CookingHearth(cheaper).cost(),
+            &MajorImprovement::CookingHearth { cheaper }.cost(),
             &player.resources,
         ) {
             ret.push(Self::BuildCard(
-                MajorImprovement::CookingHearth(cheaper),
+                MajorImprovement::CookingHearth { cheaper },
                 ReturnFireplace(false),
             ));
         }
@@ -576,7 +576,7 @@ impl Action {
         );
         for major in &majors_available {
             match major {
-                MajorImprovement::CookingHearth(cheaper) => {
+                MajorImprovement::CookingHearth { cheaper } => {
                     ret.extend(Self::cooking_hearth_choices(player, *cheaper));
                 }
                 _ => ret.push(Self::BuildCard(major.clone(), ReturnFireplace(false))),
@@ -597,7 +597,7 @@ impl Action {
             Self::UseWesternQuarry | Self::UseEasternQuarry => res[Stone.index()] += 1,
             Self::UseSheepMarket => res[Sheep.index()] += 1,
             Self::UsePigMarket => res[Boar.index()] += 1,
-            Self::UseCattleMarket => res[Cow.index()] += 1,
+            Self::UseCattleMarket => res[Cattle.index()] += 1,
             _ => (),
         }
     }
