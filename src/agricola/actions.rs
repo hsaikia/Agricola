@@ -134,14 +134,11 @@ impl Action {
             }
             Self::UseImprovements => vec![Self::BuildMajor], // TODO : Add BuildMinor here
             Self::BuildMajor => Self::build_major_choices(state),
-            Self::BuildCard(major, _) => match major {
-                MajorImprovement::ClayOven | MajorImprovement::StoneOven => {
-                    ret.extend(Self::baking_choices(player, false));
-                    ret.push(Self::EndTurn);
-                    ret
-                }
-                _ => vec![Self::EndTurn],
-            },
+            Self::BuildCard(MajorImprovement::ClayOven | MajorImprovement::StoneOven, _) => {
+                ret.extend(Self::baking_choices(player, false));
+                ret.push(Self::EndTurn);
+                ret
+            }
             Self::BakeBread(called_from_grain_util, _num_grain_to_bake) => {
                 if called_from_grain_util.0 {
                     ret.extend(Self::grain_utilization_choices(player, true));

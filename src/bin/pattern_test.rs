@@ -75,7 +75,7 @@ fn add_to_stats(stats: &mut Vec<Statistics>, state: &State, action: &Action) {
     }
 }
 
-fn sim_one_game(players: &Vec<PlayerType>) -> Vec<Statistics> {
+fn sim_one_game(players: &[PlayerType]) -> Vec<Statistics> {
     let opt_state = State::new(players);
     let mut state = opt_state.unwrap();
     let mut stats = empty_stats(players.len());

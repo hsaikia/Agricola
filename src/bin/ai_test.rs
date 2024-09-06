@@ -8,7 +8,7 @@ use agricola_game::agricola::{
 
 fn main() {
     env::set_var("RUN_BACKTRACE", "1");
-    let opt_state = State::new(&vec![PlayerType::MCTSMachine, PlayerType::MCTSMachine]);
+    let opt_state = State::new(&[PlayerType::MCTSMachine, PlayerType::MCTSMachine]);
     let mut ai_agent = AI::new();
     let mut state = opt_state.unwrap();
     const NUM_GAMES_TO_SIMULATE: usize = 100;

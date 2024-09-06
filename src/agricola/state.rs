@@ -36,7 +36,7 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(players: &Vec<PlayerType>) -> Option<Self> {
+    pub fn new(players: &[PlayerType]) -> Option<Self> {
         if players.is_empty() {
             return None;
         }

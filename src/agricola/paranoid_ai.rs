@@ -1,7 +1,3 @@
-use core::num;
-
-use crate::agricola::player;
-
 use super::{actions::Action, state::State};
 
 const MAX_DEPTH: u8 = 4;
@@ -14,11 +10,6 @@ pub fn search(
     beta: &mut f32,
     num_seen: &mut usize,
 ) -> f32 {
-    //println!("depth {}", depth);
-    // println!(
-    //     "last action {:?} alpha {} beta {}",
-    //     state.last_action, alpha, beta
-    // );
     if depth == MAX_DEPTH {
         return state.scores()[player_idx];
     }
@@ -104,7 +95,6 @@ pub fn best_move(state: &State) -> Option<Action> {
             best = v;
             best_action = Some(action.clone());
         }
-        //println!("action {:?} v {}", action, v);
     }
 
     println!(
