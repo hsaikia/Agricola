@@ -240,7 +240,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     // create app and run it
-    let tick_rate = Duration::from_millis(50);
+    let tick_rate = Duration::from_millis(10);
     let app = App::new();
     let res = run_app(&mut terminal, app, tick_rate);
 

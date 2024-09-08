@@ -3,7 +3,10 @@ use super::major_improvements::MajorImprovement;
 use super::occupations::Occupation;
 use super::player::Player;
 use super::primitives::*;
-use super::state::State;
+use super::state::{
+    State, BAKING_MAJOR_IMPROVEMENT_INDICES, FIREPLACE_AND_COOKING_HEARTH_INDICES,
+    FIREPLACE_INDICES,
+};
 pub const NUM_RESOURCE_SPACES: usize = 18;
 
 // Tuple <called from grain utilization, baked bread already>
@@ -114,7 +117,7 @@ impl Action {
             }
             Self::UseFarmExpansion => Self::farm_expansion_choices(player),
             Self::UseFencing | Self::Fence(_) => Self::fencing_choices(player),
-            Self::UseGrainUtilization => Self::grain_utilization_choices(player, false),
+            Self::UseGrainUtilization => Self::grain_utilization_choices(state, false),
             Self::BuildRoom(_) | Self::BuildStable(_) => {
                 ret.extend(Self::farm_expansion_choices(player));
                 ret.push(Self::EndTurn);
@@ -123,7 +126,7 @@ impl Action {
             Self::Sow(called_from_grain_util, _seed) => {
                 if called_from_grain_util.0 {
                     ret.extend(Self::grain_utilization_choices(
-                        player,
+                        state,
                         called_from_grain_util.1,
                     ));
                 } else {
@@ -135,13 +138,13 @@ impl Action {
             Self::UseImprovements => vec![Self::BuildMajor], // TODO : Add BuildMinor here
             Self::BuildMajor => Self::build_major_choices(state),
             Self::BuildCard(MajorImprovement::ClayOven | MajorImprovement::StoneOven, _) => {
-                ret.extend(Self::baking_choices(player, false));
+                ret.extend(Self::baking_choices(state, false));
                 ret.push(Self::EndTurn);
                 ret
             }
             Self::BakeBread(called_from_grain_util, _num_grain_to_bake) => {
                 if called_from_grain_util.0 {
-                    ret.extend(Self::grain_utilization_choices(player, true));
+                    ret.extend(Self::grain_utilization_choices(state, true));
                 }
                 ret.push(Self::EndTurn);
                 ret
@@ -204,11 +207,11 @@ impl Action {
                 }
                 ret
             }
-            Self::PreHarvest => Self::harvest_choices(player),
+            Self::PreHarvest => Self::harvest_choices(state),
             Self::Convert(_, _, conversion_stage) => {
                 match conversion_stage {
                     ConversionStage::Harvest => {
-                        ret.extend(Self::harvest_choices(player));
+                        ret.extend(Self::harvest_choices(state));
                     }
                     ConversionStage::BeforePlayOccupation(cheaper) => {
                         ret.extend(Self::occupation_choices(state, *cheaper));
@@ -241,7 +244,7 @@ impl Action {
 
         if player.resources[Food.index()] < required_food {
             ret.extend(Self::anytime_conversions(
-                player,
+                state,
                 &ConversionStage::BeforePlayOccupation(cheaper),
             ));
         } else {
@@ -286,13 +289,7 @@ impl Action {
     ) -> Vec<Self> {
         let player = state.player();
         let mut ret: Vec<Self> = Vec::new();
-        if from_house_redev.0
-            && MajorImprovement::can_build_major(
-                &player.major_cards,
-                &state.major_improvements,
-                &player.resources,
-            )
-        {
+        if from_house_redev.0 && state.available_majors_to_build().iter().any(|x| *x) {
             // TODO also add minor check
             ret.push(Self::BuildMajor);
         }
@@ -303,8 +300,9 @@ impl Action {
         ret
     }
 
-    fn anytime_conversions(player: &Player, stage: &ConversionStage) -> Vec<Self> {
+    fn anytime_conversions(state: &State, stage: &ConversionStage) -> Vec<Self> {
         let mut ret: Vec<Self> = Vec::new();
+        let player = state.player();
         if player.resources[Grain.index()] > 0 {
             ret.push(Self::Convert(
                 ResourceExchange {
@@ -331,54 +329,41 @@ impl Action {
             ));
         }
 
-        for major in &player.major_cards {
-            match major {
-                MajorImprovement::Fireplace { cheaper: _ }
-                | MajorImprovement::CookingHearth { cheaper: _ } => {
-                    for exchange in major.exchanges() {
-                        if player.can_use_exchange(&exchange) {
-                            ret.push(Self::Convert(exchange, None, stage.clone()));
-                        }
+        for idx in FIREPLACE_AND_COOKING_HEARTH_INDICES {
+            if Some(state.current_player_idx) == state.major_improvements[idx].1 {
+                for exchange in state.major_improvements[idx].0.exchanges() {
+                    if player.can_use_exchange(&exchange) {
+                        ret.push(Self::Convert(exchange, None, stage.clone()));
                     }
                 }
-                _ => (),
             }
         }
 
         ret
     }
 
-    fn harvest_choices(player: &Player) -> Vec<Self> {
+    fn harvest_choices(state: &State) -> Vec<Self> {
         let mut ret: Vec<Self> = Vec::new();
 
-        ret.extend(Self::anytime_conversions(player, &ConversionStage::Harvest));
+        ret.extend(Self::anytime_conversions(state, &ConversionStage::Harvest));
 
-        for major in &player.major_cards {
-            match major {
-                MajorImprovement::Joinery
-                | MajorImprovement::Pottery
-                | MajorImprovement::BasketmakersWorkshop => {
-                    if player.majors_used_for_harvest.contains(major) {
-                        continue;
-                    }
-
-                    for exchange in major.exchanges() {
-                        if player.can_use_exchange(&exchange) {
-                            ret.push(Self::Convert(
-                                exchange,
-                                Some(major.clone()),
-                                ConversionStage::Harvest,
-                            ));
-                        }
+        for (major, opt_idx, _) in &state.major_improvements {
+            if Some(state.current_player_idx) == *opt_idx {
+                for exchange in major.exchanges() {
+                    if state.player().can_use_exchange(&exchange) {
+                        ret.push(Self::Convert(
+                            exchange,
+                            Some(major.clone()),
+                            ConversionStage::Harvest,
+                        ));
                     }
                 }
-                _ => (),
             }
         }
 
         // Option to beg is only present when there are really no conversions possible
         // Otherwise this leads to a bad average fitness from random sampling early on
-        if ret.is_empty() || player.got_enough_food() {
+        if ret.is_empty() || state.player().got_enough_food() {
             ret.push(Self::PayFoodOrBeg);
         }
 
@@ -419,33 +404,30 @@ impl Action {
         ret
     }
 
-    fn baking_choices(player: &Player, from_grain_util: bool) -> Vec<Self> {
+    fn baking_choices(state: &State, from_grain_util: bool) -> Vec<Self> {
         let mut ret: Vec<Self> = Vec::new();
-        if player.resources[Grain.index()] > 1
-            && player.major_cards.contains(&MajorImprovement::StoneOven)
-        {
-            ret.push(Self::BakeBread(
-                CalledFromGrainUtilization(from_grain_util, false),
-                NumGrainToBake(2),
-            ));
-        }
-        if player.can_bake_bread() {
-            ret.push(Self::BakeBread(
-                CalledFromGrainUtilization(from_grain_util, false),
-                NumGrainToBake(1),
-            ));
+        for idx in BAKING_MAJOR_IMPROVEMENT_INDICES {
+            if Some(state.current_player_idx) == state.major_improvements[idx].1 {
+                for grain in 1..=state.player().resources[Grain.index()] {
+                    ret.push(Self::BakeBread(
+                        CalledFromGrainUtilization(from_grain_util, false),
+                        NumGrainToBake(grain),
+                    ));
+                }
+                break;
+            }
         }
         ret
     }
 
-    fn grain_utilization_choices(player: &Player, baked_already: bool) -> Vec<Self> {
+    fn grain_utilization_choices(state: &State, baked_already: bool) -> Vec<Self> {
         let mut ret: Vec<Self> = Vec::new();
         ret.extend(Self::sow_choices(
-            player,
+            state.player(),
             &CalledFromGrainUtilization(true, baked_already),
         ));
         if !baked_already {
-            ret.extend(Self::baking_choices(player, true));
+            ret.extend(Self::baking_choices(state, true));
         }
         ret
     }
@@ -485,11 +467,7 @@ impl Action {
                 }
                 Self::UseImprovements => {
                     // TODO : Also check minor builds here
-                    if !MajorImprovement::can_build_major(
-                        &player.major_cards,
-                        &state.major_improvements,
-                        &player.resources,
-                    ) {
+                    if !state.available_majors_to_build().iter().any(|x| *x) {
                         continue;
                     }
                 }
@@ -499,7 +477,10 @@ impl Action {
                     }
                 }
                 Self::UseGrainUtilization => {
-                    if !player.can_sow() && !player.can_bake_bread() {
+                    if !player.can_sow()
+                        && !player
+                            .can_bake_bread(state.current_player_idx, &state.major_improvements)
+                    {
                         continue;
                     }
                 }
@@ -539,23 +520,21 @@ impl Action {
         ret
     }
 
-    fn cooking_hearth_choices(player: &Player, cheaper: bool) -> Vec<Self> {
+    fn cooking_hearth_choices(state: &State, cheaper: bool) -> Vec<Self> {
         let mut ret: Vec<Self> = Vec::new();
-        if player
-            .major_cards
-            .contains(&MajorImprovement::Fireplace { cheaper })
-            || player
-                .major_cards
-                .contains(&MajorImprovement::Fireplace { cheaper: !cheaper })
-        {
-            ret.push(Self::BuildCard(
-                MajorImprovement::CookingHearth { cheaper },
-                ReturnFireplace(true),
-            ));
+
+        for fp_idx in FIREPLACE_INDICES {
+            if Some(state.current_player_idx) == state.major_improvements[fp_idx].1 {
+                ret.push(Self::BuildCard(
+                    MajorImprovement::CookingHearth { cheaper },
+                    ReturnFireplace(true),
+                ));
+            }
         }
+
         if can_pay_for_resource(
             &MajorImprovement::CookingHearth { cheaper }.cost(),
-            &player.resources,
+            &state.player().resources,
         ) {
             ret.push(Self::BuildCard(
                 MajorImprovement::CookingHearth { cheaper },
@@ -566,20 +545,20 @@ impl Action {
     }
 
     fn build_major_choices(state: &State) -> Vec<Self> {
-        let player = state.player();
         let mut ret: Vec<Self> = Vec::new();
 
-        let majors_available = MajorImprovement::available_majors_to_build(
-            &player.major_cards,
-            &state.major_improvements,
-            &player.resources,
-        );
-        for major in &majors_available {
-            match major {
+        for (major_idx, available) in state.available_majors_to_build().iter().enumerate() {
+            if !available {
+                continue;
+            }
+            match state.major_improvements[major_idx].0 {
                 MajorImprovement::CookingHearth { cheaper } => {
-                    ret.extend(Self::cooking_hearth_choices(player, *cheaper));
+                    ret.extend(Self::cooking_hearth_choices(state, cheaper));
                 }
-                _ => ret.push(Self::BuildCard(major.clone(), ReturnFireplace(false))),
+                _ => ret.push(Self::BuildCard(
+                    state.major_improvements[major_idx].0.clone(),
+                    ReturnFireplace(false),
+                )),
             }
         }
         ret
@@ -602,7 +581,13 @@ impl Action {
         }
     }
 
-    pub fn collect_resources(&self, player: &mut Player, res: &mut Resources) {
+    pub fn collect_resources(
+        &self,
+        player: &mut Player,
+        res: &mut Resources,
+        player_idx: usize,
+        majors: &[(MajorImprovement, Option<usize>, usize)],
+    ) {
         match self {
             Self::UseCopse
             | Self::UseGrove
@@ -620,7 +605,7 @@ impl Action {
             Self::UseSheepMarket | Self::UsePigMarket | Self::UseCattleMarket => {
                 take_resource(res, &mut player.resources);
                 *res = new_res();
-                player.reorg_animals(false);
+                player.reorg_animals(player_idx, majors, false);
             }
             Self::UseResourceMarket
             | Self::UseDayLaborer
@@ -842,10 +827,7 @@ impl Action {
             Self::Convert(res_ex, opt_major, _) => {
                 state.player_mut().use_exchange(res_ex);
                 if let Some(major) = opt_major {
-                    state
-                        .player_mut()
-                        .majors_used_for_harvest
-                        .push(major.clone());
+                    state.major_improvements[major.index()].2 += 1;
                 }
             }
             Self::PayFoodOrBeg => state.pay_food_or_beg(),
@@ -856,7 +838,12 @@ impl Action {
         // Collect resources if possible
         if let Some(resource_idx) = self.resource_map_idx() {
             let res = &mut state.resource_map[resource_idx];
-            self.collect_resources(player, res);
+            self.collect_resources(
+                player,
+                res,
+                state.current_player_idx,
+                &state.major_improvements,
+            );
         }
     }
 }

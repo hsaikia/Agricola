@@ -1,5 +1,4 @@
 use super::farm::{Animal, FarmyardSpace, House, Seed};
-use super::major_improvements::MajorImprovement;
 use super::player::Player;
 use super::primitives::*;
 
@@ -66,53 +65,11 @@ fn score_farm(player: &Player) -> i32 {
     score
 }
 
-#[allow(clippy::cast_possible_wrap)]
-fn score_cards(player: &Player) -> i32 {
-    let mut ret: i32 = 0;
-    // Score Majors
-    for major in &player.major_cards {
-        ret += major.points() as i32;
-        match major {
-            MajorImprovement::Joinery => {
-                if player.resources[Wood.index()] >= 7 {
-                    ret += 3;
-                } else if player.resources[Wood.index()] >= 5 {
-                    ret += 2;
-                } else if player.resources[Wood.index()] >= 3 {
-                    ret += 1;
-                }
-            }
-            MajorImprovement::Pottery => {
-                if player.resources[Clay.index()] >= 7 {
-                    ret += 3;
-                } else if player.resources[Clay.index()] >= 5 {
-                    ret += 2;
-                } else if player.resources[Clay.index()] >= 3 {
-                    ret += 1;
-                }
-            }
-            MajorImprovement::BasketmakersWorkshop => {
-                if player.resources[Reed.index()] >= 5 {
-                    ret += 3;
-                } else if player.resources[Reed.index()] >= 4 {
-                    ret += 2;
-                } else if player.resources[Reed.index()] >= 2 {
-                    ret += 1;
-                }
-            }
-            _ => (),
-        }
-    }
-    ret
-}
-
 pub fn score(player: &Player) -> i32 {
     let mut ret: i32 = 0;
 
     // House, Family and Empty Spaces
     ret += 3 * player.family_members() as i32;
-    // All resources
-    ret += score_cards(player);
     // Begging Tokens
     ret -= 3 * player.begging_tokens as i32;
     // Score farm

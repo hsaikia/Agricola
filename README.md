@@ -96,6 +96,17 @@ The win-rate formula picks a move with the following probability : `w_i / n_i + 
 
 The score/fitness probability can be given as `(x_i - a_i) / (b_i - a_i) + sqrt(2 * N_i / n_i)` so that the win-rate is again normalized.
 
+### Runtime benchmarks
+
+Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth 10): 76.32497875s
+Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth 10): 114.238166042s
+Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth None): 3151.147589625s
+
+[After Major Improvements optimization]
+Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth Some(10)): 33.720103291s
+Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth Some(10)): 48.443808583s
+Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth None): 2041.044138666s
+
 ## Misc commands
 
 Show public functions and modules

@@ -3,6 +3,7 @@ use super::farm::{Animal, Farm, FarmyardSpace, House, Seed};
 use super::major_improvements::MajorImprovement;
 use super::occupations::Occupation;
 use super::primitives::*;
+use super::state::{COOKING_HEARTH_INDICES, FIREPLACE_INDICES};
 
 const MAX_FAMILY_MEMBERS: usize = 5;
 const STARTING_PEOPLE: usize = 2;
@@ -19,13 +20,12 @@ pub struct Player {
     build_room_cost: Resources,
     build_stable_cost: Resources,
     pub renovation_cost: Resources,
-    pub major_cards: Vec<MajorImprovement>,
     pub house: House,
-    pub majors_used_for_harvest: Vec<MajorImprovement>,
     pub occupations: Vec<Occupation>,
     pub harvest_paid: bool,
     pub before_round_start: bool,
     pub farm: Farm,
+    pub has_cooking_improvement: bool,
 }
 
 impl Player {
@@ -54,13 +54,12 @@ impl Player {
             build_room_cost: room_cost,
             build_stable_cost: stable_cost,
             renovation_cost: reno_cost,
-            major_cards: vec![],
             house: House::Wood,
-            majors_used_for_harvest: vec![],
             occupations: vec![],
             harvest_paid: false,
             before_round_start: true,
             farm: Farm::new(),
+            has_cooking_improvement: false,
         }
     }
 
@@ -82,7 +81,12 @@ impl Player {
         self.player_type.clone()
     }
 
-    pub fn reorg_animals(&mut self, breed: bool) {
+    pub fn reorg_animals(
+        &mut self,
+        player_idx: usize,
+        majors: &[(MajorImprovement, Option<usize>, usize)],
+        breed: bool,
+    ) {
         self.farm.reorg_animals(&mut self.resources, breed);
 
         let sheep = self.resources[Sheep.index()];
@@ -92,47 +96,42 @@ impl Player {
         let cattle = self.resources[Cattle.index()];
         self.resources[Cattle.index()] = 0;
 
-        if self
-            .major_cards
-            .contains(&MajorImprovement::CookingHearth { cheaper: true })
-            || self
-                .major_cards
-                .contains(&MajorImprovement::CookingHearth { cheaper: false })
-        {
-            self.resources[Food.index()] += 2 * sheep + 3 * pigs + 4 * cattle;
-        } else if self
-            .major_cards
-            .contains(&MajorImprovement::Fireplace { cheaper: true })
-            || self
-                .major_cards
-                .contains(&MajorImprovement::Fireplace { cheaper: false })
-        {
-            self.resources[Food.index()] += 2 * sheep + 2 * pigs + 3 * cattle;
+        let mut owns_ch = false;
+        for ch_idx in COOKING_HEARTH_INDICES {
+            if Some(player_idx) == majors[ch_idx].1 {
+                self.resources[Food.index()] += 2 * sheep + 3 * pigs + 4 * cattle;
+                owns_ch = true;
+                break;
+            }
+        }
+
+        if !owns_ch {
+            for fp_idx in FIREPLACE_INDICES {
+                if Some(player_idx) == majors[fp_idx].1 {
+                    self.resources[Food.index()] += 2 * sheep + 2 * pigs + 3 * cattle;
+                    return;
+                }
+            }
         }
     }
 
-    pub fn can_bake_bread(&self) -> bool {
+    pub fn can_bake_bread(
+        &self,
+        player_idx: usize,
+        majors: &[(MajorImprovement, Option<usize>, usize)],
+    ) -> bool {
         // Check if any of the baking improvements are present
         // And at least one grain in supply
-        if (self
-            .major_cards
-            .contains(&MajorImprovement::Fireplace { cheaper: true })
-            || self
-                .major_cards
-                .contains(&MajorImprovement::Fireplace { cheaper: false }))
-            || self
-                .major_cards
-                .contains(&MajorImprovement::CookingHearth { cheaper: true })
-            || self
-                .major_cards
-                .contains(&MajorImprovement::CookingHearth { cheaper: false })
-            || self.major_cards.contains(&MajorImprovement::ClayOven)
-            || self.major_cards.contains(&MajorImprovement::StoneOven)
-                && self.resources[Grain.index()] > 0
-        {
-            return true;
-        }
-        false
+
+        (Some(player_idx) == majors[MajorImprovement::ClayOven.index()].1
+            || Some(player_idx) == majors[MajorImprovement::StoneOven.index()].1
+            || Some(player_idx) == majors[MajorImprovement::Fireplace { cheaper: true }.index()].1
+            || Some(player_idx) == majors[MajorImprovement::Fireplace { cheaper: false }.index()].1
+            || Some(player_idx)
+                == majors[MajorImprovement::CookingHearth { cheaper: true }.index()].1
+            || Some(player_idx)
+                == majors[MajorImprovement::CookingHearth { cheaper: false }.index()].1)
+            && self.resources[Grain.index()] > 0
     }
 
     pub fn sow_field(&mut self, seed: &Seed) {
@@ -278,7 +277,6 @@ impl Player {
         self.adults += self.children;
         self.children = 0;
         self.people_placed = 0;
-        self.majors_used_for_harvest.clear();
         self.harvest_paid = false;
         self.before_round_start = true;
     }
@@ -308,20 +306,6 @@ impl Player {
         assert!(self.can_use_exchange(res_ex));
         self.resources[res_ex.from] -= res_ex.num_from;
         self.resources[res_ex.to] += res_ex.num_to;
-    }
-
-    pub fn has_cooking_improvement(&self) -> bool {
-        self.major_cards
-            .contains(&MajorImprovement::Fireplace { cheaper: true })
-            | self
-                .major_cards
-                .contains(&MajorImprovement::Fireplace { cheaper: false })
-            | self
-                .major_cards
-                .contains(&MajorImprovement::CookingHearth { cheaper: true })
-            | self
-                .major_cards
-                .contains(&MajorImprovement::CookingHearth { cheaper: false })
     }
 
     pub fn has_resources_to_cook(&self) -> bool {
@@ -355,7 +339,7 @@ impl Player {
         }
 
         // Required food must be less than 3, and minimum food gained by cooking is 2
-        if self.has_cooking_improvement() && self.has_resources_to_cook() {
+        if self.has_cooking_improvement && self.has_resources_to_cook() {
             return true;
         }
 
@@ -418,7 +402,6 @@ impl Player {
         ret = format!("{ret}\n\n{:2} 👤   ", self.adults);
         ret = format!("{ret}{:2} 👶", self.children);
 
-        ret = format!("{ret}\n\n{}", MajorImprovement::display(&self.major_cards));
         ret = format!("{ret}\n\n{}", Occupation::display(&self.occupations));
         ret
     }

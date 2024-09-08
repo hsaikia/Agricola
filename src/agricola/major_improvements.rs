@@ -1,5 +1,7 @@
 use super::primitives::*;
 
+pub const TOTAL_MAJOR_IMPROVEMENTS: usize = 10;
+
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub enum MajorImprovement {
     Fireplace { cheaper: bool },
@@ -13,73 +15,19 @@ pub enum MajorImprovement {
 }
 
 impl MajorImprovement {
-    pub fn can_build_major(
-        majors_owned: &[Self],
-        majors_on_board: &[Self],
-        resources: &Resources,
-    ) -> bool {
-        for card in majors_on_board {
-            match card {
-                Self::Fireplace { cheaper } => {
-                    if !majors_owned.contains(&Self::Fireplace { cheaper: !cheaper })
-                        && can_pay_for_resource(&card.cost(), resources)
-                    {
-                        return true;
-                    }
-                }
-                Self::CookingHearth { cheaper } => {
-                    if (majors_owned.contains(&Self::Fireplace { cheaper: *cheaper })
-                        || majors_owned.contains(&Self::Fireplace { cheaper: !cheaper })
-                        || can_pay_for_resource(&card.cost(), resources))
-                        && !majors_owned.contains(&Self::CookingHearth { cheaper: !cheaper })
-                    {
-                        return true;
-                    }
-                }
-                _ => {
-                    if can_pay_for_resource(&card.cost(), resources) {
-                        return true;
-                    }
-                }
-            }
+    pub const fn index(&self) -> usize {
+        match self {
+            Self::Fireplace { cheaper: true } => 0,
+            Self::Fireplace { cheaper: false } => 1,
+            Self::CookingHearth { cheaper: true } => 2,
+            Self::CookingHearth { cheaper: false } => 3,
+            Self::Well => 4,
+            Self::ClayOven => 5,
+            Self::StoneOven => 6,
+            Self::Joinery => 7,
+            Self::Pottery => 8,
+            Self::BasketmakersWorkshop => 9,
         }
-
-        false
-    }
-
-    pub fn available_majors_to_build(
-        majors_owned: &[Self],
-        majors_on_board: &[Self],
-        resources: &Resources,
-    ) -> Vec<Self> {
-        let mut available: Vec<Self> = vec![];
-
-        for card in majors_on_board {
-            match card {
-                Self::Fireplace { cheaper } => {
-                    if !majors_owned.contains(&Self::Fireplace { cheaper: !cheaper })
-                        && can_pay_for_resource(&card.cost(), resources)
-                    {
-                        available.push(card.clone());
-                    }
-                }
-                Self::CookingHearth { cheaper } => {
-                    if (majors_owned.contains(&Self::Fireplace { cheaper: *cheaper })
-                        || majors_owned.contains(&Self::Fireplace { cheaper: !cheaper })
-                        || can_pay_for_resource(&card.cost(), resources))
-                        && !majors_owned.contains(&Self::CookingHearth { cheaper: !cheaper })
-                    {
-                        available.push(card.clone());
-                    }
-                }
-                _ => {
-                    if can_pay_for_resource(&card.cost(), resources) {
-                        available.push(card.clone());
-                    }
-                }
-            }
-        }
-        available
     }
 
     pub fn exchanges(&self) -> Vec<ResourceExchange> {
@@ -180,54 +128,40 @@ impl MajorImprovement {
     }
 
     pub fn cost(&self) -> Resources {
+        let mut res = new_res();
         match self {
             Self::Fireplace { cheaper } => {
-                let mut res = new_res();
                 res[Clay.index()] = if *cheaper { 2 } else { 3 };
-                res
             }
             Self::CookingHearth { cheaper } => {
-                let mut res = new_res();
                 res[Clay.index()] = if *cheaper { 4 } else { 5 };
-                res
             }
             Self::Well => {
-                let mut res = new_res();
                 res[Wood.index()] = 1;
                 res[Stone.index()] = 3;
-                res
             }
             Self::ClayOven => {
-                let mut res = new_res();
                 res[Clay.index()] = 3;
                 res[Stone.index()] = 1;
-                res
             }
             Self::StoneOven => {
-                let mut res = new_res();
                 res[Clay.index()] = 1;
                 res[Stone.index()] = 3;
-                res
             }
             Self::Joinery => {
-                let mut res = new_res();
                 res[Wood.index()] = 2;
                 res[Stone.index()] = 2;
-                res
             }
             Self::Pottery => {
-                let mut res = new_res();
                 res[Clay.index()] = 2;
                 res[Stone.index()] = 2;
-                res
             }
             Self::BasketmakersWorkshop => {
-                let mut res = new_res();
                 res[Reed.index()] = 2;
                 res[Stone.index()] = 2;
-                res
             }
         }
+        res
     }
 
     pub fn display(cards: &Vec<Self>) -> String {

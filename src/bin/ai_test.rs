@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, time::Instant};
 
 use agricola_game::agricola::{
     actions::Action,
@@ -8,10 +8,12 @@ use agricola_game::agricola::{
 
 fn main() {
     env::set_var("RUN_BACKTRACE", "1");
+    let start = Instant::now();
     let opt_state = State::new(&[PlayerType::MCTSMachine, PlayerType::MCTSMachine]);
     let mut ai_agent = AI::new();
     let mut state = opt_state.unwrap();
     const NUM_GAMES_TO_SIMULATE: usize = 100;
+    const OPT_DEPTH: Option<usize> = None;
 
     loop {
         let actions = Action::next_choices(&state);
@@ -28,7 +30,7 @@ fn main() {
 
         ai_agent.init_records(&actions, &state);
         for _ in 0..NUM_GAMES_TO_SIMULATE {
-            ai_agent.sample_once(&state, Some(10), false);
+            ai_agent.sample_once(&state, OPT_DEPTH, false);
         }
 
         println!("Scores {:?}", state.scores());
@@ -39,4 +41,12 @@ fn main() {
             state.current_player_idx, records[0].action
         );
     }
+    let duration = start.elapsed();
+    println!(
+        "Time taken in a {} player MCTS AI game (Simulated Games {}, Depth {:?}): {:?}",
+        state.players.len(),
+        NUM_GAMES_TO_SIMULATE,
+        OPT_DEPTH,
+        duration
+    );
 }

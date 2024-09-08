@@ -115,10 +115,12 @@ impl AI {
             path.push(expand_node_hash);
         }
 
-        // Perform playout - play the game out until the end
+        // Perform playout - play the game out until the desired depth (if none, play until the end)
         tmp_game.play_random(&mut path, opt_depth);
+
         // Calculate result and backpropagate to the root
         let res = tmp_game.fitness();
+
         if debug {
             println!(": {}", res[state.current_player_idx]);
         }

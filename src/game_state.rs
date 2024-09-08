@@ -1,9 +1,37 @@
-pub trait Action {}
+#[derive(Hash, PartialEq)]
+pub struct GameState {
+    pub current_player_idx: usize,
+    pub scores: Vec<i32>,
+    pub wood: Vec<u8>,
+}
 
-pub trait GameState {
-    fn actions(&self) -> Vec<Box<dyn Action>> {
-        Vec::new()
+pub trait AccumulationSpace {
+    fn update(&mut self);
+}
+
+pub trait Action {
+    fn apply_choice(&self, state: &mut GameState);
+}
+
+pub struct UseDayLaborer {}
+
+#[derive(Hash, PartialEq)]
+pub struct UseForest {}
+
+impl AccumulationSpace for UseForest {
+    fn update(&mut self) {
+        println!("UseForest");
     }
+}
 
-    fn apply_action(&mut self, _action: Box<dyn Action>) {}
+impl Action for UseDayLaborer {
+    fn apply_choice(&self, state: &mut GameState) {
+        state.scores[state.current_player_idx] += 1;
+    }
+}
+
+impl Action for UseForest {
+    fn apply_choice(&self, state: &mut GameState) {
+        state.wood[state.current_player_idx] += 1;
+    }
 }
