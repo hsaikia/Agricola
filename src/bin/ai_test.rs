@@ -1,3 +1,4 @@
+use indicatif::ProgressBar;
 use std::{env, time::Instant};
 
 use agricola_game::agricola::{
@@ -12,8 +13,8 @@ fn main() {
     let opt_state = State::new(&[PlayerType::MCTSMachine, PlayerType::MCTSMachine]);
     let mut ai_agent = AI::new();
     let mut state = opt_state.unwrap();
-    const NUM_GAMES_TO_SIMULATE: usize = 100;
-    const OPT_DEPTH: Option<usize> = None;
+    const NUM_GAMES_TO_SIMULATE: usize = 500;
+    const OPT_DEPTH: Option<usize> = Some(30);
 
     loop {
         let actions = Action::next_choices(&state);
@@ -29,9 +30,12 @@ fn main() {
         }
 
         ai_agent.init_records(&actions, &state);
+        let bar = ProgressBar::new(NUM_GAMES_TO_SIMULATE as u64);
         for _ in 0..NUM_GAMES_TO_SIMULATE {
+            bar.inc(1);
             ai_agent.sample_once(&state, OPT_DEPTH, false);
         }
+        bar.finish();
 
         println!("Scores {:?}", state.scores());
         let records = ai_agent.sorted_records();

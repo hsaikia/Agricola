@@ -65,15 +65,15 @@ fn score_farm(player: &Player) -> i32 {
     score
 }
 
-pub fn score(player: &Player) -> i32 {
-    let mut ret: i32 = 0;
+pub fn score(player: &Player) -> f32 {
+    let mut ret: f32 = 0.0;
 
     // House, Family and Empty Spaces
-    ret += 3 * player.family_members() as i32;
+    ret += 3.0 * player.family_members() as f32;
     // Begging Tokens
-    ret -= 3 * player.begging_tokens as i32;
+    ret -= 3.0 * player.begging_tokens as f32;
     // Score farm
-    ret += score_farm(player);
+    ret += score_farm(player) as f32;
 
     ret
 }

@@ -259,7 +259,7 @@ impl State {
         let mut scores: Vec<f32> = Vec::new();
         let card_scores = self.score_cards();
         for (idx, p) in self.players.iter().enumerate() {
-            scores.push(scoring::score(p) as f32 + card_scores[idx] as f32);
+            scores.push(scoring::score(p) + card_scores[idx] as f32);
         }
         scores
     }
