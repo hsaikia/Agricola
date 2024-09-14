@@ -6,6 +6,10 @@ const NUM_FARMYARD_SPACES: usize = A * B;
 const MAX_FENCES: usize = 15;
 const ROOM_INDICES: [usize; 2] = [5, 10];
 
+// 5 pastures actually decrease total capacity while needing more wood. Plus score is (by default, without any bonuses) capped at 4 pastures
+// If some card allows additional bonuses for 5 pastures, this flag can be set to true
+const ALLOW_FIVE_PASTURES: bool = false;
+
 // Farmyard spaces
 // 00 01 02 03 04
 // 05 06 07 08 09
@@ -157,6 +161,17 @@ fn pasture_config_hash(pasture: &[Vec<usize>]) -> u64 {
     hash
 }
 
+// Every pasture space can hold 2 animals, with a stable each pasture has double capacity, given a max of 4 stables
+fn pasture_max_capacities(pasture: &[Vec<usize>]) -> Vec<usize> {
+    let mut max_capacity = Vec::new();
+    for (i, p) in pasture.iter().enumerate() {
+        let stable_multipler = if i < 4 { 2 } else { 1 };
+        max_capacity.push(p.len() * 2 * stable_multipler);
+    }
+    max_capacity.sort();
+    max_capacity
+}
+
 // House indices are at 0, 5. Fiels also need to be adjacent. So we prefer pastures to not break the connectivity of farm tiles in the rest of the farmyard
 fn breaks_connectivity(pastures: &[Vec<usize>]) -> bool {
     let pasture_indices = pastures.iter().flatten().collect::<Vec<&usize>>();
@@ -196,6 +211,38 @@ fn breaks_connectivity(pastures: &[Vec<usize>]) -> bool {
         }
     }
 
+    false
+}
+
+// If pasture p1 is contained entirely in pasture p2
+fn contained_in(p1: &[usize], p2: &[usize]) -> bool {
+    for x in p1.iter() {
+        if !p2.contains(x) {
+            return false;
+        }
+    }
+    true
+}
+
+// If p1 is a future extension of p2
+fn is_future_extension(pastures1: &[Vec<usize>], pastures2: &[Vec<usize>]) -> bool {
+    // A pasture config can be extended in the future by adding more wood
+    // Pastures can either be created adjacent to the existing pastures or existing pastures can be split into two or more pastures
+    // In all those cases, such a (future) pasture config is considered an extension
+    let mut p2_indices = pastures2.iter().flatten().collect::<Vec<&usize>>();
+    p2_indices.sort();
+    let mut p1_indices_fully_contained_in_p2: Vec<&usize> = Vec::new();
+    for p1 in pastures1.iter() {
+        for p in pastures2.iter() {
+            if contained_in(p1, p) {
+                p1_indices_fully_contained_in_p2.extend(p1);
+            }
+        }
+    }
+    p1_indices_fully_contained_in_p2.sort();
+    if p1_indices_fully_contained_in_p2.len() == p2_indices.len() {
+        return true;
+    }
     false
 }
 
@@ -253,8 +300,9 @@ fn main() {
         all_pastures.push((vec![p.clone()], *w));
     }
 
-    // Loop until we have 5 pastures (more than 5 pastures are impossible with 15 fences)
-    for _ in 1..5 {
+    // Loop until we have 5 pastures (more than 5 pastures are impossible with 15 fences) if ALLOW_FIVE_PASTURES is true
+    let max_pastures = if ALLOW_FIVE_PASTURES { 5 } else { 4 };
+    for _ in 1..max_pastures {
         let l = all_pastures.len();
         for i in 0..l {
             for p in single_pastures.iter() {
@@ -291,7 +339,7 @@ fn main() {
         let hash = pasture_config_hash(ps);
         let min_wood = pasture_config_to_min_wood_map.get(&hash).unwrap();
 
-        // Reject a multi-pasture if the whood required to build the exact same config is greater than the min_wood required to build that config
+        // Reject a multi-pasture if the wood required to build the exact same config is greater than the min_wood required to build that config
         if wood > min_wood {
             continue;
         }
@@ -302,24 +350,23 @@ fn main() {
     for (i, all_pastures) in possible_pastures_from_wood.iter().enumerate() {
         println!("All pasture configs for wood {}", i);
         for pastures in all_pastures.iter() {
+            let mut flat_p_indices = pastures.iter().flatten().collect::<Vec<&usize>>();
+            flat_p_indices.sort();
+
             let mut future_extensions = 0;
             for future_pastures in possible_pastures_from_wood.iter().skip(i + 1) {
-                for future_ps in future_pastures.iter() {
-                    let mut num_contains = 0;
-                    for p in pastures.iter() {
-                        if future_ps.contains(p) {
-                            // future_extensions += 1;
-                            num_contains += 1;
-                        }
-                    }
-                    if num_contains == pastures.len() {
+                for future_pasture in future_pastures.iter() {
+                    if is_future_extension(future_pasture, pastures) {
                         future_extensions += 1;
-                        //println!("\tFuture extension: {:?}", future_ps);
                     }
                 }
             }
 
-            println!("{:?} Future extensions {}", pastures, future_extensions);
+            let max_capacity = pasture_max_capacities(pastures);
+            println!(
+                "{:?} Max Capacity {:?} Future extensions {}",
+                pastures, max_capacity, future_extensions
+            );
         }
         println!("-----------------");
     }
