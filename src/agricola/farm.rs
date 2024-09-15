@@ -1,4 +1,6 @@
-use super::primitives::*;
+use derivative::Derivative;
+
+use super::{fencing::PastureConfig, primitives::*};
 use std::{collections::HashMap, collections::VecDeque, hash::Hash};
 
 const L: usize = 5;
@@ -94,11 +96,15 @@ pub const FENCE_INDICES: [[usize; 4]; NUM_FARMYARD_SPACES] = [
     [53, 65, 63, 75],
 ];
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Derivative, Debug, Clone, Hash)]
 pub struct Farm {
     pub farmyard_spaces: [FarmyardSpace; NUM_FARMYARD_SPACES],
     pub fences: [bool; NUM_FENCE_INDICES], // (5 + 6) * (3 + 4)
     pub pet: Option<(Animal, usize)>,
+    #[derivative(Hash = "ignore")]
+    pub fence_options_cache: Vec<PastureConfig>,
+    #[derivative(Hash = "ignore")]
+    pub cache_invalid: bool,
 }
 
 impl Default for Farm {
@@ -117,6 +123,8 @@ impl Farm {
             farmyard_spaces,
             fences: [false; NUM_FENCE_INDICES],
             pet: None,
+            fence_options_cache: Default::default(),
+            cache_invalid: true,
         }
     }
 
@@ -653,11 +661,13 @@ impl Farm {
     pub fn add_field(&mut self, idx: usize) {
         assert!(self.farmyard_spaces[idx] == FarmyardSpace::Empty);
         self.farmyard_spaces[idx] = FarmyardSpace::Field(None);
+        self.cache_invalid = true;
     }
 
     pub fn build_room(&mut self, idx: usize) {
         assert!(self.farmyard_spaces[idx] == FarmyardSpace::Empty);
         self.farmyard_spaces[idx] = FarmyardSpace::Room;
+        self.cache_invalid = true;
     }
 
     pub fn build_stable(&mut self, idx: usize) {
