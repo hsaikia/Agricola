@@ -31,7 +31,7 @@ fn score_farm(player: &Player) -> i32 {
                 House::Stone => score += 2,
                 House::Wood => (),
             },
-            FarmyardSpace::FencedPasture(opt_animal, has_stable) => {
+            FarmyardSpace::FencedPasture(opt_animal, has_stable, _) => {
                 if has_stable {
                     score += 1;
                 }

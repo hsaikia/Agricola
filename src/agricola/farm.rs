@@ -41,7 +41,7 @@ pub enum FarmyardSpace {
     Room,
     Field(Option<(Seed, usize)>),
     UnfencedStable(Option<(Animal, usize)>),
-    FencedPasture(Option<(Animal, usize)>, ContainsStable),
+    FencedPasture(Option<(Animal, usize)>, ContainsStable, usize),
 }
 
 // Farmyard spaces
@@ -165,7 +165,7 @@ impl Farm {
         for (i, space) in self.farmyard_spaces.iter().enumerate() {
             match space {
                 FarmyardSpace::Empty
-                | FarmyardSpace::FencedPasture(_, _)
+                | FarmyardSpace::FencedPasture(_, _, _)
                 | FarmyardSpace::UnfencedStable(_) => {
                     // Mark all unused spots next to empty spaces, fenced spaces, and spaces with unfenced stables
                     for spot in FENCE_INDICES[i] {
@@ -232,7 +232,7 @@ impl Farm {
             match self.farmyard_spaces[idx] {
                 FarmyardSpace::Empty
                 | FarmyardSpace::UnfencedStable(_)
-                | FarmyardSpace::FencedPasture(_, _) => {
+                | FarmyardSpace::FencedPasture(_, _, _) => {
                     for i in 0..4 {
                         ret[FENCE_INDICES[idx][i]] += 1;
                         count[FENCE_INDICES[idx][i]] += 1;
@@ -428,10 +428,10 @@ impl Farm {
             }
             match self.farmyard_spaces[idx] {
                 FarmyardSpace::Empty => {
-                    self.farmyard_spaces[idx] = FarmyardSpace::FencedPasture(None, false)
+                    self.farmyard_spaces[idx] = FarmyardSpace::FencedPasture(None, false, 0)
                 }
                 FarmyardSpace::UnfencedStable(animal) => {
-                    self.farmyard_spaces[idx] = FarmyardSpace::FencedPasture(animal, true)
+                    self.farmyard_spaces[idx] = FarmyardSpace::FencedPasture(animal, true, 0)
                 }
                 _ => (),
             }
@@ -445,12 +445,13 @@ impl Farm {
         for idx in 0..NUM_FARMYARD_SPACES {
             match self.farmyard_spaces[idx] {
                 FarmyardSpace::UnfencedStable(_) => unfenced_stables.push(idx),
-                FarmyardSpace::FencedPasture(_, has_stable) => {
+                FarmyardSpace::FencedPasture(_, has_stable, _) => {
                     pasture_idx[idx] = pasture_idx[idx].min(idx as i32);
                     stables[idx] = has_stable;
                     for (i, opt_ni) in NEIGHBOR_SPACES[idx].iter().enumerate() {
                         if let Some(ni) = opt_ni {
-                            if let FarmyardSpace::FencedPasture(_, _) = self.farmyard_spaces[*ni] {
+                            if let FarmyardSpace::FencedPasture(_, _, _) = self.farmyard_spaces[*ni]
+                            {
                                 // No fence between these two spaces -> they are part of the same pasture
                                 if !self.fences[FENCE_INDICES[idx][i]] {
                                     // Assign the smallest index of all spaces in a pasture as the pasture index
@@ -514,7 +515,7 @@ impl Farm {
         for fs in &mut self.farmyard_spaces {
             match fs {
                 FarmyardSpace::UnfencedStable(animals)
-                | FarmyardSpace::FencedPasture(animals, _) => {
+                | FarmyardSpace::FencedPasture(animals, _, _) => {
                     if let Some((animal, amt)) = animals {
                         match *animal {
                             Animal::Sheep => res[Sheep.index()] += *amt,
@@ -565,10 +566,11 @@ impl Farm {
             for idx in pac.0 {
                 let num_animals_to_place = animal_capacity_per_pasture.min(*count);
                 match self.farmyard_spaces[idx] {
-                    FarmyardSpace::FencedPasture(_, has_stable) => {
+                    FarmyardSpace::FencedPasture(_, has_stable, pasture_idx) => {
                         self.farmyard_spaces[idx] = FarmyardSpace::FencedPasture(
                             Some((animal, num_animals_to_place)),
                             has_stable,
+                            pasture_idx,
                         );
                         *count -= num_animals_to_place;
                     }
@@ -626,7 +628,7 @@ impl Farm {
             .filter(|&i| {
                 matches!(
                     self.farmyard_spaces[i],
-                    FarmyardSpace::Empty | FarmyardSpace::FencedPasture(_, false)
+                    FarmyardSpace::Empty | FarmyardSpace::FencedPasture(_, false, _)
                 )
             })
             .collect()
@@ -673,15 +675,15 @@ impl Farm {
     pub fn build_stable(&mut self, idx: usize) {
         let available = matches!(
             self.farmyard_spaces[idx],
-            FarmyardSpace::Empty | FarmyardSpace::FencedPasture(_, false)
+            FarmyardSpace::Empty | FarmyardSpace::FencedPasture(_, false, _)
         );
         assert!(available);
         assert!(self.can_build_stable());
 
         match self.farmyard_spaces[idx] {
             FarmyardSpace::Empty => self.farmyard_spaces[idx] = FarmyardSpace::UnfencedStable(None),
-            FarmyardSpace::FencedPasture(animal, false) => {
-                self.farmyard_spaces[idx] = FarmyardSpace::FencedPasture(animal, true)
+            FarmyardSpace::FencedPasture(animal, false, pasture_idx) => {
+                self.farmyard_spaces[idx] = FarmyardSpace::FencedPasture(animal, true, pasture_idx)
             }
             _ => (),
         }
@@ -692,10 +694,10 @@ impl Farm {
         let mut candidate_spaces = 0;
         for fs in &self.farmyard_spaces {
             match *fs {
-                FarmyardSpace::UnfencedStable(_) | FarmyardSpace::FencedPasture(_, true) => {
+                FarmyardSpace::UnfencedStable(_) | FarmyardSpace::FencedPasture(_, true, _) => {
                     num_stables += 1
                 }
-                FarmyardSpace::Empty | FarmyardSpace::FencedPasture(_, false) => {
+                FarmyardSpace::Empty | FarmyardSpace::FencedPasture(_, false, _) => {
                     candidate_spaces += 1
                 }
                 _ => (),
@@ -792,9 +794,9 @@ mod tests {
         farm.fences[FENCE_INDICES[9][2]] = true;
         farm.fences[FENCE_INDICES[9][3]] = true;
 
-        farm.farmyard_spaces[3] = FarmyardSpace::FencedPasture(None, false);
-        farm.farmyard_spaces[4] = FarmyardSpace::FencedPasture(None, false);
-        farm.farmyard_spaces[9] = FarmyardSpace::FencedPasture(None, false);
+        farm.farmyard_spaces[3] = FarmyardSpace::FencedPasture(None, false, 0);
+        farm.farmyard_spaces[4] = FarmyardSpace::FencedPasture(None, false, 0);
+        farm.farmyard_spaces[9] = FarmyardSpace::FencedPasture(None, false, 0);
 
         let fences_used = farm.total_fences_used();
         assert_eq!(fences_used, 9);

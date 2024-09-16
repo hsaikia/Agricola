@@ -471,7 +471,7 @@ impl Player {
                                 stuff = format!("{stuff} 🔲 ");
                             }
                         }
-                        FarmyardSpace::FencedPasture(opt_animal, has_stable) => {
+                        FarmyardSpace::FencedPasture(opt_animal, has_stable, _) => {
                             if has_stable {
                                 ret = format!("{ret} 🔶 ");
                             } else {
