@@ -138,7 +138,7 @@ impl State {
         // Harvest grain and veggies
         player.harvest_fields();
         // Move all animals to the resources array
-        player.farm.farm_animals_to_resources(&mut player.resources);
+        // player.farm.farm_animals_to_resources(&mut player.resources);
     }
 
     // After paying for harvest - this function needs to be called to clear the empty hidden space

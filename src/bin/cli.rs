@@ -6,7 +6,6 @@ use agricola_game::agricola::state::State;
 use agricola_game::agricola::{
     actions::Action,
     algorithms::{PlayerType, AI},
-    farm::Farm,
 };
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
@@ -188,8 +187,8 @@ impl App {
                     for (i, action) in self.current_actions.iter().enumerate() {
                         if i == self.selection_y {
                             ret = format!("{}\n>> {:?}", ret, action);
-                            if let Action::Fence(spaces) = action {
-                                additional_stuff = Farm::format_fence_layout(spaces);
+                            if let Action::Fence(_) = action {
+                                additional_stuff = String::from("Fence Layout : TODO");
                             }
                         } else {
                             ret = format!("{}\n{:?}", ret, action);
@@ -212,8 +211,8 @@ impl App {
                                 ret, rec.action, rec.fitness, rec.games
                             );
 
-                            if let Action::Fence(spaces) = &rec.action {
-                                additional_stuff = Farm::format_fence_layout(spaces);
+                            if let Action::Fence(_) = &rec.action {
+                                additional_stuff = String::from("Fence Layout : TODO");
                             }
                         } else {
                             ret = format!(

@@ -1,5 +1,6 @@
 use super::algorithms::PlayerType;
-use super::farm::{Animal, Farm, FarmyardSpace, House, Seed};
+use super::farm::{Farm, House, Seed};
+use super::fencing::PastureConfig;
 use super::major_improvements::MajorImprovement;
 use super::occupations::Occupation;
 use super::primitives::*;
@@ -87,7 +88,7 @@ impl Player {
         majors: &[(MajorImprovement, Option<usize>, usize)],
         breed: bool,
     ) {
-        self.farm.reorg_animals(&mut self.resources, breed);
+        //self.farm.reorg_animals(&mut self.resources, breed);
 
         let sheep = self.resources[Sheep.index()];
         self.resources[Sheep.index()] = 0;
@@ -147,27 +148,14 @@ impl Player {
             && self.farm.can_sow()
     }
 
-    pub fn fencing_choices(&self) -> Vec<Vec<usize>> {
-        let mut ret: Vec<Vec<usize>> = Vec::new();
-        let fencing_arrangements = self.farm.fencing_options(self.resources[Wood.index()]);
-        for idxs in fencing_arrangements {
-            ret.push(idxs);
-        }
-        ret
+    pub fn fencing_choices(&self) -> Vec<PastureConfig> {
+        self.farm.fencing_options(self.resources[Wood.index()])
     }
 
-    pub fn fence(&mut self, fence_indices: &Vec<usize>) {
+    pub fn fence(&mut self, pasture_config: &PastureConfig) {
         assert!(self.can_fence());
-        let fencing_options = self.farm.fencing_options(self.resources[Wood.index()]);
-        let mut wood = 0;
-        for fo in fencing_options.iter() {
-            if fo == fence_indices {
-                wood = fo.len();
-            }
-        }
-
-        self.farm.fence_spaces(fence_indices);
-        self.resources[Wood.index()] -= wood;
+        self.farm
+            .fence_spaces(pasture_config, &mut self.resources[Wood.index()]);
     }
 
     pub fn can_fence(&self) -> bool {
@@ -407,103 +395,9 @@ impl Player {
     }
 
     pub fn display_farm(&self) -> (String, String) {
-        const SX: usize = 5;
-        const SY: usize = 3;
-        let mut ret = String::from("\n\n\n");
-        let mut stuff = String::from("\n\n\n");
-        for ii in 0..2 * SY + 1 {
-            for jj in 0..2 * SX + 1 {
-                let fidx = ii * (2 * SX + 1) + jj;
-
-                if (ii + jj) % 2 == 1 {
-                    // Fence
-                    if self.farm.fences[fidx] {
-                        if ii % 2 == 0 {
-                            ret = format!("{ret} ━━ ");
-                            stuff = format!("{stuff} ━━ ");
-                        } else {
-                            ret = format!("{ret}┃");
-                            stuff = format!("{stuff}┃");
-                        }
-                    } else if ii % 2 == 0 {
-                        ret = format!("{ret}    ");
-                        stuff = format!("{stuff}    ");
-                    } else {
-                        ret = format!("{ret} ");
-                        stuff = format!("{stuff} ");
-                    }
-                } else if ii % 2 == 1 && jj % 2 == 1 {
-                    // Farmyard space
-                    let idx = (ii / 2) * 5 + jj / 2;
-                    match self.farm.farmyard_spaces[idx] {
-                        FarmyardSpace::Empty => {
-                            ret = format!("{ret} 🔲 ");
-                            stuff = format!("{stuff} 🔲 ");
-                        }
-                        FarmyardSpace::Room => {
-                            match self.house {
-                                House::Wood => ret = format!("{ret} 🛖 "),
-                                House::Clay => ret = format!("{ret} 🏠 "),
-                                House::Stone => ret = format!("{ret} 🏰 "),
-                            }
-                            stuff = format!("{stuff} 🔲 ");
-                        }
-                        FarmyardSpace::Field(opt_seed) => {
-                            ret = format!("{ret} 🟩 ");
-                            if let Some((seed, amt)) = opt_seed {
-                                match seed {
-                                    Seed::Grain => stuff = format!("{stuff}{amt} 🌾"),
-                                    Seed::Vegetable => stuff = format!("{stuff}{amt} 🎃"),
-                                }
-                            } else {
-                                stuff = format!("{stuff} 🔲 ");
-                            }
-                        }
-                        FarmyardSpace::UnfencedStable(opt_animal) => {
-                            ret = format!("{ret} 🔶 ");
-                            if let Some((animal, amt)) = opt_animal {
-                                match animal {
-                                    Animal::Sheep => stuff = format!("{stuff}{amt} 🐑"),
-                                    Animal::Boar => stuff = format!("{stuff}{amt} 🐖"),
-                                    Animal::Cattle => stuff = format!("{stuff}{amt} 🐄"),
-                                }
-                            } else {
-                                stuff = format!("{stuff} 🔲 ");
-                            }
-                        }
-                        FarmyardSpace::FencedPasture(opt_animal, has_stable, _) => {
-                            if has_stable {
-                                ret = format!("{ret} 🔶 ");
-                            } else {
-                                ret = format!("{ret} 🔲 ");
-                            }
-                            if let Some((animal, amt)) = opt_animal {
-                                match animal {
-                                    Animal::Sheep => stuff = format!("{stuff}{amt} 🐑"),
-                                    Animal::Boar => stuff = format!("{stuff}{amt} 🐖"),
-                                    Animal::Cattle => stuff = format!("{stuff}{amt} 🐄"),
-                                }
-                            } else {
-                                stuff = format!("{stuff} 🔲 ");
-                            }
-                        }
-                    }
-                } else {
-                    ret = format!("{ret}+");
-                    stuff = format!("{stuff}+");
-                }
-            }
-            ret = format!("{}\n", ret);
-            stuff = format!("{}\n", stuff);
-        }
-
-        if let Some(pet) = self.farm.pet {
-            match pet.0 {
-                Animal::Sheep => stuff = format!("{stuff}\nPet {} 🐑", pet.1),
-                Animal::Boar => stuff = format!("{stuff}\nPet {} 🐖", pet.1),
-                Animal::Cattle => stuff = format!("{stuff}\nPet {} 🐄", pet.1),
-            }
-        }
+        // TODO : Fix these!
+        let ret = String::from("\n\n\nTODO");
+        let stuff = String::from("\n\n\nTODO");
 
         (ret, stuff)
     }

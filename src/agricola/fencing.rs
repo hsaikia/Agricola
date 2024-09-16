@@ -1,12 +1,7 @@
+use rand::Rng;
 use std::collections::{HashMap, VecDeque};
 
-use super::farm::FarmyardSpace;
-
-const A: usize = 5;
-const B: usize = 3;
-const NUM_FARMYARD_SPACES: usize = A * B;
-const MAX_FENCES: usize = 15;
-const ROOM_INDICES: [usize; 2] = [5, 10];
+use super::farm::{FarmyardSpace, MAX_FENCES, NEIGHBOR_SPACES, NUM_FARMYARD_SPACES};
 
 // 5 pastures actually decrease total capacity while needing more wood. Plus score is (by default, without any bonuses) capped at 4 pastures
 // If some card allows additional bonuses for 5 pastures, set this to 5 (more than 5 pastures are impossible with 15 fences).
@@ -16,25 +11,6 @@ const MAX_PASTURES: usize = 4;
 // 00 01 02 03 04
 // 05 06 07 08 09
 // 10 11 12 13 14
-
-// Order : NEWS
-const NEIGHBOR_SPACES: [[Option<usize>; 4]; NUM_FARMYARD_SPACES] = [
-    [None, Some(1), None, Some(5)],
-    [None, Some(2), Some(0), Some(6)],
-    [None, Some(3), Some(1), Some(7)],
-    [None, Some(4), Some(2), Some(8)],
-    [None, None, Some(3), Some(9)],
-    [Some(0), Some(6), None, Some(10)],
-    [Some(1), Some(7), Some(5), Some(11)],
-    [Some(2), Some(8), Some(6), Some(12)],
-    [Some(3), Some(9), Some(7), Some(13)],
-    [Some(4), None, Some(8), Some(14)],
-    [Some(5), Some(11), None, None],
-    [Some(6), Some(12), Some(10), None],
-    [Some(7), Some(13), Some(11), None],
-    [Some(8), Some(14), Some(12), None],
-    [Some(9), None, Some(13), None],
-];
 
 type Pasture = Vec<usize>;
 
@@ -194,13 +170,20 @@ pub fn pasture_sizes_from_hash(hash: u64) -> Vec<usize> {
 fn breaks_connectivity(pastures: &[Pasture], room_and_field_spaces: &[bool]) -> bool {
     let pasture_indices = pastures.iter().flatten().collect::<Vec<&usize>>();
 
-    let mut visited = room_and_field_spaces.to_vec();
+    let mut visited = vec![false; NUM_FARMYARD_SPACES];
 
     for idx in pasture_indices.iter() {
         visited[**idx] = true;
     }
 
-    let mut q = VecDeque::from(ROOM_INDICES.to_vec());
+    // Put all room and field spaces in a queue
+    let mut q = VecDeque::new();
+    for idx in 0..NUM_FARMYARD_SPACES {
+        if room_and_field_spaces[idx] {
+            q.push_back(idx);
+            visited[idx] = true;
+        }
+    }
 
     while !q.is_empty() {
         let current = q.pop_front().unwrap();
@@ -355,11 +338,19 @@ fn all_possible_fence_configs(
     possible_pastures_from_wood
 }
 
-pub fn get_all_pasture_configs(
-    farmyard_spaces: &[FarmyardSpace],
-    fences_available: usize,
-    fences_used: usize,
-) -> Vec<PastureConfig> {
+pub fn get_existing_pastures(farmyard_spaces: &[FarmyardSpace]) -> [Pasture; MAX_PASTURES] {
+    let mut existing_pastures: [Pasture; MAX_PASTURES] = Default::default();
+
+    for (idx, space) in farmyard_spaces.iter().enumerate() {
+        if let FarmyardSpace::FencedPasture(_, _, pasture_idx) = space {
+            existing_pastures[*pasture_idx].push(idx);
+        }
+    }
+
+    existing_pastures
+}
+
+pub fn get_all_pasture_configs(farmyard_spaces: &[FarmyardSpace]) -> Vec<PastureConfig> {
     let mut room_and_field_spaces = [
         false, false, false, false, false, false, false, false, false, false, false, false, false,
         false, false,
@@ -385,9 +376,6 @@ pub fn get_all_pasture_configs(
 
     if existing_pastures_configs.iter().all(|p| p.is_empty()) {
         for (w, all_pastures) in possible_pasture_configs_for_wood.iter().enumerate() {
-            if w > fences_available {
-                break;
-            }
             for pastures in all_pastures.iter() {
                 ret.push(PastureConfig {
                     pastures: pastures.clone(),
@@ -400,13 +388,9 @@ pub fn get_all_pasture_configs(
         for (w, all_pastures) in possible_pasture_configs_for_wood.iter().enumerate() {
             for pastures in all_pastures.iter() {
                 if is_future_extension(pastures, &existing_pastures_configs) {
-                    if w == fences_used {
-                        continue;
-                    }
-
                     ret.push(PastureConfig {
                         pastures: pastures.clone(),
-                        wood: w - fences_used,
+                        wood: w,
                         hash: pasture_config_hash(pastures),
                     });
                 }
@@ -414,5 +398,32 @@ pub fn get_all_pasture_configs(
         }
     }
 
+    ret
+}
+
+/// Get a random pasture configuration from all possible pasture configurations for a given pasture size configuration
+pub fn get_rand_fence_options(
+    all_pasture_configs: &[PastureConfig],
+    fences_used: usize,
+    wood_available: usize,
+) -> Vec<PastureConfig> {
+    let mut size_config_map: HashMap<u64, Vec<usize>> = HashMap::new();
+
+    for (i, pasture_config) in all_pasture_configs.iter().enumerate() {
+        if pasture_config.wood > wood_available + fences_used || pasture_config.wood <= fences_used {
+            continue;
+        }
+        size_config_map
+            .entry(pasture_config.hash)
+            .or_default()
+            .push(i);
+    }
+
+    let mut ret = Vec::new();
+    for (_, v) in size_config_map.iter() {
+        // TODO : Instead of picking a random pasture config, pick the one that maximizes the capacity
+        let idx = v[rand::thread_rng().gen_range(0..v.len())];
+        ret.push(all_pasture_configs[idx].clone());
+    }
     ret
 }

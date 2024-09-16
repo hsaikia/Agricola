@@ -13,8 +13,8 @@ fn main() {
     let opt_state = State::new(&[PlayerType::MCTSMachine, PlayerType::MCTSMachine]);
     let mut ai_agent = AI::new();
     let mut state = opt_state.unwrap();
-    const NUM_GAMES_TO_SIMULATE: usize = 500;
-    const OPT_DEPTH: Option<usize> = Some(30);
+    const NUM_GAMES_TO_SIMULATE: usize = 100;
+    const OPT_DEPTH: Option<usize> = Some(10);
 
     loop {
         let actions = Action::next_choices(&state);

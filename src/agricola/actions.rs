@@ -1,4 +1,5 @@
 use super::farm::Seed;
+use super::fencing::PastureConfig;
 use super::major_improvements::MajorImprovement;
 use super::occupations::Occupation;
 use super::player::Player;
@@ -84,7 +85,7 @@ pub enum Action {
     Sow(CalledFromGrainUtilization, Seed),
     Renovate(CalledFromHouseRedevelopment, CalledFromFarmRedevelopment),
     GrowFamily(WithRoom),
-    Fence(Vec<usize>),
+    Fence(PastureConfig),
     Plow(CalledFromCultivation, usize),
     Convert(ResourceExchange, Option<MajorImprovement>, ConversionStage),
     PreHarvest,
@@ -116,7 +117,7 @@ impl Action {
                 ret
             }
             Self::UseFarmExpansion => Self::farm_expansion_choices(player),
-            Self::UseFencing | Self::Fence(_) => Self::fencing_choices(player),
+            Self::UseFencing => Self::fencing_choices(player),
             Self::UseGrainUtilization => Self::grain_utilization_choices(state, false),
             Self::BuildRoom(_) | Self::BuildStable(_) => {
                 ret.extend(Self::farm_expansion_choices(player));
@@ -385,9 +386,9 @@ impl Action {
 
     fn fencing_choices(player: &Player) -> Vec<Self> {
         let mut ret: Vec<Self> = Vec::new();
-        let pasture_sizes = player.fencing_choices();
-        for ps in pasture_sizes {
-            ret.push(Self::Fence(ps));
+        let pasture_configs = player.fencing_choices();
+        for ps_conf in pasture_configs {
+            ret.push(Self::Fence(ps_conf));
         }
         ret.push(Self::EndTurn);
         ret
@@ -800,8 +801,8 @@ impl Action {
             Self::Plow(_, pasture_idx) => {
                 state.player_mut().add_new_field(pasture_idx);
             }
-            Self::Fence(pasture_indices) => {
-                state.player_mut().fence(pasture_indices);
+            Self::Fence(pasture_config) => {
+                state.player_mut().fence(pasture_config);
             }
             Self::BuildRoom(pasture_idx) => {
                 state.player_mut().build_room(pasture_idx);

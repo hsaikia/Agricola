@@ -1,4 +1,5 @@
 use super::farm::{Animal, FarmyardSpace, House, Seed};
+use super::fencing::get_existing_pastures;
 use super::player::Player;
 use super::primitives::*;
 
@@ -13,15 +14,12 @@ const CATTLE_SCORE: [i32; 7] = [-1, 1, 2, 2, 3, 3, 4];
 fn score_farm(player: &Player) -> i32 {
     let mut score = 0;
     let mut res: Resources = player.resources;
-    let mut num_pastures: usize = 0;
     let mut num_fields: usize = 0;
 
-    let pastures = player.farm.pastures_and_capacities();
-    for (p, c) in pastures {
-        if c > p.len() {
-            num_pastures += 1; // score all pastures except for unfenced stables
-        }
-    }
+    let num_pastures = get_existing_pastures(&player.farm.farmyard_spaces)
+        .iter()
+        .filter(|p| !p.is_empty())
+        .count();
 
     for space in &player.farm.farmyard_spaces {
         match *space {
@@ -59,8 +57,8 @@ fn score_farm(player: &Player) -> i32 {
     score += GRAIN_SCORE[res[Grain.index()].min(GRAIN_SCORE.len() - 1)];
     score += VEGETABLE_SCORE[res[Vegetable.index()].min(VEGETABLE_SCORE.len() - 1)];
     score += SHEEP_SCORE[res[Sheep.index()].min(SHEEP_SCORE.len() - 1)];
-    score += PIGS_SCORE[res[Sheep.index()].min(PIGS_SCORE.len() - 1)];
-    score += CATTLE_SCORE[res[Sheep.index()].min(CATTLE_SCORE.len() - 1)];
+    score += PIGS_SCORE[res[Boar.index()].min(PIGS_SCORE.len() - 1)];
+    score += CATTLE_SCORE[res[Cattle.index()].min(CATTLE_SCORE.len() - 1)];
 
     score
 }
