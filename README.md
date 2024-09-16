@@ -77,8 +77,7 @@ Fitness [-17, 8, -8, -16]
 
 ## TODO
 
-- Fencing options cache (use derivative trait to not hash)
-- Fence actions -> pastures? -> Capacity vector -> Arrangement (from cache)
+- Fix segfaults in fencing
 - Refactor Farmyard space to not store animal info. Animals should be stored in Resource vector only.
 - Implement basic NN AI
 - ImplementNN based training by replacing the MCTS playoff decision based on UCT to be done by the NN. 
