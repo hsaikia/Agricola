@@ -1,4 +1,4 @@
-use super::farm::{Animal, FarmyardSpace, House, Seed};
+use super::farm::{FarmyardSpace, House, Seed};
 use super::fencing::get_existing_pastures;
 use super::player::Player;
 use super::primitives::*;
@@ -29,16 +29,9 @@ fn score_farm(player: &Player) -> i32 {
                 House::Stone => score += 2,
                 House::Wood => (),
             },
-            FarmyardSpace::FencedPasture(opt_animal, has_stable, _) => {
+            FarmyardSpace::FencedPasture(has_stable, _) => {
                 if has_stable {
                     score += 1;
-                }
-                if let Some(animal) = opt_animal {
-                    match animal.0 {
-                        Animal::Sheep => res[Sheep.index()] += 1,
-                        Animal::Boar => res[Boar.index()] += 1,
-                        Animal::Cattle => res[Cattle.index()] += 1,
-                    }
                 }
             }
             FarmyardSpace::Field(Some((seed, amt))) => {

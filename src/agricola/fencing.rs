@@ -5,14 +5,15 @@ use super::farm::{FarmyardSpace, MAX_FENCES, NEIGHBOR_SPACES, NUM_FARMYARD_SPACE
 
 // 5 pastures actually decrease total capacity while needing more wood. Plus score is (by default, without any bonuses) capped at 4 pastures
 // If some card allows additional bonuses for 5 pastures, set this to 5 (more than 5 pastures are impossible with 15 fences).
-const MAX_PASTURES: usize = 4;
+pub const MAX_PASTURES: usize = 4;
+const STABLE_MULTIPLIER: usize = 2;
 
 // Farmyard spaces
 // 00 01 02 03 04
 // 05 06 07 08 09
 // 10 11 12 13 14
 
-type Pasture = Vec<usize>;
+pub type Pasture = Vec<usize>;
 
 #[derive(Clone, Debug, Hash)]
 pub struct PastureConfig {
@@ -170,7 +171,7 @@ pub fn pasture_sizes_from_hash(hash: u64) -> Vec<usize> {
 fn breaks_connectivity(pastures: &[Pasture], room_and_field_spaces: &[bool]) -> bool {
     let pasture_indices = pastures.iter().flatten().collect::<Vec<&usize>>();
 
-    let mut visited = vec![false; NUM_FARMYARD_SPACES];
+    let mut visited = [false; NUM_FARMYARD_SPACES];
 
     for idx in pasture_indices.iter() {
         visited[**idx] = true;
@@ -338,11 +339,48 @@ fn all_possible_fence_configs(
     possible_pastures_from_wood
 }
 
+pub fn get_existing_pasture_capacities(farmyard_spaces: &[FarmyardSpace]) -> Vec<usize> {
+    let mut ret = Vec::new();
+
+    // Add capacity for the house pet
+    ret.push(1);
+
+    let mut bare_capacities = [0; MAX_PASTURES];
+    let mut stables = [0; MAX_PASTURES];
+
+    for space in farmyard_spaces.iter() {
+        match *space {
+            FarmyardSpace::FencedPasture(stable, pasture_idx) => {
+                bare_capacities[pasture_idx] += 2;
+                if stable {
+                    stables[pasture_idx] += 1;
+                }
+            }
+            FarmyardSpace::UnfencedStable => {
+                // Each unfenced stable can hold 1 animal
+                ret.push(1);
+            }
+            _ => (),
+        }
+    }
+
+    for i in 0..MAX_PASTURES {
+        if bare_capacities[i] > 0 {
+            if stables[i] == 0 {
+                ret.push(bare_capacities[i]);
+            } else {
+                ret.push(bare_capacities[i] * STABLE_MULTIPLIER * stables[i]);
+            }
+        }
+    }
+    ret
+}
+
 pub fn get_existing_pastures(farmyard_spaces: &[FarmyardSpace]) -> [Pasture; MAX_PASTURES] {
     let mut existing_pastures: [Pasture; MAX_PASTURES] = Default::default();
 
     for (idx, space) in farmyard_spaces.iter().enumerate() {
-        if let FarmyardSpace::FencedPasture(_, _, pasture_idx) = space {
+        if let FarmyardSpace::FencedPasture(_, pasture_idx) = space {
             existing_pastures[*pasture_idx].push(idx);
         }
     }
@@ -356,15 +394,12 @@ pub fn get_all_pasture_configs(farmyard_spaces: &[FarmyardSpace]) -> Vec<Pasture
         false, false,
     ];
 
-    let mut existing_pastures_configs: [Pasture; MAX_PASTURES] = Default::default();
+    let existing_pastures_configs = get_existing_pastures(farmyard_spaces);
 
     for (idx, space) in farmyard_spaces.iter().enumerate() {
         match space {
             FarmyardSpace::Field(_) | FarmyardSpace::Room => {
                 room_and_field_spaces[idx] = true;
-            }
-            FarmyardSpace::FencedPasture(_, _, pasture_idx) => {
-                existing_pastures_configs[*pasture_idx].push(idx);
             }
             _ => (),
         }
@@ -410,7 +445,8 @@ pub fn get_rand_fence_options(
     let mut size_config_map: HashMap<u64, Vec<usize>> = HashMap::new();
 
     for (i, pasture_config) in all_pasture_configs.iter().enumerate() {
-        if pasture_config.wood > wood_available + fences_used || pasture_config.wood <= fences_used {
+        if pasture_config.wood > wood_available + fences_used || pasture_config.wood <= fences_used
+        {
             continue;
         }
         size_config_map

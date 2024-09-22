@@ -16,8 +16,8 @@ fn test2() -> Vec<PastureConfig> {
     farmyard_spaces[5] = FarmyardSpace::Room;
     farmyard_spaces[10] = FarmyardSpace::Room;
 
-    farmyard_spaces[13] = FarmyardSpace::FencedPasture(None, false, 0);
-    farmyard_spaces[14] = FarmyardSpace::FencedPasture(None, false, 1);
+    farmyard_spaces[13] = FarmyardSpace::FencedPasture(false, 0);
+    farmyard_spaces[14] = FarmyardSpace::FencedPasture(false, 1);
 
     get_all_pasture_configs(&farmyard_spaces)
 }

@@ -35,7 +35,7 @@ pub struct Boar;
 #[derive(Clone, Debug, Hash)]
 pub struct Cattle;
 
-const NUM_RESOURCES: usize = 10;
+pub const NUM_RESOURCES: usize = 10;
 
 impl Resource for Food {
     fn index(&self) -> usize {
@@ -97,35 +97,10 @@ impl Resource for Cattle {
     }
 }
 
-pub const RESOURCE_EMOJIS: [&str; NUM_RESOURCES] = [
-    "\u{1f372}",
-    "\u{1fab5}",
-    "\u{1f9f1}",
-    "\u{1faa8}",
-    "\u{1f344}",
-    "\u{1f33e}",
-    "🎃",
-    "\u{1f411}",
-    "\u{1f416}",
-    "\u{1f404}",
-];
-
 pub type Resources = [usize; NUM_RESOURCES];
 
 pub fn new_res() -> Resources {
     [0; NUM_RESOURCES]
-}
-
-pub fn format_resources(res: &Resources) -> String {
-    let mut ret = String::new();
-    let available = res.iter().enumerate().filter(|&(_, x)| x > &0);
-    for (i, n) in available {
-        if !ret.is_empty() {
-            ret = format!("{} +", ret);
-        }
-        ret = format!("{} {}{}", ret, n, RESOURCE_EMOJIS[i]);
-    }
-    ret
 }
 
 pub fn can_pay_for_resource(cost: &Resources, store: &Resources) -> bool {

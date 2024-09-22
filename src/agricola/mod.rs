@@ -1,5 +1,6 @@
 pub mod actions;
 pub mod algorithms;
+pub mod display;
 pub mod farm;
 pub mod fencing;
 pub mod major_improvements;

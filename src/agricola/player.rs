@@ -82,25 +82,41 @@ impl Player {
         self.player_type.clone()
     }
 
-    pub fn reorg_animals(
+    pub fn accommodate_animals(
         &mut self,
         player_idx: usize,
         majors: &[(MajorImprovement, Option<usize>, usize)],
         breed: bool,
     ) {
-        //self.farm.reorg_animals(&mut self.resources, breed);
+        if breed {
+            if self.resources[Sheep.index()] > 1 {
+                self.resources[Sheep.index()] += 1;
+            }
+            if self.resources[Boar.index()] > 1 {
+                self.resources[Boar.index()] += 1;
+            }
+            if self.resources[Cattle.index()] > 1 {
+                self.resources[Cattle.index()] += 1;
+            }
+        }
 
-        let sheep = self.resources[Sheep.index()];
-        self.resources[Sheep.index()] = 0;
-        let pigs = self.resources[Boar.index()];
-        self.resources[Boar.index()] = 0;
-        let cattle = self.resources[Cattle.index()];
-        self.resources[Cattle.index()] = 0;
+        let animals = [
+            self.resources[Sheep.index()],
+            self.resources[Boar.index()],
+            self.resources[Cattle.index()],
+        ];
+        let leftover = self.farm.accommodate_animals(&animals);
+
+        self.resources[Sheep.index()] -= leftover[0];
+        self.resources[Boar.index()] -= leftover[1];
+        self.resources[Cattle.index()] -= leftover[2];
+
+        // TODO: Don't just toss animals this way - give a choice to the player and re-org using that choice
 
         let mut owns_ch = false;
         for ch_idx in COOKING_HEARTH_INDICES {
             if Some(player_idx) == majors[ch_idx].1 {
-                self.resources[Food.index()] += 2 * sheep + 3 * pigs + 4 * cattle;
+                self.resources[Food.index()] += 2 * leftover[0] + 3 * leftover[1] + 4 * leftover[2];
                 owns_ch = true;
                 break;
             }
@@ -109,7 +125,8 @@ impl Player {
         if !owns_ch {
             for fp_idx in FIREPLACE_INDICES {
                 if Some(player_idx) == majors[fp_idx].1 {
-                    self.resources[Food.index()] += 2 * sheep + 2 * pigs + 3 * cattle;
+                    self.resources[Food.index()] +=
+                        2 * leftover[0] + 2 * leftover[1] + 3 * leftover[2];
                     return;
                 }
             }
@@ -332,73 +349,5 @@ impl Player {
         }
 
         false
-    }
-
-    pub fn display_resources(&self) -> String {
-        let res = &self.resources;
-        let mut ret = format!(
-            "\n\n\n\n{:2} {}   ",
-            res[Wood.index()],
-            RESOURCE_EMOJIS[Wood.index()]
-        );
-        ret = format!(
-            "{ret}{:2} {}   ",
-            res[Clay.index()],
-            RESOURCE_EMOJIS[Clay.index()]
-        );
-        ret = format!(
-            "{ret}{:2} {}   ",
-            res[Stone.index()],
-            RESOURCE_EMOJIS[Stone.index()]
-        );
-        ret = format!(
-            "{ret}{:2} {}",
-            res[Reed.index()],
-            RESOURCE_EMOJIS[Reed.index()]
-        );
-        ret = format!(
-            "{ret}\n{:2} {}   ",
-            res[Grain.index()],
-            RESOURCE_EMOJIS[Grain.index()]
-        );
-        ret = format!(
-            "{ret}{:2} {}   ",
-            res[Vegetable.index()],
-            RESOURCE_EMOJIS[Vegetable.index()]
-        );
-        ret = format!(
-            "{ret}{:2} {}   ",
-            res[Food.index()],
-            RESOURCE_EMOJIS[Food.index()]
-        );
-        ret = format!("{ret}{:2} \u{1f37d}", self.begging_tokens);
-        ret = format!(
-            "{ret}\n{:2} {}   ",
-            res[Sheep.index()],
-            RESOURCE_EMOJIS[Sheep.index()]
-        );
-        ret = format!(
-            "{ret}{:2} {}   ",
-            res[Boar.index()],
-            RESOURCE_EMOJIS[Boar.index()]
-        );
-        ret = format!(
-            "{ret}{:2} {}",
-            res[Cattle.index()],
-            RESOURCE_EMOJIS[Cattle.index()]
-        );
-        ret = format!("{ret}\n\n{:2} 👤   ", self.adults);
-        ret = format!("{ret}{:2} 👶", self.children);
-
-        ret = format!("{ret}\n\n{}", Occupation::display(&self.occupations));
-        ret
-    }
-
-    pub fn display_farm(&self) -> (String, String) {
-        // TODO : Fix these!
-        let ret = String::from("\n\n\nTODO");
-        let stuff = String::from("\n\n\nTODO");
-
-        (ret, stuff)
     }
 }

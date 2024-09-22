@@ -1,6 +1,8 @@
+use std::env;
 use std::time::{Duration, Instant};
 use std::{error::Error, io};
 
+use agricola_game::agricola::display::{display_farm, display_resources};
 use agricola_game::agricola::scoring;
 use agricola_game::agricola::state::State;
 use agricola_game::agricola::{
@@ -20,7 +22,8 @@ use ratatui::{
     Frame, Terminal,
 };
 
-const NUM_GAMES_TO_SIMULATE: usize = 10;
+const NUM_GAMES_TO_SIMULATE: usize = 1000;
+const DEPTH: Option<usize> = Some(50);
 
 #[derive(Clone, Copy, Debug)]
 enum PlayerSelection {
@@ -138,7 +141,7 @@ impl App {
 
                         if !self.move_selected && self.ai.num_games_sampled < NUM_GAMES_TO_SIMULATE
                         {
-                            self.ai.sample_once(state, Some(50), false);
+                            self.ai.sample_once(state, DEPTH, false);
                             return;
                         }
                         let records = self.ai.sorted_records();
@@ -188,7 +191,7 @@ impl App {
                         if i == self.selection_y {
                             ret = format!("{}\n>> {:?}", ret, action);
                             if let Action::Fence(_) = action {
-                                additional_stuff = String::from("Fence Layout : TODO");
+                                additional_stuff = display_farm(state.player());
                             }
                         } else {
                             ret = format!("{}\n{:?}", ret, action);
@@ -231,6 +234,7 @@ impl App {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    env::set_var("RUN_BACKTRACE", "1");
     // setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -372,11 +376,11 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
             );
 
             if i == state.starting_player_idx {
-                title_string = format!("{title_string} | Starting Player ");
+                title_string = format!("{title_string} | 🟡 ");
             }
 
             if i == state.current_player_idx {
-                title_string = format!("{title_string} | Turn ");
+                title_string = format!("{title_string} | 🔻 ");
             }
 
             let farm = Block::default().title(title_string).borders(Borders::ALL);
@@ -395,17 +399,13 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                 )
                 .split(farm_areas[2 * i]);
 
-            let farm_strings = p.display_farm();
-            let main_farm = Paragraph::new(farm_strings.0.to_string())
-                .style(Style::default())
-                .alignment(ratatui::layout::Alignment::Center);
-            let farm_artifacts = Paragraph::new(farm_strings.1.to_string())
+            let farm_strings = display_farm(p);
+            let main_farm = Paragraph::new(farm_strings.to_string())
                 .style(Style::default())
                 .alignment(ratatui::layout::Alignment::Center);
             f.render_widget(main_farm, displays[0]);
-            f.render_widget(farm_artifacts, displays[1]);
 
-            let resource_text = Paragraph::new(p.display_resources());
+            let resource_text = Paragraph::new(display_resources(p));
             f.render_widget(resource_text, displays[2]);
         }
 

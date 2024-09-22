@@ -1,8 +1,9 @@
 use super::primitives::*;
+use std::fmt::Debug;
 
 pub const TOTAL_MAJOR_IMPROVEMENTS: usize = 10;
 
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Hash, PartialEq)]
 pub enum MajorImprovement {
     Fireplace { cheaper: bool },
     CookingHearth { cheaper: bool },
@@ -12,6 +13,34 @@ pub enum MajorImprovement {
     Joinery,
     Pottery,
     BasketmakersWorkshop,
+}
+
+impl Debug for MajorImprovement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            Self::Fireplace { cheaper } => {
+                if *cheaper {
+                    "Fireplace (2 🧱)"
+                } else {
+                    "Fireplace (3 🧱)"
+                }
+            }
+            Self::CookingHearth { cheaper } => {
+                if *cheaper {
+                    "Cooking Hearth (4 🧱)"
+                } else {
+                    "Cooking Hearth (5 🧱)"
+                }
+            }
+            Self::Well => "Well",
+            Self::ClayOven => "Clay Oven",
+            Self::StoneOven => "Stone Oven",
+            Self::Joinery => "Joinery",
+            Self::Pottery => "Pottery",
+            Self::BasketmakersWorkshop => "Basketmaker's Workshop",
+        };
+        write!(f, "{}", name)
+    }
 }
 
 impl MajorImprovement {

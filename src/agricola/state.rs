@@ -1,5 +1,6 @@
 use super::actions::{Action, NUM_RESOURCE_SPACES};
 use super::algorithms::PlayerType;
+use super::display::format_resources;
 use super::major_improvements::{MajorImprovement, TOTAL_MAJOR_IMPROVEMENTS};
 use super::occupations::Occupation;
 use super::player::Player;
@@ -462,7 +463,7 @@ impl State {
         }
 
         player.harvest_paid = true;
-        player.reorg_animals(self.current_player_idx, &self.major_improvements, true);
+        player.accommodate_animals(self.current_player_idx, &self.major_improvements, true);
         self.current_player_idx = (self.current_player_idx + 1) % self.players.len();
         self.remove_empty_stage();
     }
@@ -506,22 +507,23 @@ impl State {
         for action in &self.open_spaces {
             let idx = action.action_idx();
             if self.occupied_spaces.contains(&idx) {
-                ret = format!("{}\n[X] {:?} is occupied", ret, action);
+                ret.push_str(&format!("\n[X] {:?} is occupied", action));
             } else {
-                ret = format!("{}\n[-] {:?}", ret, action);
+                ret.push_str(&format!("\n[-] {:?}", action));
                 if action.resource_map_idx().is_some() {
-                    ret = format!(
-                        "{}{}",
-                        ret,
-                        format_resources(&self.resource_map[action.resource_map_idx().unwrap()])
-                    );
+                    ret.push_str(&format_resources(
+                        &self.resource_map[action.resource_map_idx().unwrap()],
+                    ));
                 }
             }
         }
 
-        ret = format!("{}\n\n=== Available majors ===\n", ret);
-        for major in &self.major_improvements {
-            ret = format!("{}\n{major:?}", ret);
+        ret.push_str("\n\n=== Available majors ===\n");
+        for (major, owner, _) in &self.major_improvements {
+            ret.push_str(&format!("\n{major:?}"));
+            if owner.is_some() {
+                ret.push_str(&format!(". Owned by Player {}", owner.unwrap() + 1));
+            }
         }
         ret
     }

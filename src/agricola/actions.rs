@@ -606,7 +606,7 @@ impl Action {
             Self::UseSheepMarket | Self::UsePigMarket | Self::UseCattleMarket => {
                 take_resource(res, &mut player.resources);
                 *res = new_res();
-                player.reorg_animals(player_idx, majors, false);
+                player.accommodate_animals(player_idx, majors, false);
             }
             Self::UseResourceMarket
             | Self::UseDayLaborer
