@@ -19,8 +19,8 @@ fn sigmoid(x: f32) -> f32 {
     1.0 / (1.0 + (-x).exp())
 }
 
-fn dsigmoid(x: f32) -> f32 {
-    let y = sigmoid(x);
+// Assuming output is the output of a sigmoid activation
+fn dsigmoid(y: f32) -> f32 {
     y * (1.0 - y)
 }
 

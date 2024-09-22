@@ -13,16 +13,13 @@ fn main() {
 
     let mut rng = rand::thread_rng();
 
-    for i in 0..500000 {
+    for i in 0..=5000000 {
         let (inputs, targets) = &data[rng.gen_range(0..data.len())];
         let outputs = nn.feed_forward(inputs);
         nn.backpropagate(inputs, targets, 0.15);
-        println!("{:?} -> {:?}", inputs, outputs);
-        println!(
-            "Iteration {} Loss = {}",
-            i + 1,
-            nn.l2_loss(&outputs, targets)
-        );
+        if i % 100000 == 0 {
+            println!("Iteration {} Loss = {}", i, nn.l2_loss(&outputs, targets));
+        }
     }
 
     for (inputs, _) in &data {
@@ -30,12 +27,12 @@ fn main() {
         println!("{:?} -> {:?}", inputs, outputs);
     }
 
-    // Best results:
     /*
-        Iteration 500000 Loss = 0.005712643
-    [0.0, 0.0] -> [0.042051688]
-    [0.0, 1.0] -> [0.92525727]
-    [1.0, 0.0] -> [0.92525727]
-    [1.0, 1.0] -> [0.069337614]
-         */
+    Best results:
+    Iteration 5000000 Loss = 0.00090728153
+    [0.0, 0.0] -> [0.030100394]
+    [0.0, 1.0] -> [0.96897024]
+    [1.0, 0.0] -> [0.96897024]
+    [1.0, 1.0] -> [0.033484533]
+             */
 }
