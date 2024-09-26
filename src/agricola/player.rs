@@ -4,14 +4,12 @@ use super::fencing::PastureConfig;
 use super::major_improvements::MajorImprovement;
 use super::occupations::Occupation;
 use super::quantity::*;
-use super::state::{COOKING_HEARTH_INDICES, FIREPLACE_INDICES};
 
 #[derive(Clone, Hash)]
 pub struct Player {
     // Animals in this resources array are the ones that are pets in the house and the ones that are kept in unfenced stables
     pub player_type: PlayerType,
     pub resources: Resources,
-    pub begging_tokens: usize,
     pub build_room_cost: Resources,
     build_stable_cost: Resources,
     pub renovation_cost: Resources,
@@ -40,7 +38,6 @@ impl Player {
         Player {
             player_type,
             resources: res,
-            begging_tokens: 0,
             build_room_cost: room_cost,
             build_stable_cost: stable_cost,
             renovation_cost: reno_cost,
@@ -63,57 +60,6 @@ impl Player {
 
     pub fn player_type(&self) -> PlayerType {
         self.player_type.clone()
-    }
-
-    pub fn accommodate_animals(
-        &mut self,
-        player_idx: usize,
-        majors: &[(MajorImprovement, Option<usize>, usize)],
-        breed: bool,
-    ) {
-        if breed {
-            if self.resources[Sheep.index()] > 1 {
-                self.resources[Sheep.index()] += 1;
-            }
-            if self.resources[Boar.index()] > 1 {
-                self.resources[Boar.index()] += 1;
-            }
-            if self.resources[Cattle.index()] > 1 {
-                self.resources[Cattle.index()] += 1;
-            }
-        }
-
-        let animals = [
-            self.resources[Sheep.index()],
-            self.resources[Boar.index()],
-            self.resources[Cattle.index()],
-        ];
-        let leftover = self.farm.accommodate_animals(&animals);
-
-        self.resources[Sheep.index()] -= leftover[0];
-        self.resources[Boar.index()] -= leftover[1];
-        self.resources[Cattle.index()] -= leftover[2];
-
-        // TODO: Don't just toss animals this way - give a choice to the player and re-org using that choice
-
-        let mut owns_ch = false;
-        for ch_idx in COOKING_HEARTH_INDICES {
-            if Some(player_idx) == majors[ch_idx].1 {
-                self.resources[Food.index()] += 2 * leftover[0] + 3 * leftover[1] + 4 * leftover[2];
-                owns_ch = true;
-                break;
-            }
-        }
-
-        if !owns_ch {
-            for fp_idx in FIREPLACE_INDICES {
-                if Some(player_idx) == majors[fp_idx].1 {
-                    self.resources[Food.index()] +=
-                        2 * leftover[0] + 2 * leftover[1] + 3 * leftover[2];
-                    return;
-                }
-            }
-        }
     }
 
     pub fn can_bake_bread(

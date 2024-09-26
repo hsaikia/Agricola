@@ -585,11 +585,10 @@ impl Action {
 
     pub fn collect_resources(
         &self,
-        player: &mut Player,
-        res: &mut Resources,
-        player_idx: usize,
-        majors: &[(MajorImprovement, Option<usize>, usize)],
+        state: &mut State,
+        resource_idx: usize,
     ) {
+        let mut res = state.resource_map[resource_idx].clone();
         match self {
             Self::UseCopse
             | Self::UseGrove
@@ -601,23 +600,24 @@ impl Action {
             | Self::UseFishing
             | Self::UseWesternQuarry
             | Self::UseEasternQuarry => {
-                take_resource(res, &mut player.resources);
-                *res = new_res();
+                take_resource(&mut res, &mut state.player_mut().resources);
+                res = new_res();
             }
             Self::UseSheepMarket | Self::UsePigMarket | Self::UseCattleMarket => {
-                take_resource(res, &mut player.resources);
-                *res = new_res();
-                player.accommodate_animals(player_idx, majors, false);
+                take_resource(&mut res, &mut state.player_mut().resources);
+                res = new_res();
+                state.accommodate_animals(false);
             }
             Self::UseResourceMarket
             | Self::UseDayLaborer
             | Self::UseGrainSeeds
             | Self::UseVegetableSeeds
             | Self::UseMeetingPlace => {
-                take_resource(res, &mut player.resources);
+                take_resource(&mut res, &mut state.player_mut().resources);
             }
             _ => (),
         }
+        state.resource_map[resource_idx] = res;
     }
 
     pub fn resource_map_idx(&self) -> Option<usize> {
@@ -835,15 +835,11 @@ impl Action {
             _ => (),
         }
 
-        let player = &mut state.players[state.current_player_idx];
         // Collect resources if possible
         if let Some(resource_idx) = self.resource_map_idx() {
-            let res = &mut state.resource_map[resource_idx];
             self.collect_resources(
-                player,
-                res,
-                state.current_player_idx,
-                &state.major_improvements,
+                state,
+                resource_idx,
             );
         }
     }

@@ -196,6 +196,9 @@ impl State {
     pub fn grow_family_with_room(&mut self) {
         assert!(self.can_grow_family_with_room());
         self.current_player_quantities_mut()[Children.index()] += 1;
+        if self.family_members(self.current_player_idx) >= self.current_player_quantities()[Rooms.index()] {
+            self.current_player_flags_mut()[HasRoomToGrow.index()] = false;
+        }
     }
 
     pub fn get_hash(&self) -> u64 {
@@ -322,7 +325,6 @@ impl State {
         });
 
         self.player_flags.iter_mut().for_each(|p| {
-            p[HasRoomToGrow.index()] = false;
             p[HarvestPaid.index()] = false;
             p[BeforeRoundStart.index()] = true;
         });
@@ -548,17 +550,68 @@ impl State {
     pub fn pay_food_or_beg(&mut self) {
         let food_required = self.food_required();
         self.current_player_flags_mut()[HarvestPaid.index()] = true;
-        let player = &mut self.players[self.current_player_idx];
-        if food_required > player.resources[Food.index()] {
-            player.begging_tokens += food_required - player.resources[Food.index()];
-            player.resources[Food.index()] = 0;
+        if food_required > self.player().resources[Food.index()] {
+            self.current_player_quantities_mut()[BeggingTokens.index()] += food_required - self.player().resources[Food.index()];
+            self.player_mut().resources[Food.index()] = 0;
         } else {
-            player.resources[Food.index()] -= food_required;
+            self.player_mut().resources[Food.index()] -= food_required;
         }
 
-        player.accommodate_animals(self.current_player_idx, &self.major_improvements, true);
+        self.accommodate_animals(true);
         self.current_player_idx = (self.current_player_idx + 1) % self.players.len();
         self.remove_empty_stage();
+    }
+
+    pub fn accommodate_animals(
+        &mut self,
+        breed: bool,
+    ) {
+        let mut res = self.player().resources.clone();
+
+        if breed {
+            if res[Sheep.index()] > 1 {
+                res[Sheep.index()] += 1;
+            }
+            if res[Boar.index()] > 1 {
+                res[Boar.index()] += 1;
+            }
+            if res[Cattle.index()] > 1 {
+                res[Cattle.index()] += 1;
+            }
+        }
+
+        let animals = [
+            res[Sheep.index()],
+            res[Boar.index()],
+            res[Cattle.index()],
+        ];
+        let leftover = self.player_mut().farm.accommodate_animals(&animals);
+
+        res[Sheep.index()] -= leftover[0];
+        res[Boar.index()] -= leftover[1];
+        res[Cattle.index()] -= leftover[2];
+
+        // TODO: Don't just toss animals this way - give a choice to the player and re-org using that choice
+        let mut owns_ch = false;
+        for ch_idx in COOKING_HEARTH_INDICES {
+            if Some(self.current_player_idx) == self.major_improvements[ch_idx].1 {
+                res[Food.index()] += 2 * leftover[0] + 3 * leftover[1] + 4 * leftover[2];
+                owns_ch = true;
+                break;
+            }
+        }
+
+        if !owns_ch {
+            for fp_idx in FIREPLACE_INDICES {
+                if Some(self.current_player_idx) == self.major_improvements[fp_idx].1 {
+                    res[Food.index()] +=
+                        2 * leftover[0] + 2 * leftover[1] + 3 * leftover[2];
+                    return;
+                }
+            }
+        }
+
+        self.player_mut().resources = res;
     }
 
     pub fn total_workers(&self) -> usize {
@@ -580,7 +633,7 @@ impl State {
         // House, Family and Empty Spaces
         ret += 3.0 * self.family_members(player_idx) as f32;
         // Begging Tokens
-        ret -= 3.0 * player.begging_tokens as f32;
+        ret -= 3.0 * self.player_quantities(player_idx)[BeggingTokens.index()] as f32;
         // Score farm
         ret += score_farm(player) as f32;
     
