@@ -3,28 +3,20 @@ use super::farm::{Farm, House, Seed};
 use super::fencing::PastureConfig;
 use super::major_improvements::MajorImprovement;
 use super::occupations::Occupation;
-use super::primitives::*;
+use super::quantity::*;
 use super::state::{COOKING_HEARTH_INDICES, FIREPLACE_INDICES};
-
-const MAX_FAMILY_MEMBERS: usize = 5;
-const STARTING_PEOPLE: usize = 2;
 
 #[derive(Clone, Hash)]
 pub struct Player {
     // Animals in this resources array are the ones that are pets in the house and the ones that are kept in unfenced stables
     pub player_type: PlayerType,
     pub resources: Resources,
-    pub people_placed: usize,
-    pub adults: usize,
-    pub children: usize,
     pub begging_tokens: usize,
-    build_room_cost: Resources,
+    pub build_room_cost: Resources,
     build_stable_cost: Resources,
     pub renovation_cost: Resources,
     pub house: House,
     pub occupations: Vec<Occupation>,
-    pub harvest_paid: bool,
-    pub before_round_start: bool,
     pub farm: Farm,
     pub has_cooking_improvement: bool,
 }
@@ -48,17 +40,12 @@ impl Player {
         Player {
             player_type,
             resources: res,
-            people_placed: 0,
-            adults: STARTING_PEOPLE,
-            children: 0,
             begging_tokens: 0,
             build_room_cost: room_cost,
             build_stable_cost: stable_cost,
             renovation_cost: reno_cost,
             house: House::Wood,
             occupations: vec![],
-            harvest_paid: false,
-            before_round_start: true,
             farm: Farm::new(),
             has_cooking_improvement: false,
         }
@@ -72,10 +59,6 @@ impl Player {
                 Seed::Vegetable => self.resources[Vegetable.index()] += 1,
             }
         }
-    }
-
-    pub fn got_enough_food(&self) -> bool {
-        2 * self.adults + self.children <= self.resources[Food.index()]
     }
 
     pub fn player_type(&self) -> PlayerType {
@@ -182,25 +165,6 @@ impl Player {
             .is_empty()
     }
 
-    pub fn grow_family_with_room(&mut self) {
-        assert!(self.can_grow_family_with_room());
-        self.children += 1;
-    }
-
-    pub fn grow_family_without_room(&mut self) {
-        assert!(self.can_grow_family_without_room());
-        self.children += 1;
-    }
-
-    pub fn can_grow_family_with_room(&self) -> bool {
-        self.family_members() < MAX_FAMILY_MEMBERS
-            && self.family_members() < self.farm.room_indices().len()
-    }
-
-    pub fn can_grow_family_without_room(&self) -> bool {
-        self.family_members() < MAX_FAMILY_MEMBERS
-    }
-
     pub fn renovate(&mut self) {
         assert!(self.can_renovate());
         // TODO for cards like Conservator this must be implemented in a more general way
@@ -230,18 +194,6 @@ impl Player {
             return false;
         }
         can_pay_for_resource(&self.renovation_cost, &self.resources)
-    }
-
-    // Builds a single room
-    pub fn build_room(&mut self, idx: &usize) {
-        pay_for_resource(&self.build_room_cost, &mut self.resources);
-        self.farm.build_room(*idx);
-
-        match self.house {
-            House::Wood => self.renovation_cost[Clay.index()] += 1,
-            House::Clay => self.renovation_cost[Stone.index()] += 1,
-            House::Stone => (),
-        }
     }
 
     // Builds a single stable
@@ -276,31 +228,6 @@ impl Player {
 
     pub fn field_options(&self) -> Vec<usize> {
         self.farm.possible_field_positions()
-    }
-
-    pub fn reset_for_next_round(&mut self) {
-        self.adults += self.children;
-        self.children = 0;
-        self.people_placed = 0;
-        self.harvest_paid = false;
-        self.before_round_start = true;
-    }
-
-    pub fn workers(&self) -> usize {
-        self.adults
-    }
-
-    pub fn family_members(&self) -> usize {
-        self.adults + self.children
-    }
-
-    pub fn increment_people_placed(&mut self) {
-        self.people_placed += 1;
-        self.before_round_start = false;
-    }
-
-    pub fn all_people_placed(&self) -> bool {
-        self.people_placed == self.adults
     }
 
     pub fn can_use_exchange(&self, res_ex: &ResourceExchange) -> bool {

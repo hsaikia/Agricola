@@ -1,101 +1,150 @@
-use std::fmt::Debug;
-use std::hash::Hash;
-
-pub trait Resource: Debug {
+pub trait Quantity {
     fn index(&self) -> usize;
 }
 
-#[derive(Clone, Debug, Hash)]
 pub struct Food;
-
-#[derive(Clone, Debug, Hash)]
 pub struct Wood;
-
-#[derive(Clone, Debug, Hash)]
 pub struct Clay;
-
-#[derive(Clone, Debug, Hash)]
 pub struct Stone;
-
-#[derive(Clone, Debug, Hash)]
 pub struct Reed;
-
-#[derive(Clone, Debug, Hash)]
 pub struct Grain;
-
-#[derive(Clone, Debug, Hash)]
 pub struct Vegetable;
-
-#[derive(Clone, Debug, Hash)]
 pub struct Sheep;
-
-#[derive(Clone, Debug, Hash)]
 pub struct Boar;
-
-#[derive(Clone, Debug, Hash)]
 pub struct Cattle;
+pub struct AdultMembers;
+pub struct Children;
+pub struct MembersPlacedThisRound;
+pub struct Rooms;
+pub struct Fields;
+pub struct Pastures;
+pub struct PastureSpaces;
+pub struct UnfencedStables;
+pub struct FencedStables;
+pub struct BeggingTokens;
 
-pub const NUM_RESOURCES: usize = 10;
-
-impl Resource for Food {
+impl Quantity for Food {
     fn index(&self) -> usize {
         0
     }
 }
 
-impl Resource for Wood {
+impl Quantity for Wood {
     fn index(&self) -> usize {
         1
     }
 }
 
-impl Resource for Clay {
+impl Quantity for Clay {
     fn index(&self) -> usize {
         2
     }
 }
 
-impl Resource for Stone {
+impl Quantity for Stone {
     fn index(&self) -> usize {
         3
     }
 }
 
-impl Resource for Reed {
+impl Quantity for Reed {
     fn index(&self) -> usize {
         4
     }
 }
 
-impl Resource for Grain {
+impl Quantity for Grain {
     fn index(&self) -> usize {
         5
     }
 }
 
-impl Resource for Vegetable {
+impl Quantity for Vegetable {
     fn index(&self) -> usize {
         6
     }
 }
 
-impl Resource for Sheep {
+impl Quantity for Sheep {
     fn index(&self) -> usize {
         7
     }
 }
 
-impl Resource for Boar {
+impl Quantity for Boar {
     fn index(&self) -> usize {
         8
     }
 }
 
-impl Resource for Cattle {
+impl Quantity for Cattle {
     fn index(&self) -> usize {
         9
     }
 }
+
+impl Quantity for AdultMembers {
+    fn index(&self) -> usize {
+        10
+    }
+}
+
+impl Quantity for Children {
+    fn index(&self) -> usize {
+        11
+    }
+}
+
+impl Quantity for MembersPlacedThisRound {
+    fn index(&self) -> usize {
+        12
+    }
+}
+
+impl Quantity for Rooms {
+    fn index(&self) -> usize {
+        13
+    }
+}
+
+impl Quantity for Fields {
+    fn index(&self) -> usize {
+        14
+    }
+}
+
+impl Quantity for Pastures {
+    fn index(&self) -> usize {
+        15
+    }
+}
+
+impl Quantity for PastureSpaces {
+    fn index(&self) -> usize {
+        16
+    }
+}
+
+impl Quantity for UnfencedStables {
+    fn index(&self) -> usize {
+        17
+    }
+}
+
+impl Quantity for FencedStables {
+    fn index(&self) -> usize {
+        18
+    }
+}
+
+impl Quantity for BeggingTokens {
+    fn index(&self) -> usize {
+        19
+    }
+}
+
+pub const NUM_QUANTITIES: usize = 20;
+pub const NUM_RESOURCES: usize = 10;
 
 pub type Resources = [usize; NUM_RESOURCES];
 

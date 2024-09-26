@@ -1,5 +1,6 @@
-use super::primitives::*;
 use std::fmt::Debug;
+
+use super::quantity::*;
 
 pub const TOTAL_MAJOR_IMPROVEMENTS: usize = 10;
 

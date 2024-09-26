@@ -1,11 +1,13 @@
 use super::actions::{Action, NUM_RESOURCE_SPACES};
 use super::algorithms::PlayerType;
 use super::display::format_resources;
+use super::farm::House;
+use super::flag::*;
 use super::major_improvements::{MajorImprovement, TOTAL_MAJOR_IMPROVEMENTS};
 use super::occupations::Occupation;
 use super::player::Player;
-use super::primitives::*;
-use super::scoring;
+use super::quantity::*;
+use super::scoring::score_farm;
 use rand::Rng;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -13,6 +15,7 @@ use std::hash::{Hash, Hasher};
 const INITIAL_OPEN_SPACES: usize = 16;
 pub const NUM_ACTION_SPACES: usize = 30;
 const MAX_NUM_PLAYERS: usize = 4;
+const MAX_FAMILY_MEMBERS: usize = 5;
 
 pub const FIREPLACE_INDICES: [usize; 2] = [
     MajorImprovement::Fireplace { cheaper: true }.index(),
@@ -53,6 +56,8 @@ pub struct State {
     pub occupied_spaces: Vec<usize>,
     pub hidden_spaces: Vec<Vec<Action>>,
     pub players: Vec<Player>,
+    pub player_quantities: [[usize; NUM_QUANTITIES]; MAX_NUM_PLAYERS],
+    pub player_flags: [[bool; NUM_FLAGS]; MAX_NUM_PLAYERS],
     pub major_improvements: [(MajorImprovement, Option<usize>, usize); 10], // (Major, PlayerIdx, Number_of_times_used_in_harvest)
     pub current_player_idx: usize,
     pub starting_player_idx: usize,
@@ -69,6 +74,22 @@ impl State {
         }
 
         let first_player_idx = rand::thread_rng().gen_range(0..players.len());
+        let mut player_quantities = [[0; NUM_QUANTITIES]; MAX_NUM_PLAYERS];
+        for (i, player_quantities) in player_quantities.iter_mut().enumerate().take(players.len()) {
+            if i == first_player_idx {
+                player_quantities[Food.index()] = 2;
+            } else {
+                player_quantities[Food.index()] = 3;
+            }
+            player_quantities[Rooms.index()] = 2;
+            player_quantities[AdultMembers.index()] = 2;
+        }
+
+        let mut player_flags = [[false; NUM_FLAGS]; MAX_NUM_PLAYERS];
+        for player_flags in player_flags.iter_mut().take(players.len()) {
+            player_flags[WoodHouse.index()] = true;
+        }
+
         let mut state = State {
             resource_map: Action::init_resource_map(),
             open_spaces: Action::initial_open_spaces(),
@@ -87,6 +108,8 @@ impl State {
                 (MajorImprovement::BasketmakersWorkshop, None, 0),
             ],
             players: Vec::<Player>::new(),
+            player_quantities,
+            player_flags,
             current_player_idx: first_player_idx,
             starting_player_idx: first_player_idx,
             people_placed_this_round: 0,
@@ -111,6 +134,10 @@ impl State {
 
         // Add action to the sequence of actions taken by the current player
         self.last_action = action.clone();
+    }
+
+    pub fn harvest_paid(&self) -> bool {
+        self.current_player_flags()[HarvestPaid.index()]
     }
 
     pub fn can_init_new_round(&self) -> bool {
@@ -138,8 +165,21 @@ impl State {
         let player = &mut self.players[self.current_player_idx];
         // Harvest grain and veggies
         player.harvest_fields();
-        // Move all animals to the resources array
-        // player.farm.farm_animals_to_resources(&mut player.resources);
+    }
+
+    pub fn family_members(&self, player_idx : usize) -> usize {
+        self.player_quantities(player_idx)[AdultMembers.index()] + self.player_quantities(player_idx)[Children.index()]
+    }
+
+    fn food_required(&self) -> usize {
+        2 * self.current_player_quantities()[AdultMembers.index()]
+            + self.current_player_quantities()[Children.index()]
+    }
+
+    pub fn got_enough_food(&self) -> bool {
+        2 * self.current_player_quantities()[AdultMembers.index()]
+            + self.current_player_quantities()[Children.index()]
+            <= self.current_player_quantities()[Food.index()]
     }
 
     // After paying for harvest - this function needs to be called to clear the empty hidden space
@@ -147,6 +187,15 @@ impl State {
         if self.hidden_spaces.last().is_some() && self.hidden_spaces.last().unwrap().is_empty() {
             self.hidden_spaces.pop();
         }
+    }
+
+    pub fn can_grow_family_with_room(&self) -> bool {
+        self.family_members(self.current_player_idx) < MAX_FAMILY_MEMBERS && self.current_player_flags()[HasRoomToGrow.index()]
+    }
+
+    pub fn grow_family_with_room(&mut self) {
+        assert!(self.can_grow_family_with_room());
+        self.current_player_quantities_mut()[Children.index()] += 1;
     }
 
     pub fn get_hash(&self) -> u64 {
@@ -259,10 +308,24 @@ impl State {
     pub fn scores(&self) -> Vec<f32> {
         let mut scores: Vec<f32> = Vec::new();
         let card_scores = self.score_cards();
-        for (idx, p) in self.players.iter().enumerate() {
-            scores.push(scoring::score(p) + card_scores[idx] as f32);
+        for (idx, card_score) in card_scores.iter().enumerate().take(self.players.len()) {
+            scores.push(self.score(idx) + *card_score as f32);
         }
         scores
+    }
+
+    pub fn reset_for_next_round(&mut self) {
+        self.player_quantities.iter_mut().for_each(|p| {
+            p[MembersPlacedThisRound.index()] = 0;
+            p[AdultMembers.index()] += p[Children.index()];
+            p[Children.index()] = 0;
+        });
+
+        self.player_flags.iter_mut().for_each(|p| {
+            p[HasRoomToGrow.index()] = false;
+            p[HarvestPaid.index()] = false;
+            p[BeforeRoundStart.index()] = true;
+        });
     }
 
     pub fn init_new_round(&mut self) {
@@ -283,9 +346,7 @@ impl State {
         }
 
         // Reset workers
-        self.players
-            .iter_mut()
-            .for_each(Player::reset_for_next_round);
+        self.reset_for_next_round();
         self.people_placed_this_round = 0;
 
         // Reset majors if used in harvest
@@ -374,6 +435,28 @@ impl State {
         }
     }
 
+    // Builds a single room
+    pub fn build_room(&mut self, idx: &usize) {
+        let player = &mut self.players[self.current_player_idx];
+        pay_for_resource(&player.build_room_cost, &mut player.resources);
+        player.farm.build_room(*idx);
+
+        match player.house {
+            House::Wood => player.renovation_cost[Clay.index()] += 1,
+            House::Clay => player.renovation_cost[Stone.index()] += 1,
+            House::Stone => (),
+        }
+
+        // Increment player quantities
+        self.current_player_quantities_mut()[Rooms.index()] += 1;
+        let rooms = self.current_player_quantities()[Rooms.index()];
+
+        // Set the Can Grow flag
+        if rooms > self.family_members(self.current_player_idx) {
+            self.current_player_flags_mut()[HasRoomToGrow.index()] = true;
+        }
+    }
+
     pub fn build_major(&mut self, major: &MajorImprovement, return_fireplace: bool) {
         let player = &mut self.players[self.current_player_idx];
         match major {
@@ -452,9 +535,20 @@ impl State {
         }
     }
 
+    pub fn all_people_placed(&self) -> bool {
+        self.current_player_quantities()[MembersPlacedThisRound.index()]
+            == self.current_player_quantities()[AdultMembers.index()]
+    }
+
+    pub fn increment_people_placed(&mut self) {
+        self.current_player_quantities_mut()[MembersPlacedThisRound.index()] += 1;
+        self.current_player_flags_mut()[BeforeRoundStart.index()] = false;
+    }
+
     pub fn pay_food_or_beg(&mut self) {
+        let food_required = self.food_required();
+        self.current_player_flags_mut()[HarvestPaid.index()] = true;
         let player = &mut self.players[self.current_player_idx];
-        let food_required = 2 * player.adults + player.children;
         if food_required > player.resources[Food.index()] {
             player.begging_tokens += food_required - player.resources[Food.index()];
             player.resources[Food.index()] = 0;
@@ -462,16 +556,40 @@ impl State {
             player.resources[Food.index()] -= food_required;
         }
 
-        player.harvest_paid = true;
         player.accommodate_animals(self.current_player_idx, &self.major_improvements, true);
         self.current_player_idx = (self.current_player_idx + 1) % self.players.len();
         self.remove_empty_stage();
     }
 
+    pub fn total_workers(&self) -> usize {
+        self.player_quantities
+            .iter()
+            .map(|q| q[AdultMembers.index()])
+            .sum()
+    }
+
+    pub fn before_round_start(&self) -> bool {
+        self.current_player_flags()[BeforeRoundStart.index()]
+    }
+
+    pub fn score(&self, player_idx : usize) -> f32 {
+        let mut ret: f32 = 0.0;
+
+        let player = &self.players[player_idx];
+    
+        // House, Family and Empty Spaces
+        ret += 3.0 * self.family_members(player_idx) as f32;
+        // Begging Tokens
+        ret -= 3.0 * player.begging_tokens as f32;
+        // Score farm
+        ret += score_farm(player) as f32;
+    
+        ret
+    }
+
     pub fn end_turn(&mut self) {
-        let player = &mut self.players[self.current_player_idx];
         // Increment people placed by player
-        player.increment_people_placed();
+        self.increment_people_placed();
 
         // Increment workers placed
         self.people_placed_this_round += 1;
@@ -480,9 +598,8 @@ impl State {
         self.current_player_idx = (self.current_player_idx + 1) % self.players.len();
 
         // Skip over players that have all their workers placed
-        let total_workers = self.players.iter().map(Player::workers).sum();
-        if self.people_placed_this_round < total_workers {
-            while self.players[self.current_player_idx].all_people_placed() {
+        if self.people_placed_this_round < self.total_workers() {
+            while self.all_people_placed() {
                 self.current_player_idx = (self.current_player_idx + 1) % self.players.len();
             }
         }
@@ -493,12 +610,20 @@ impl State {
         player.renovate();
     }
 
+    pub fn grow_family_without_room(&mut self) {
+        assert!(self.can_grow_family_without_room());
+        self.current_player_quantities_mut()[Children.index()] += 1;
+    }
+
+    pub fn can_grow_family_without_room(&self) -> bool {
+        self.family_members(self.current_player_idx) < MAX_FAMILY_MEMBERS
+    }
+
     pub fn grow_family(&mut self, with_room: bool) {
-        let player = &mut self.players[self.current_player_idx];
         if with_room {
-            player.grow_family_with_room();
+            self.grow_family_with_room();
         } else {
-            player.grow_family_without_room();
+            self.grow_family_without_room();
         }
     }
 
@@ -534,5 +659,37 @@ impl State {
 
     pub fn player_mut(&mut self) -> &mut Player {
         &mut self.players[self.current_player_idx]
+    }
+
+    pub fn player_quantities(&self, player_idx : usize) -> &[usize; NUM_QUANTITIES] {
+        &self.player_quantities[player_idx]
+    }
+
+    pub fn player_quantities_mut(&mut self, player_idx : usize) -> &mut [usize; NUM_QUANTITIES] {
+        &mut self.player_quantities[player_idx]
+    }
+
+    pub fn player_flags(&self, player_idx : usize) -> &[bool; NUM_FLAGS] {
+        &self.player_flags[player_idx]
+    }
+
+    pub fn player_flags_mut(&mut self, player_idx : usize) -> &mut [bool; NUM_FLAGS] {
+        &mut self.player_flags[player_idx]
+    }
+
+    pub fn current_player_quantities(&self) -> &[usize; NUM_QUANTITIES] {
+        &self.player_quantities[self.current_player_idx]
+    }
+
+    pub fn current_player_quantities_mut(&mut self) -> &mut [usize; NUM_QUANTITIES] {
+        &mut self.player_quantities[self.current_player_idx]
+    }
+
+    pub fn current_player_flags(&self) -> &[bool; NUM_FLAGS] {
+        &self.player_flags[self.current_player_idx]
+    }
+
+    pub fn current_player_flags_mut(&mut self) -> &mut [bool; NUM_FLAGS] {
+        &mut self.player_flags[self.current_player_idx]
     }
 }

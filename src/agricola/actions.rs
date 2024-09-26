@@ -1,9 +1,10 @@
 use super::farm::Seed;
 use super::fencing::PastureConfig;
+use super::flag::*;
 use super::major_improvements::MajorImprovement;
 use super::occupations::Occupation;
 use super::player::Player;
-use super::primitives::*;
+use super::quantity::*;
 use super::state::{
     State, BAKING_MAJOR_IMPROVEMENT_INDICES, FIREPLACE_AND_COOKING_HEARTH_INDICES,
     FIREPLACE_INDICES,
@@ -199,7 +200,7 @@ impl Action {
             }
             Self::EndTurn => Self::end_turn_choices(state),
             Self::Harvest => {
-                if !player.harvest_paid {
+                if !state.harvest_paid() {
                     ret.push(Self::PreHarvest);
                 } else if state.can_init_new_round() {
                     ret.push(Self::StartRound);
@@ -270,8 +271,7 @@ impl Action {
 
     fn end_turn_choices(state: &State) -> Vec<Self> {
         let mut ret: Vec<Self> = Vec::new();
-        let total_workers = state.players.iter().map(Player::workers).sum();
-        if state.people_placed_this_round < total_workers {
+        if state.people_placed_this_round < state.total_workers() {
             ret.push(Self::PlaceWorker);
         } else if state.is_harvest() {
             ret.push(Self::Harvest);
@@ -364,7 +364,7 @@ impl Action {
 
         // Option to beg is only present when there are really no conversions possible
         // Otherwise this leads to a bad average fitness from random sampling early on
-        if ret.is_empty() || state.player().got_enough_food() {
+        if ret.is_empty() || state.got_enough_food() {
             ret.push(Self::PayFoodOrBeg);
         }
 
@@ -438,12 +438,13 @@ impl Action {
         let mut ret: Vec<Self> = Vec::new();
 
         // At the start of each round, if you have at least 3 rooms but only 2 people, you get 1 food and 1 crop of your choice (grain or vegetable).
-        if player.before_round_start && player.occupations.contains(&Occupation::Childless) {
-            let people = player.adults + player.children; // children should always be zero (grown into adults) at this point
-            if people == 2 && people < player.farm.room_indices().len() {
-                ret.push(Self::GetResourceFromChildless(Grain.index()));
-                ret.push(Self::GetResourceFromChildless(Vegetable.index()));
-            }
+        if state.before_round_start()
+            && player.occupations.contains(&Occupation::Childless)
+            && state.family_members(state.current_player_idx) == 2
+            && state.can_grow_family_with_room()
+        {
+            ret.push(Self::GetResourceFromChildless(Grain.index()));
+            ret.push(Self::GetResourceFromChildless(Vegetable.index()));
         }
 
         if !ret.is_empty() {
@@ -491,12 +492,12 @@ impl Action {
                     }
                 }
                 Self::UseWishForChildren => {
-                    if !player.can_grow_family_with_room() {
+                    if !state.can_grow_family_with_room() {
                         continue;
                     }
                 }
                 Self::UseUrgentWishForChildren => {
-                    if !player.can_grow_family_without_room() {
+                    if !state.can_grow_family_without_room() {
                         continue;
                     }
                 }
@@ -785,8 +786,7 @@ impl Action {
                 // At the start of each round, if you have at least 3 rooms but only 2 people, you get 1 food and 1 crop of your choice (grain or vegetable).
                 state.player_mut().resources[*res] += 1;
                 state.player_mut().resources[Food.index()] += 1;
-                state.player_mut().before_round_start = false;
-            }
+                state.current_player_flags_mut()[BeforeRoundStart.index()] = false;            }
             Self::StartRound => {
                 state.init_new_round();
             }
@@ -805,7 +805,7 @@ impl Action {
                 state.player_mut().fence(pasture_config);
             }
             Self::BuildRoom(pasture_idx) => {
-                state.player_mut().build_room(pasture_idx);
+                state.build_room(pasture_idx);
             }
             Self::BuildStable(pasture_idx) => {
                 state.player_mut().build_stable(pasture_idx);

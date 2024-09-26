@@ -3,7 +3,6 @@ use std::time::{Duration, Instant};
 use std::{error::Error, io};
 
 use agricola_game::agricola::display::{display_farm, display_resources};
-use agricola_game::agricola::scoring;
 use agricola_game::agricola::state::State;
 use agricola_game::agricola::{
     actions::Action,
@@ -372,7 +371,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                 " Player {} | {:?} | {} Points",
                 i + 1,
                 p.player_type(),
-                scoring::score(p)
+                state.score(i)
             );
 
             if i == state.starting_player_idx {
@@ -405,7 +404,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                 .alignment(ratatui::layout::Alignment::Center);
             f.render_widget(main_farm, displays[0]);
 
-            let resource_text = Paragraph::new(display_resources(p));
+            let resource_text = Paragraph::new(display_resources(state, i));
             f.render_widget(resource_text, displays[2]);
         }
 

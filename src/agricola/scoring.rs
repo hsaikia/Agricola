@@ -1,7 +1,7 @@
 use super::farm::{FarmyardSpace, House, Seed};
 use super::fencing::get_existing_pastures;
 use super::player::Player;
-use super::primitives::*;
+use super::quantity::*;
 
 const FIELD_SCORE: [i32; 6] = [-1, -1, 1, 2, 3, 4];
 const PASTURE_SCORE: [i32; 5] = [-1, 1, 2, 3, 4];
@@ -11,7 +11,7 @@ const SHEEP_SCORE: [i32; 9] = [-1, 1, 1, 1, 2, 2, 3, 3, 4];
 const PIGS_SCORE: [i32; 8] = [-1, 1, 1, 2, 2, 3, 3, 4];
 const CATTLE_SCORE: [i32; 7] = [-1, 1, 2, 2, 3, 3, 4];
 
-fn score_farm(player: &Player) -> i32 {
+pub fn score_farm(player: &Player) -> i32 {
     let mut score = 0;
     let mut res: Resources = player.resources;
     let mut num_fields: usize = 0;
@@ -56,15 +56,3 @@ fn score_farm(player: &Player) -> i32 {
     score
 }
 
-pub fn score(player: &Player) -> f32 {
-    let mut ret: f32 = 0.0;
-
-    // House, Family and Empty Spaces
-    ret += 3.0 * player.family_members() as f32;
-    // Begging Tokens
-    ret -= 3.0 * player.begging_tokens as f32;
-    // Score farm
-    ret += score_farm(player) as f32;
-
-    ret
-}

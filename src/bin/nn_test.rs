@@ -2,7 +2,7 @@ use agricola_game::nn::NeuralNetwork;
 use rand::Rng;
 
 fn main() {
-    let mut nn = NeuralNetwork::new(&[2, 10, 1]);
+    let mut nn = NeuralNetwork::new(&[2, 9, 1]);
 
     let data = vec![
         (vec![0.0, 0.0], vec![0.0]),

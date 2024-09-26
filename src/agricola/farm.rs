@@ -24,13 +24,6 @@ pub enum Seed {
     Vegetable,
 }
 
-#[derive(Copy, Clone, Debug, Hash, PartialEq)]
-pub enum Animal {
-    Sheep,
-    Boar,
-    Cattle,
-}
-
 type ContainsStable = bool;
 
 #[derive(Copy, Clone, Debug, Default, Hash, PartialEq)]
@@ -71,7 +64,6 @@ pub const NEIGHBOR_SPACES: [[Option<usize>; 4]; NUM_FARMYARD_SPACES] = [
 pub struct Farm {
     pub farmyard_spaces: [FarmyardSpace; NUM_FARMYARD_SPACES],
     pub fences_used: usize,
-    pub pet: Option<(Animal, usize)>,
     #[derivative(Hash = "ignore")]
     pub fence_options_cache: Vec<PastureConfig>,
 }
@@ -92,7 +84,6 @@ impl Farm {
         Self {
             farmyard_spaces,
             fences_used: 0,
-            pet: None,
             fence_options_cache: get_all_pasture_configs(&farmyard_spaces),
         }
     }
