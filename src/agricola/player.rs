@@ -1,15 +1,12 @@
 use super::algorithms::PlayerType;
 use super::farm::{Farm, House};
-use super::occupations::Occupation;
 use super::quantity::*;
 
 #[derive(Clone, Hash)]
 pub struct Player {
     pub player_type: PlayerType,
     pub house: House,
-    pub occupations: Vec<Occupation>,
     pub farm: Farm,
-    pub has_cooking_improvement: bool,
 }
 
 impl Player {
@@ -20,9 +17,7 @@ impl Player {
         Player {
             player_type,
             house: House::Wood,
-            occupations: vec![],
             farm: Farm::new(),
-            has_cooking_improvement: false,
         }
     }
 

@@ -7,7 +7,6 @@ pub mod fencing;
 pub mod flag;
 pub mod major_improvements;
 pub mod mcts;
-pub mod occupations;
 pub mod paranoid_ai;
 pub mod player;
 pub mod quantity;

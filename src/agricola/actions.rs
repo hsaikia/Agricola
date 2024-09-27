@@ -1,9 +1,9 @@
+use super::card::AssistantTiller;
+use super::card::*;
 use super::farm::Seed;
 use super::fencing::PastureConfig;
 use super::flag::*;
 use super::major_improvements::MajorImprovement;
-use super::occupations::Occupation;
-use super::player::Player;
 use super::quantity::*;
 use super::state::{
     State, BAKING_MAJOR_IMPROVEMENT_INDICES, FIREPLACE_AND_COOKING_HEARTH_INDICES,
@@ -92,7 +92,7 @@ pub enum Action {
     PreHarvest,
     PayFoodOrBeg,
     StartGame,
-    PlayOccupation(Occupation, usize),
+    PlayOccupation(usize, usize),    // Occ index and food required
     GetResourceFromChildless(usize), // index of Grain or Vegetable
 }
 
@@ -223,7 +223,7 @@ impl Action {
             }
             Self::PayFoodOrBeg => vec![Self::Harvest],
             Self::UseDayLaborer => {
-                ret.extend(Self::day_laborer_choices(player));
+                ret.extend(Self::day_laborer_choices(state));
                 ret
             }
             _ => vec![Self::EndTurn],
@@ -231,14 +231,13 @@ impl Action {
     }
 
     fn occupation_choices(state: &State, cheaper: bool) -> Vec<Self> {
-        let player = state.player();
         let mut required_food = if cheaper { 1 } else { 2 };
         // First Occ on L1 = 0 else 1. So 0, 1, 1, 1, ..
         // First two Occs on L2 = 1 else 2. So 1, 1, 2, 2, 2, ..
-        if player.occupations.is_empty() && cheaper {
+        if state.num_occupations_played() == 0 && cheaper {
             required_food = 0;
         }
-        if player.occupations.len() < 2 && !cheaper {
+        if state.num_occupations_played() < 2 && !cheaper {
             required_food = 1;
         }
 
@@ -250,17 +249,17 @@ impl Action {
                 &ConversionStage::BeforePlayOccupation(cheaper),
             ));
         } else {
-            for occ in &state.available_occupations {
-                ret.push(Self::PlayOccupation(occ.clone(), required_food));
+            for occ in &state.occupations_available() {
+                ret.push(Self::PlayOccupation(*occ, required_food));
             }
         }
         ret
     }
 
-    fn day_laborer_choices(player: &Player) -> Vec<Self> {
+    fn day_laborer_choices(state: &State) -> Vec<Self> {
         let mut ret: Vec<Self> = Vec::new();
-        let field_opt = player.field_options();
-        if !field_opt.is_empty() && player.occupations.contains(&Occupation::AssistantTiller) {
+        let field_opt = state.player().field_options();
+        if !field_opt.is_empty() && state.current_player_cards()[AssistantTiller.index()] {
             for opt in field_opt {
                 ret.push(Self::Plow(CalledFromCultivation(false), opt));
             }
@@ -437,7 +436,7 @@ impl Action {
 
         // At the start of each round, if you have at least 3 rooms but only 2 people, you get 1 food and 1 crop of your choice (grain or vegetable).
         if state.before_round_start()
-            && player.occupations.contains(&Occupation::Childless)
+            && state.current_player_cards()[Childless.index()]
             && state.family_members(state.current_player_idx) == 2
             && state.can_grow_family_with_room()
         {
@@ -503,7 +502,7 @@ impl Action {
                 }
 
                 Self::UseLessons(cheaper) => {
-                    if state.available_occupations.is_empty()
+                    if state.occupations_available().is_empty()
                         || !state.can_play_occupation(*cheaper)
                     {
                         continue;
@@ -786,8 +785,8 @@ impl Action {
                 state.starting_player_idx = state.current_player_idx;
             }
             Self::PlayOccupation(occ, food_cost) => {
-                state.player_mut().occupations.push(occ.clone());
-                state.available_occupations.retain(|x| x != occ);
+                //state.player_mut().occupations.push(occ.clone());
+                state.current_player_cards_mut()[*occ] = true;
                 state.current_player_quantities_mut()[Food.index()] -= food_cost;
             }
             Self::Plow(_, pasture_idx) => {

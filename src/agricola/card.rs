@@ -1,4 +1,4 @@
-trait Card {
+pub trait Card {
     fn index(&self) -> usize;
 }
 
@@ -91,3 +91,20 @@ impl Card for Childless {
 }
 
 pub const NUM_CARDS: usize = 12;
+pub const MAJOR_IMPROVEMENTS_INDICES: [usize; 10] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+pub const OCCUPATIONS_INDICES: [usize; 2] = [10, 11];
+
+pub const CARD_NAMES: [&str; NUM_CARDS] = [
+    "Major : Fireplace (2 🧱)",
+    "Major : Fireplace (3 🧱)",
+    "Major : Cooking Hearth (4 🧱)",
+    "Major : Cooking Hearth (5 🧱)",
+    "Major : Well",
+    "Major : Clay Oven",
+    "Major : Stone Oven",
+    "Major : Joinery",
+    "Major : Pottery",
+    "Major : Basketmaker's Workshop",
+    "Occupation : Assistant Tiller",
+    "Occupation : Childless",
+];

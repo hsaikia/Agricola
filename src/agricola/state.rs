@@ -1,11 +1,11 @@
 use super::actions::{Action, NUM_RESOURCE_SPACES};
 use super::algorithms::PlayerType;
+use super::card::{NUM_CARDS, OCCUPATIONS_INDICES};
 use super::display::format_resources;
 use super::farm::{House, Seed};
 use super::fencing::PastureConfig;
 use super::flag::*;
 use super::major_improvements::{MajorImprovement, TOTAL_MAJOR_IMPROVEMENTS};
-use super::occupations::Occupation;
 use super::player::Player;
 use super::quantity::*;
 use super::scoring::score_farm;
@@ -59,13 +59,13 @@ pub struct State {
     pub players: Vec<Player>,
     player_quantities: [[usize; NUM_QUANTITIES]; MAX_NUM_PLAYERS],
     player_flags: [[bool; NUM_FLAGS]; MAX_NUM_PLAYERS],
+    player_cards: [[bool; NUM_CARDS]; MAX_NUM_PLAYERS],
     pub major_improvements: [(MajorImprovement, Option<usize>, usize); 10], // (Major, PlayerIdx, Number_of_times_used_in_harvest)
     pub current_player_idx: usize,
     pub starting_player_idx: usize,
     pub people_placed_this_round: usize,
     pub last_action: Action,
     pub start_round_events: Vec<Event>,
-    pub available_occupations: Vec<Occupation>,
 }
 
 impl State {
@@ -111,12 +111,12 @@ impl State {
             players: Vec::<Player>::new(),
             player_quantities,
             player_flags,
+            player_cards: [[false; NUM_CARDS]; MAX_NUM_PLAYERS],
             current_player_idx: first_player_idx,
             starting_player_idx: first_player_idx,
             people_placed_this_round: 0,
             last_action: Action::StartGame,
             start_round_events: vec![],
-            available_occupations: Occupation::all(),
         };
         state.init_players(players, first_player_idx);
         //println!("New Game Started");
@@ -562,11 +562,10 @@ impl State {
     }
 
     pub fn build_major(&mut self, major: &MajorImprovement, return_fireplace: bool) {
-        let player = &mut self.players[self.current_player_idx];
         match major {
             &MajorImprovement::Fireplace { cheaper: _ }
             | &MajorImprovement::CookingHearth { cheaper: _ } => {
-                player.has_cooking_improvement = true;
+                self.current_player_flags_mut()[HasCookingImprovement.index()] = true;
             }
             _ => {}
         }
@@ -849,12 +848,22 @@ impl State {
         }
     }
 
+    pub fn num_occupations_played(&self) -> usize {
+        OCCUPATIONS_INDICES.iter().fold(0, |acc, idx| {
+            if self.player_cards[self.current_player_idx][*idx] {
+                acc + 1
+            } else {
+                acc
+            }
+        })
+    }
+
     pub fn can_play_occupation(&self, cheaper: bool) -> bool {
         let mut required_food = if cheaper { 1 } else { 2 };
-        if self.player().occupations.is_empty() && cheaper {
+        if self.num_occupations_played() == 0 && cheaper {
             required_food = 0;
         }
-        if self.player().occupations.len() < 2 && !cheaper {
+        if self.num_occupations_played() < 2 && !cheaper {
             required_food = 1;
         }
 
@@ -873,7 +882,9 @@ impl State {
         }
 
         // Required food must be less than 3, and minimum food gained by cooking is 2
-        if self.player().has_cooking_improvement && self.has_resources_to_cook() {
+        if self.current_player_flags()[HasCookingImprovement.index()]
+            && self.has_resources_to_cook()
+        {
             return true;
         }
 
@@ -904,6 +915,18 @@ impl State {
             }
         }
         ret
+    }
+
+    fn card_available(&self, card_idx: usize) -> bool {
+        (0..self.players.len()).all(|i| !self.player_cards[i][card_idx])
+    }
+
+    pub fn occupations_available(&self) -> Vec<usize> {
+        OCCUPATIONS_INDICES
+            .iter()
+            .filter(|idx| self.card_available(**idx))
+            .copied()
+            .collect()
     }
 
     pub fn player(&self) -> &Player {
@@ -944,5 +967,21 @@ impl State {
 
     pub fn current_player_flags_mut(&mut self) -> &mut [bool; NUM_FLAGS] {
         &mut self.player_flags[self.current_player_idx]
+    }
+
+    pub fn player_cards(&self, player_idx: usize) -> &[bool; NUM_CARDS] {
+        &self.player_cards[player_idx]
+    }
+
+    pub fn player_cards_mut(&mut self, player_idx: usize) -> &mut [bool; NUM_CARDS] {
+        &mut self.player_cards[player_idx]
+    }
+
+    pub fn current_player_cards(&self) -> &[bool; NUM_CARDS] {
+        &self.player_cards[self.current_player_idx]
+    }
+
+    pub fn current_player_cards_mut(&mut self) -> &mut [bool; NUM_CARDS] {
+        &mut self.player_cards[self.current_player_idx]
     }
 }

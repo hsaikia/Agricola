@@ -2,6 +2,7 @@ use crate::agricola::fencing::MAX_PASTURES;
 use crate::agricola::player::Player;
 
 use super::{
+    card::CARD_NAMES,
     farm::{FarmyardSpace, House, L, W},
     quantity::*,
     state::State,
@@ -33,7 +34,6 @@ pub fn format_resources(res: &Resources) -> String {
 }
 
 pub fn display_resources(state: &State, player_idx: usize) -> String {
-    let player = &state.players[player_idx];
     let res = state.player_quantities(player_idx);
     let mut ret = String::from("\n\n");
 
@@ -59,8 +59,10 @@ pub fn display_resources(state: &State, player_idx: usize) -> String {
         ));
     }
 
-    for occ in &player.occupations {
-        ret = format!("{ret}\n{occ:?}");
+    for (i, card) in state.player_cards(player_idx).iter().enumerate() {
+        if *card {
+            ret.push_str(&format!("\n{}", CARD_NAMES[i]));
+        }
     }
     ret
 }
