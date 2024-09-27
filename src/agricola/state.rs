@@ -2,13 +2,14 @@ use super::actions::{Action, NUM_RESOURCE_SPACES};
 use super::algorithms::PlayerType;
 use super::card::{NUM_CARDS, OCCUPATIONS_INDICES};
 use super::display::format_resources;
-use super::farm::{House, Seed};
+use super::farm::Seed;
 use super::fencing::PastureConfig;
 use super::flag::*;
 use super::major_improvements::{MajorImprovement, TOTAL_MAJOR_IMPROVEMENTS};
 use super::player::Player;
 use super::quantity::*;
 use super::scoring::score_farm;
+use core::panic;
 use rand::Rng;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -446,15 +447,21 @@ impl State {
         }
     }
 
-    pub fn set_can_build_room(&mut self) {
-        let room_material_idx = match self.player().house {
-            House::Wood => Wood.index(),
-            House::Clay => Clay.index(),
-            House::Stone => Stone.index(),
-        };
+    fn room_material_idx(&self) -> usize {
+        if self.current_player_flags()[WoodHouse.index()] {
+            Wood.index()
+        } else if self.current_player_flags()[ClayHouse.index()] {
+            Clay.index()
+        } else if self.current_player_flags()[StoneHouse.index()] {
+            Stone.index()
+        } else {
+            panic!("No house type set");
+        }
+    }
 
+    pub fn set_can_build_room(&mut self) {
         if !self.player().farm.possible_room_positions().is_empty()
-            && self.current_player_quantities()[room_material_idx] >= 5
+            && self.current_player_quantities()[self.room_material_idx()] >= 5
             && self.current_player_quantities()[Reed.index()] >= 2
         {
             self.current_player_flags_mut()[CanBuildRoom.index()] = true;
@@ -470,11 +477,7 @@ impl State {
     pub fn build_room(&mut self, idx: &usize) {
         assert!(self.can_build_room());
         // By default Rooms cost 5 of the corresponding building resource (as the material of the house and 2 Reed)
-        let room_material_idx = match self.player().house {
-            House::Wood => Wood.index(),
-            House::Clay => Clay.index(),
-            House::Stone => Stone.index(),
-        };
+        let room_material_idx = self.room_material_idx();
         self.current_player_quantities_mut()[room_material_idx] -= 5;
         self.current_player_quantities_mut()[Reed.index()] -= 2;
         self.player_mut().farm.build_room(*idx);
@@ -545,19 +548,35 @@ impl State {
         self.current_player_flags()[CanRenovate.index()]
     }
 
+    fn renovation_material_idx(&self) -> Option<usize> {
+        if self.current_player_flags()[WoodHouse.index()] {
+            Some(Clay.index())
+        } else if self.current_player_flags()[ClayHouse.index()] {
+            Some(Stone.index())
+        } else {
+            None
+        }
+    }
+
     pub fn renovate(&mut self) {
         assert!(self.current_player_flags()[CanRenovate.index()]);
         // TODO for cards like Conservator this must be implemented in a more general way
-        let renovation_material_idx = match self.player().house {
-            House::Wood => Some(Clay.index()),
-            House::Clay => Some(Stone.index()),
-            House::Stone => None,
-        };
+        let renovation_material_idx = self.renovation_material_idx();
 
         if let Some(renovation_material_idx) = renovation_material_idx {
             self.current_player_quantities_mut()[renovation_material_idx] -=
                 self.current_player_quantities()[Rooms.index()];
             self.current_player_quantities_mut()[Reed.index()] -= 1;
+
+            if renovation_material_idx == Clay.index() {
+                self.current_player_flags_mut()[WoodHouse.index()] = false;
+                self.current_player_flags_mut()[ClayHouse.index()] = true;
+                self.current_player_flags_mut()[StoneHouse.index()] = false;
+            } else if renovation_material_idx == Stone.index() {
+                self.current_player_flags_mut()[WoodHouse.index()] = false;
+                self.current_player_flags_mut()[ClayHouse.index()] = false;
+                self.current_player_flags_mut()[StoneHouse.index()] = true;
+            }
         }
     }
 
@@ -800,15 +819,12 @@ impl State {
 
     pub fn score(&self, player_idx: usize) -> f32 {
         let mut ret: f32 = 0.0;
-
-        let player = &self.players[player_idx];
-
         // House, Family and Empty Spaces
         ret += 3.0 * self.family_members(player_idx) as f32;
         // Begging Tokens
         ret -= 3.0 * self.player_quantities(player_idx)[BeggingTokens.index()] as f32;
         // Score farm
-        ret += score_farm(player, self.player_quantities(player_idx)) as f32;
+        ret += score_farm(self, player_idx) as f32;
 
         ret
     }

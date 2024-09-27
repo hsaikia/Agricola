@@ -190,7 +190,7 @@ impl App {
                         if i == self.selection_y {
                             ret = format!("{}\n>> {:?}", ret, action);
                             if let Action::Fence(_) = action {
-                                additional_stuff = display_farm(state.player());
+                                additional_stuff = display_farm(state, state.current_player_idx);
                             }
                         } else {
                             ret = format!("{}\n{:?}", ret, action);
@@ -398,7 +398,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                 )
                 .split(farm_areas[2 * i]);
 
-            let farm_strings = display_farm(p);
+            let farm_strings = display_farm(state, i);
             let main_farm = Paragraph::new(farm_strings.to_string())
                 .style(Style::default())
                 .alignment(ratatui::layout::Alignment::Center);

@@ -1,9 +1,9 @@
-use crate::agricola::fencing::MAX_PASTURES;
-use crate::agricola::player::Player;
+use super::flag::*;
+use crate::agricola::{fencing::MAX_PASTURES, flag::WoodHouse};
 
 use super::{
     card::CARD_NAMES,
-    farm::{FarmyardSpace, House, L, W},
+    farm::{FarmyardSpace, L, W},
     quantity::*,
     state::State,
 };
@@ -67,14 +67,15 @@ pub fn display_resources(state: &State, player_idx: usize) -> String {
     ret
 }
 
-pub fn display_farm(player: &Player) -> String {
-    // TODO : Fix these!
+pub fn display_farm(state: &State, player_idx: usize) -> String {
     let mut ret = String::from("\n\n\n");
 
-    let room_emoji = match player.house {
-        House::Clay => "[CR]",
-        House::Stone => "[SR]",
-        House::Wood => "[WR]",
+    let room_emoji = if state.player_flags(player_idx)[WoodHouse.index()] {
+        "[WR] "
+    } else if state.player_flags(player_idx)[ClayHouse.index()] {
+        "[CR] "
+    } else {
+        "[SR] "
     };
 
     const PASTURE_EMOJIS: [[&str; MAX_PASTURES]; 2] = [
@@ -85,7 +86,7 @@ pub fn display_farm(player: &Player) -> String {
     for i in 0..W {
         for j in 0..L {
             let idx = i * L + j;
-            match player.farm.farmyard_spaces[idx] {
+            match state.players[player_idx].farm.farmyard_spaces[idx] {
                 FarmyardSpace::Empty => {
                     ret.push_str("[--]");
                 }

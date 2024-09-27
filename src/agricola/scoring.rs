@@ -1,7 +1,8 @@
-use super::farm::{FarmyardSpace, House, Seed};
+use super::farm::{FarmyardSpace, Seed};
 use super::fencing::get_existing_pastures;
-use super::player::Player;
+use super::flag::*;
 use super::quantity::*;
+use super::state::State;
 
 const FIELD_SCORE: [i32; 6] = [-1, -1, 1, 2, 3, 4];
 const PASTURE_SCORE: [i32; 5] = [-1, 1, 2, 3, 4];
@@ -10,11 +11,21 @@ const VEGETABLE_SCORE: [i32; 5] = [-1, 1, 2, 3, 4];
 const SHEEP_SCORE: [i32; 9] = [-1, 1, 1, 1, 2, 2, 3, 3, 4];
 const PIGS_SCORE: [i32; 8] = [-1, 1, 1, 2, 2, 3, 3, 4];
 const CATTLE_SCORE: [i32; 7] = [-1, 1, 2, 2, 3, 3, 4];
+const HOUSE_SCORE: [i32; 3] = [0, 1, 2];
 
-pub fn score_farm(player: &Player, player_quantities: &[usize; NUM_QUANTITIES]) -> i32 {
+pub fn score_farm(state: &State, player_idx: usize) -> i32 {
     let mut score = 0;
     let mut num_fields: usize = 0;
-    let mut player_quantities = *player_quantities;
+    let mut player_quantities = *state.player_quantities(player_idx);
+    let player = &state.players[player_idx];
+
+    let house_type_idx = if state.player_flags(player_idx)[WoodHouse.index()] {
+        0
+    } else if state.player_flags(player_idx)[ClayHouse.index()] {
+        1
+    } else {
+        2
+    };
 
     let num_pastures = get_existing_pastures(&player.farm.farmyard_spaces)
         .iter()
@@ -24,11 +35,7 @@ pub fn score_farm(player: &Player, player_quantities: &[usize; NUM_QUANTITIES]) 
     for space in &player.farm.farmyard_spaces {
         match *space {
             FarmyardSpace::Empty => score -= 1,
-            FarmyardSpace::Room => match player.house {
-                House::Clay => score += 1,
-                House::Stone => score += 2,
-                House::Wood => (),
-            },
+            FarmyardSpace::Room => score += HOUSE_SCORE[house_type_idx],
             FarmyardSpace::FencedPasture(has_stable, _) => {
                 if has_stable {
                     score += 1;

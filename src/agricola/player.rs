@@ -1,11 +1,10 @@
 use super::algorithms::PlayerType;
-use super::farm::{Farm, House};
+use super::farm::Farm;
 use super::quantity::*;
 
 #[derive(Clone, Hash)]
 pub struct Player {
     pub player_type: PlayerType,
-    pub house: House,
     pub farm: Farm,
 }
 
@@ -16,7 +15,6 @@ impl Player {
 
         Player {
             player_type,
-            house: House::Wood,
             farm: Farm::new(),
         }
     }

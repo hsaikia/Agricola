@@ -11,13 +11,6 @@ pub const MAX_FENCES: usize = 15;
 pub const MAX_STABLES: usize = 4;
 pub const ROOM_INDICES: [usize; 2] = [5, 10];
 
-#[derive(Copy, Clone, Hash)]
-pub enum House {
-    Wood,
-    Clay,
-    Stone,
-}
-
 #[derive(Debug, Copy, Clone, Hash, PartialEq)]
 pub enum Seed {
     Grain,
