@@ -113,7 +113,7 @@ impl Farm {
                     FarmyardSpace::UnfencedStable => {
                         self.farmyard_spaces[space] = FarmyardSpace::FencedPasture(true, idx);
                     }
-                    FarmyardSpace::FencedPasture(stable, _ ) => {
+                    FarmyardSpace::FencedPasture(stable, _) => {
                         self.farmyard_spaces[space] = FarmyardSpace::FencedPasture(stable, idx);
                     }
                     _ => (),

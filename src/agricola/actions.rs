@@ -828,6 +828,8 @@ impl Action {
         if let Some(resource_idx) = self.resource_map_idx() {
             self.collect_resources(state, resource_idx);
             state.set_can_renovate();
+            state.set_can_build_room();
+            state.set_can_build_stable();
         }
     }
 }

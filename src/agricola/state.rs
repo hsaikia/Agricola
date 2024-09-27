@@ -466,13 +466,10 @@ impl State {
     }
 
     pub fn set_can_build_room(&mut self) {
-        if !self.current_farm().possible_room_positions().is_empty()
-            && self.current_player_quantities()[self.room_material_idx()] >= 5
-            && self.current_player_quantities()[Reed.index()] >= 2
-        {
-            self.current_player_flags_mut()[CanBuildRoom.index()] = true;
-        }
-        self.current_player_flags_mut()[CanBuildRoom.index()] = false;
+        self.current_player_flags_mut()[CanBuildRoom.index()] =
+            !self.current_farm().possible_room_positions().is_empty()
+                && self.current_player_quantities()[self.room_material_idx()] >= 5
+                && self.current_player_quantities()[Reed.index()] >= 2;
     }
 
     pub fn can_build_room(&self) -> bool {
@@ -512,10 +509,8 @@ impl State {
     }
 
     pub fn set_can_build_stable(&mut self) {
-        if self.current_player_quantities()[Wood.index()] >= 2 {
-            self.current_player_flags_mut()[CanBuildStable.index()] = true;
-        }
-        self.current_player_flags_mut()[CanBuildStable.index()] = false;
+        self.current_player_flags_mut()[CanBuildStable.index()] =
+            self.current_player_quantities()[Wood.index()] >= 2;
     }
 
     pub fn can_build_stable(&self) -> bool {
@@ -537,17 +532,14 @@ impl State {
     }
 
     pub fn set_can_renovate(&mut self) {
-        if self.current_player_quantities()[Reed.index()] >= 1
-            && ((self.current_player_flags()[WoodHouse.index()]
-                && self.current_player_quantities()[Clay.index()]
-                    >= self.current_player_quantities()[Rooms.index()])
-                || (self.current_player_flags()[ClayHouse.index()]
-                    && self.current_player_quantities()[Stone.index()]
-                        >= self.current_player_quantities()[Rooms.index()]))
-        {
-            self.current_player_flags_mut()[CanRenovate.index()] = true;
-        }
-        self.current_player_flags_mut()[CanRenovate.index()] = false;
+        self.current_player_flags_mut()[CanRenovate.index()] =
+            self.current_player_quantities()[Reed.index()] >= 1
+                && ((self.current_player_flags()[WoodHouse.index()]
+                    && self.current_player_quantities()[Clay.index()]
+                        >= self.current_player_quantities()[Rooms.index()])
+                    || (self.current_player_flags()[ClayHouse.index()]
+                        && self.current_player_quantities()[Stone.index()]
+                            >= self.current_player_quantities()[Rooms.index()]));
     }
 
     pub fn can_renovate(&self) -> bool {
@@ -1006,5 +998,34 @@ impl State {
 
     pub fn player_farm(&self, player_idx: usize) -> &Farm {
         &self.farms[player_idx]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::env;
+
+    // Note this useful idiom: importing names from outer (for mod tests) scope.
+    use super::*;
+
+    #[test]
+    fn test_can_use_farm_expansion() {
+        env::set_var("RUN_BACKTRACE", "1");
+        let mut state = State::new(&[PlayerType::Human]).unwrap();
+
+        assert!(state.current_player_flags()[WoodHouse.index()]);
+
+        let room_positions = state.current_farm().possible_room_positions();
+        assert_eq!(room_positions.len(), 3);
+
+        state.current_player_quantities_mut()[Wood.index()] = 5;
+        state.current_player_quantities_mut()[Reed.index()] = 2;
+
+        assert!(!state.can_build_room());
+        state.set_can_build_room();
+        assert!(state.can_build_room());
+        assert!(!state.can_build_stable());
+        state.set_can_build_stable();
+        assert!(state.can_build_stable());
     }
 }
