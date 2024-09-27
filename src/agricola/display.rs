@@ -35,14 +35,14 @@ pub fn format_resources(res: &Resources) -> String {
 
 pub fn display_resources(state: &State, player_idx: usize) -> String {
     let res = state.player_quantities(player_idx);
-    let mut ret = String::from("\n\n");
+    let mut ret = String::from("\n");
 
-    for (i, num_res) in res.iter().enumerate() {
+    for (i, num_res) in res.iter().take(NUM_RESOURCES).enumerate() {
         if num_res == &0 {
             continue;
         }
         ret.push_str(&format!(
-            "\n{:2} {:?}",
+            "\n{:2} {}",
             num_res,
             RESOURCE_EMOJIS[i].repeat(*num_res)
         ));
@@ -71,11 +71,11 @@ pub fn display_farm(state: &State, player_idx: usize) -> String {
     let mut ret = String::from("\n\n\n");
 
     let room_emoji = if state.player_flags(player_idx)[WoodHouse.index()] {
-        "[WR] "
+        "[WR]"
     } else if state.player_flags(player_idx)[ClayHouse.index()] {
-        "[CR] "
+        "[CR]"
     } else {
-        "[SR] "
+        "[SR]"
     };
 
     const PASTURE_EMOJIS: [[&str; MAX_PASTURES]; 2] = [
