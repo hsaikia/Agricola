@@ -125,7 +125,7 @@ impl App {
             if self.current_actions.len() == 1 {
                 self.current_actions[0].apply_choice(state);
             } else {
-                match state.player_type() {
+                match state.player_type(state.current_player_idx) {
                     PlayerType::Human => {
                         if !self.move_selected {
                             return;
@@ -184,7 +184,7 @@ impl App {
         let mut ret: String = String::new();
         let mut additional_stuff: String = String::new();
         if let Some(state) = &self.state {
-            match state.player_type() {
+            match state.player_type(state.current_player_idx) {
                 PlayerType::Human => {
                     for (i, action) in self.current_actions.iter().enumerate() {
                         if i == self.selection_y {
@@ -354,7 +354,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         f.render_widget(text, chunks[0]);
 
         // Player farms
-        let n = state.players.len() as u16;
+        let n = state.num_players as u16;
         let padding: u16 = 2;
         let board_size = (100 - padding * (n - 1)) / n;
         let mut constraints = vec![Constraint::Percentage(board_size)];
@@ -366,11 +366,11 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
             .direction(Direction::Vertical)
             .constraints(constraints)
             .split(chunks[1]);
-        for (i, p) in state.players.iter().enumerate() {
+        for i in 0..state.num_players {
             let mut title_string = format!(
                 " Player {} | {:?} | {} Points",
                 i + 1,
-                p.player_type(),
+                state.player_type(i),
                 state.score(i)
             );
 

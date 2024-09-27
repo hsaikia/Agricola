@@ -48,9 +48,6 @@ fn main() {
     let duration = start.elapsed();
     println!(
         "Time taken in a {} player MCTS AI game (Simulated Games {}, Depth {:?}): {:?}",
-        state.players.len(),
-        NUM_GAMES_TO_SIMULATE,
-        OPT_DEPTH,
-        duration
+        state.num_players, NUM_GAMES_TO_SIMULATE, OPT_DEPTH, duration
     );
 }

@@ -6,7 +6,6 @@ use super::farm::{Farm, Seed};
 use super::fencing::PastureConfig;
 use super::flag::*;
 use super::major_improvements::{MajorImprovement, TOTAL_MAJOR_IMPROVEMENTS};
-use super::player::Player;
 use super::quantity::*;
 use super::scoring::score_farm;
 use core::panic;
@@ -53,11 +52,12 @@ pub struct Event {
 
 #[derive(Clone, Hash)]
 pub struct State {
+    pub num_players: usize,
     pub resource_map: [Resources; NUM_RESOURCE_SPACES],
     pub open_spaces: Vec<Action>,
     pub occupied_spaces: Vec<usize>,
     pub hidden_spaces: Vec<Vec<Action>>,
-    pub players: Vec<Player>,
+    player_types: [PlayerType; MAX_NUM_PLAYERS],
     player_quantities: [[usize; NUM_QUANTITIES]; MAX_NUM_PLAYERS],
     player_flags: [[bool; NUM_FLAGS]; MAX_NUM_PLAYERS],
     player_cards: [[bool; NUM_CARDS]; MAX_NUM_PLAYERS],
@@ -93,7 +93,13 @@ impl State {
             player_flags[WoodHouse.index()] = true;
         }
 
-        let mut state = State {
+        let mut player_types = [PlayerType::MCTSMachine; MAX_NUM_PLAYERS];
+        for (i, player_type) in player_types.iter_mut().enumerate().take(players.len()) {
+            *player_type = players[i];
+        }
+
+        let state = State {
+            num_players: players.len(),
             resource_map: Action::init_resource_map(),
             open_spaces: Action::initial_open_spaces(),
             occupied_spaces: Vec::new(),
@@ -110,7 +116,7 @@ impl State {
                 (MajorImprovement::Pottery, None, 0),
                 (MajorImprovement::BasketmakersWorkshop, None, 0),
             ],
-            players: Vec::<Player>::new(),
+            player_types,
             player_quantities,
             player_flags,
             player_cards: [[false; NUM_CARDS]; MAX_NUM_PLAYERS],
@@ -121,8 +127,6 @@ impl State {
             last_action: Action::StartGame,
             start_round_events: vec![],
         };
-        state.init_players(players, first_player_idx);
-        //println!("New Game Started");
         Some(state)
     }
 
@@ -247,8 +251,8 @@ impl State {
         }
     }
 
-    pub fn player_type(&self) -> PlayerType {
-        self.players[self.current_player_idx].player_type()
+    pub fn player_type(&self, player_idx: usize) -> PlayerType {
+        self.player_types[player_idx]
     }
 
     pub fn fitness(&self) -> Vec<f32> {
@@ -322,7 +326,7 @@ impl State {
     pub fn scores(&self) -> Vec<f32> {
         let mut scores: Vec<f32> = Vec::new();
         let card_scores = self.score_cards();
-        for (idx, card_score) in card_scores.iter().enumerate().take(self.players.len()) {
+        for (idx, card_score) in card_scores.iter().enumerate().take(self.num_players) {
             scores.push(self.score(idx) + *card_score as f32);
         }
         scores
@@ -389,19 +393,11 @@ impl State {
         // Look for start round events
         let start_round_events = self.start_round_events.clone();
         for event in start_round_events {
-            for i in 0..self.players.len() {
+            for i in 0..self.num_players {
                 if event.round == current_round && event.player_idx == i {
                     (event.func)(self.player_quantities_mut(i));
                 }
             }
-        }
-    }
-
-    fn init_players(&mut self, player_types: &[PlayerType], first_idx: usize) {
-        for (i, player_type) in player_types.iter().enumerate() {
-            let food = if i == first_idx { 2 } else { 3 };
-            let player = Player::create_new(food, player_type.clone());
-            self.players.push(player);
         }
     }
 
@@ -761,7 +757,7 @@ impl State {
         }
 
         self.accommodate_animals(true);
-        self.current_player_idx = (self.current_player_idx + 1) % self.players.len();
+        self.current_player_idx = (self.current_player_idx + 1) % self.num_players;
         self.remove_empty_stage();
     }
 
@@ -844,12 +840,12 @@ impl State {
         self.people_placed_this_round += 1;
 
         // Advance to next player
-        self.current_player_idx = (self.current_player_idx + 1) % self.players.len();
+        self.current_player_idx = (self.current_player_idx + 1) % self.num_players;
 
         // Skip over players that have all their workers placed
         if self.people_placed_this_round < self.total_workers() {
             while self.all_people_placed() {
-                self.current_player_idx = (self.current_player_idx + 1) % self.players.len();
+                self.current_player_idx = (self.current_player_idx + 1) % self.num_players;
             }
         }
     }
@@ -941,7 +937,7 @@ impl State {
     }
 
     fn card_available(&self, card_idx: usize) -> bool {
-        (0..self.players.len()).all(|i| !self.player_cards[i][card_idx])
+        (0..self.num_players).all(|i| !self.player_cards[i][card_idx])
     }
 
     pub fn occupations_available(&self) -> Vec<usize> {
@@ -950,14 +946,6 @@ impl State {
             .filter(|idx| self.card_available(**idx))
             .copied()
             .collect()
-    }
-
-    pub fn player(&self) -> &Player {
-        &self.players[self.current_player_idx]
-    }
-
-    pub fn player_mut(&mut self) -> &mut Player {
-        &mut self.players[self.current_player_idx]
     }
 
     pub fn player_quantities(&self, player_idx: usize) -> &[usize; NUM_QUANTITIES] {

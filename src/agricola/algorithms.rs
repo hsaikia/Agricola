@@ -3,7 +3,7 @@ use super::mcts::GameRecord;
 use super::state::State;
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Hash, PartialEq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq)]
 pub enum PlayerType {
     Human,
     MCTSMachine,
