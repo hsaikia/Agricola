@@ -805,7 +805,7 @@ impl Action {
                 state.build_room(pasture_idx);
             }
             Self::BuildStable(pasture_idx) => {
-                state.player_mut().build_stable(pasture_idx);
+                state.build_stable(pasture_idx);
             }
             Self::Sow(_called_from_grain_util, seed) => {
                 state.player_mut().sow_field(seed);

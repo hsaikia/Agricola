@@ -94,12 +94,6 @@ impl Player {
             .is_empty()
     }
 
-    // Builds a single stable
-    pub fn build_stable(&mut self, idx: &usize) {
-        self.resources[Wood.index()] -= 2;
-        self.farm.build_stable(*idx);
-    }
-
     pub fn add_new_field(&mut self, idx: &usize) {
         self.farm.add_field(*idx);
     }
