@@ -1,7 +1,8 @@
 use super::actions::{Action, NUM_RESOURCE_SPACES};
 use super::algorithms::PlayerType;
 use super::display::format_resources;
-use super::farm::House;
+use super::farm::{House, Seed};
+use super::fencing::PastureConfig;
 use super::flag::*;
 use super::major_improvements::{MajorImprovement, TOTAL_MAJOR_IMPROVEMENTS};
 use super::occupations::Occupation;
@@ -46,7 +47,7 @@ pub const BAKING_MAJOR_IMPROVEMENT_INDICES: [usize; 6] = [
 pub struct Event {
     pub round: usize,
     pub player_idx: usize,
-    pub func: fn(res: Resources) -> Resources,
+    pub func: fn(res: &mut [usize; NUM_QUANTITIES]),
 }
 
 #[derive(Clone, Hash)]
@@ -56,8 +57,8 @@ pub struct State {
     pub occupied_spaces: Vec<usize>,
     pub hidden_spaces: Vec<Vec<Action>>,
     pub players: Vec<Player>,
-    pub player_quantities: [[usize; NUM_QUANTITIES]; MAX_NUM_PLAYERS],
-    pub player_flags: [[bool; NUM_FLAGS]; MAX_NUM_PLAYERS],
+    player_quantities: [[usize; NUM_QUANTITIES]; MAX_NUM_PLAYERS],
+    player_flags: [[bool; NUM_FLAGS]; MAX_NUM_PLAYERS],
     pub major_improvements: [(MajorImprovement, Option<usize>, usize); 10], // (Major, PlayerIdx, Number_of_times_used_in_harvest)
     pub current_player_idx: usize,
     pub starting_player_idx: usize,
@@ -161,10 +162,14 @@ impl State {
         false
     }
 
-    pub fn pre_harvest(&mut self) {
-        let player = &mut self.players[self.current_player_idx];
-        // Harvest grain and veggies
-        player.harvest_fields();
+    pub fn harvest_fields(&mut self) {
+        let crops = self.player_mut().farm.harvest_fields();
+        for crop in crops {
+            match crop {
+                Seed::Grain => self.current_player_quantities_mut()[Grain.index()] += 1,
+                Seed::Vegetable => self.current_player_quantities_mut()[Vegetable.index()] += 1,
+            }
+        }
     }
 
     pub fn family_members(&self, player_idx: usize) -> usize {
@@ -276,32 +281,31 @@ impl State {
         for (major, opt_idx, _) in &self.major_improvements {
             if let Some(idx) = opt_idx {
                 ret[*idx] += major.points() as i32;
-                let player = &self.players[*idx];
                 match major {
                     MajorImprovement::Joinery => {
-                        if player.resources[Wood.index()] >= 7 {
+                        if self.player_quantities(*idx)[Wood.index()] >= 7 {
                             ret[*idx] += 3;
-                        } else if player.resources[Wood.index()] >= 5 {
+                        } else if self.player_quantities(*idx)[Wood.index()] >= 5 {
                             ret[*idx] += 2;
-                        } else if player.resources[Wood.index()] >= 3 {
+                        } else if self.player_quantities(*idx)[Wood.index()] >= 3 {
                             ret[*idx] += 1;
                         }
                     }
                     MajorImprovement::Pottery => {
-                        if player.resources[Clay.index()] >= 7 {
+                        if self.player_quantities(*idx)[Clay.index()] >= 7 {
                             ret[*idx] += 3;
-                        } else if player.resources[Clay.index()] >= 5 {
+                        } else if self.player_quantities(*idx)[Clay.index()] >= 5 {
                             ret[*idx] += 2;
-                        } else if player.resources[Clay.index()] >= 3 {
+                        } else if self.player_quantities(*idx)[Clay.index()] >= 3 {
                             ret[*idx] += 1;
                         }
                     }
                     MajorImprovement::BasketmakersWorkshop => {
-                        if player.resources[Reed.index()] >= 5 {
+                        if self.player_quantities(*idx)[Reed.index()] >= 5 {
                             ret[*idx] += 3;
-                        } else if player.resources[Reed.index()] >= 4 {
+                        } else if self.player_quantities(*idx)[Reed.index()] >= 4 {
                             ret[*idx] += 2;
-                        } else if player.resources[Reed.index()] >= 2 {
+                        } else if self.player_quantities(*idx)[Reed.index()] >= 2 {
                             ret[*idx] += 1;
                         }
                     }
@@ -380,10 +384,11 @@ impl State {
         self.current_player_idx = self.starting_player_idx;
 
         // Look for start round events
-        for event in &self.start_round_events {
-            for (i, player) in self.players.iter_mut().enumerate() {
+        let start_round_events = self.start_round_events.clone();
+        for event in start_round_events {
+            for i in 0..self.players.len() {
                 if event.round == current_round && event.player_idx == i {
-                    player.resources = (event.func)(player.resources);
+                    (event.func)(self.player_quantities_mut(i));
                 }
             }
         }
@@ -416,7 +421,7 @@ impl State {
             if player_idx.is_none()
                 && can_pay_for_resource(
                     &major.cost(),
-                    &self.players[self.current_player_idx].resources,
+                    self.player_quantities(self.current_player_idx),
                 )
             {
                 available[idx] = true;
@@ -569,14 +574,13 @@ impl State {
         if return_fireplace && matches!(major, MajorImprovement::CookingHearth { cheaper: _ }) {
             self.replace_fireplace_with_cooking_hearth();
         } else {
-            pay_for_resource(&major.cost(), &mut player.resources);
+            pay_for_resource(&major.cost(), self.current_player_quantities_mut());
             self.major_improvements[major.index()].1 = Some(self.current_player_idx);
 
             if matches!(major, MajorImprovement::Well) {
                 let current_round = self.current_round();
-                let func = |mut res: Resources| {
+                let func = |res: &mut Quantities| {
                     res[Food.index()] += 1;
-                    res
                 };
                 for i in 1..=5 {
                     self.start_round_events.push(Event {
@@ -589,25 +593,101 @@ impl State {
         }
     }
 
+    pub fn fencing_choices(&self) -> Vec<PastureConfig> {
+        self.player()
+            .farm
+            .fencing_options(self.current_player_quantities()[Wood.index()])
+    }
+
+    pub fn fence(&mut self, pasture_config: &PastureConfig) {
+        assert!(self.can_fence());
+        let mut wood = self.current_player_quantities()[Wood.index()];
+        self.player_mut()
+            .farm
+            .fence_spaces(pasture_config, &mut wood);
+        self.current_player_quantities_mut()[Wood.index()] = wood;
+    }
+
+    pub fn can_fence(&self) -> bool {
+        !self
+            .player()
+            .farm
+            .fencing_options(self.current_player_quantities()[Wood.index()])
+            .is_empty()
+    }
+
+    pub fn can_use_exchange(&self, res_ex: &ResourceExchange) -> bool {
+        self.current_player_quantities()[res_ex.from] >= res_ex.num_from
+    }
+
+    pub fn use_exchange(&mut self, res_ex: &ResourceExchange) {
+        assert!(self.can_use_exchange(res_ex));
+        self.current_player_quantities_mut()[res_ex.from] -= res_ex.num_from;
+        self.current_player_quantities_mut()[res_ex.to] += res_ex.num_to;
+    }
+
+    pub fn has_resources_to_cook(&self) -> bool {
+        self.current_player_quantities()[Sheep.index()]
+            + self.current_player_quantities()[Boar.index()]
+            + self.current_player_quantities()[Cattle.index()]
+            + self.current_player_quantities()[Vegetable.index()]
+            > 0
+    }
+
+    pub fn can_bake_bread(&self, player_idx: usize) -> bool {
+        // Check if any of the baking improvements are present
+        // And at least one grain in supply
+
+        (Some(player_idx) == self.major_improvements[MajorImprovement::ClayOven.index()].1
+            || Some(player_idx) == self.major_improvements[MajorImprovement::StoneOven.index()].1
+            || Some(player_idx)
+                == self.major_improvements[MajorImprovement::Fireplace { cheaper: true }.index()].1
+            || Some(player_idx)
+                == self.major_improvements[MajorImprovement::Fireplace { cheaper: false }.index()]
+                    .1
+            || Some(player_idx)
+                == self.major_improvements
+                    [MajorImprovement::CookingHearth { cheaper: true }.index()]
+                .1
+            || Some(player_idx)
+                == self.major_improvements
+                    [MajorImprovement::CookingHearth { cheaper: false }.index()]
+                .1)
+            && self.current_player_quantities()[Grain.index()] > 0
+    }
+
+    pub fn sow_field(&mut self, seed: &Seed) {
+        self.player_mut().farm.sow_field(seed);
+        match seed {
+            Seed::Grain => self.current_player_quantities_mut()[Grain.index()] -= 1,
+            Seed::Vegetable => self.current_player_quantities_mut()[Vegetable.index()] -= 1,
+        }
+    }
+
+    pub fn can_sow(&self) -> bool {
+        (self.current_player_quantities()[Grain.index()] > 0
+            || self.current_player_quantities()[Vegetable.index()] > 0)
+            && self.player().farm.can_sow()
+    }
+
     pub fn bake_bread(&mut self, num_grain_to_bake: usize) {
-        let player = &mut self.players[self.current_player_idx];
-        assert!(player.can_bake_bread(self.current_player_idx, &self.major_improvements));
+        assert!(self.can_bake_bread(self.current_player_idx));
         let mut num_grain_to_bake = num_grain_to_bake;
         while num_grain_to_bake > 0 {
-            if player.resources[Grain.index()] == 0 {
+            if self.current_player_quantities()[Grain.index()] == 0 {
                 break;
             }
             if Some(self.current_player_idx)
                 == self.major_improvements[MajorImprovement::ClayOven.index()].1
                 && self.major_improvements[MajorImprovement::ClayOven.index()].2 == 0
             {
-                player.resources[Food.index()] += 5;
+                self.current_player_quantities_mut()[Food.index()] += 5;
                 self.major_improvements[MajorImprovement::ClayOven.index()].2 = 1;
             } else if Some(self.current_player_idx)
                 == self.major_improvements[MajorImprovement::StoneOven.index()].1
                 && self.major_improvements[MajorImprovement::StoneOven.index()].2 < 2
             {
-                player.resources[Food.index()] += 4;
+                self.current_player_quantities_mut()[Food.index()] += 4;
                 self.major_improvements[MajorImprovement::StoneOven.index()].2 += 1;
             } else if Some(self.current_player_idx)
                 == self.major_improvements
@@ -618,7 +698,7 @@ impl State {
                         [MajorImprovement::CookingHearth { cheaper: false }.index()]
                     .1
             {
-                player.resources[Food.index()] += 3;
+                self.current_player_quantities_mut()[Food.index()] += 3;
             } else if Some(self.current_player_idx)
                 == self.major_improvements[MajorImprovement::Fireplace { cheaper: true }.index()].1
                 || Some(self.current_player_idx)
@@ -626,10 +706,10 @@ impl State {
                         [MajorImprovement::Fireplace { cheaper: false }.index()]
                     .1
             {
-                player.resources[Food.index()] += 2;
+                self.current_player_quantities_mut()[Food.index()] += 2;
             }
 
-            player.resources[Grain.index()] -= 1;
+            self.current_player_quantities_mut()[Grain.index()] -= 1;
             num_grain_to_bake -= 1;
         }
     }
@@ -647,12 +727,12 @@ impl State {
     pub fn pay_food_or_beg(&mut self) {
         let food_required = self.food_required();
         self.current_player_flags_mut()[HarvestPaid.index()] = true;
-        if food_required > self.player().resources[Food.index()] {
+        if food_required > self.current_player_quantities()[Food.index()] {
             self.current_player_quantities_mut()[BeggingTokens.index()] +=
-                food_required - self.player().resources[Food.index()];
-            self.player_mut().resources[Food.index()] = 0;
+                food_required - self.current_player_quantities()[Food.index()];
+            self.current_player_quantities_mut()[Food.index()] = 0;
         } else {
-            self.player_mut().resources[Food.index()] -= food_required;
+            self.current_player_quantities_mut()[Food.index()] -= food_required;
         }
 
         self.accommodate_animals(true);
@@ -661,32 +741,36 @@ impl State {
     }
 
     pub fn accommodate_animals(&mut self, breed: bool) {
-        let mut res = self.player().resources;
+        let mut quantites = *self.current_player_quantities();
 
         if breed {
-            if res[Sheep.index()] > 1 {
-                res[Sheep.index()] += 1;
+            if quantites[Sheep.index()] > 1 {
+                quantites[Sheep.index()] += 1;
             }
-            if res[Boar.index()] > 1 {
-                res[Boar.index()] += 1;
+            if quantites[Boar.index()] > 1 {
+                quantites[Boar.index()] += 1;
             }
-            if res[Cattle.index()] > 1 {
-                res[Cattle.index()] += 1;
+            if quantites[Cattle.index()] > 1 {
+                quantites[Cattle.index()] += 1;
             }
         }
 
-        let animals = [res[Sheep.index()], res[Boar.index()], res[Cattle.index()]];
+        let animals = [
+            quantites[Sheep.index()],
+            quantites[Boar.index()],
+            quantites[Cattle.index()],
+        ];
         let leftover = self.player_mut().farm.accommodate_animals(&animals);
 
-        res[Sheep.index()] -= leftover[0];
-        res[Boar.index()] -= leftover[1];
-        res[Cattle.index()] -= leftover[2];
+        quantites[Sheep.index()] -= leftover[0];
+        quantites[Boar.index()] -= leftover[1];
+        quantites[Cattle.index()] -= leftover[2];
 
         // TODO: Don't just toss animals this way - give a choice to the player and re-org using that choice
         let mut owns_ch = false;
         for ch_idx in COOKING_HEARTH_INDICES {
             if Some(self.current_player_idx) == self.major_improvements[ch_idx].1 {
-                res[Food.index()] += 2 * leftover[0] + 3 * leftover[1] + 4 * leftover[2];
+                quantites[Food.index()] += 2 * leftover[0] + 3 * leftover[1] + 4 * leftover[2];
                 owns_ch = true;
                 break;
             }
@@ -695,13 +779,13 @@ impl State {
         if !owns_ch {
             for fp_idx in FIREPLACE_INDICES {
                 if Some(self.current_player_idx) == self.major_improvements[fp_idx].1 {
-                    res[Food.index()] += 2 * leftover[0] + 2 * leftover[1] + 3 * leftover[2];
+                    quantites[Food.index()] += 2 * leftover[0] + 2 * leftover[1] + 3 * leftover[2];
                     return;
                 }
             }
         }
 
-        self.player_mut().resources = res;
+        *self.current_player_quantities_mut() = quantites;
     }
 
     pub fn total_workers(&self) -> usize {
@@ -725,7 +809,7 @@ impl State {
         // Begging Tokens
         ret -= 3.0 * self.player_quantities(player_idx)[BeggingTokens.index()] as f32;
         // Score farm
-        ret += score_farm(player) as f32;
+        ret += score_farm(player, self.player_quantities(player_idx)) as f32;
 
         ret
     }
@@ -763,6 +847,37 @@ impl State {
         } else {
             self.grow_family_without_room();
         }
+    }
+
+    pub fn can_play_occupation(&self, cheaper: bool) -> bool {
+        let mut required_food = if cheaper { 1 } else { 2 };
+        if self.player().occupations.is_empty() && cheaper {
+            required_food = 0;
+        }
+        if self.player().occupations.len() < 2 && !cheaper {
+            required_food = 1;
+        }
+
+        // If can pay directly
+        if required_food <= self.current_player_quantities()[Food.index()] {
+            return true;
+        }
+
+        // If cannot pay directly, but can convert some resources
+        required_food -= self.current_player_quantities()[Food.index()];
+
+        let raw_grain_and_veg = self.current_player_quantities()[Grain.index()]
+            + self.current_player_quantities()[Vegetable.index()];
+        if required_food <= raw_grain_and_veg {
+            return true;
+        }
+
+        // Required food must be less than 3, and minimum food gained by cooking is 2
+        if self.player().has_cooking_improvement && self.has_resources_to_cook() {
+            return true;
+        }
+
+        false
     }
 
     pub fn format(&self) -> String {

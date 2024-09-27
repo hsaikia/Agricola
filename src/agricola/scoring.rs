@@ -11,10 +11,10 @@ const SHEEP_SCORE: [i32; 9] = [-1, 1, 1, 1, 2, 2, 3, 3, 4];
 const PIGS_SCORE: [i32; 8] = [-1, 1, 1, 2, 2, 3, 3, 4];
 const CATTLE_SCORE: [i32; 7] = [-1, 1, 2, 2, 3, 3, 4];
 
-pub fn score_farm(player: &Player) -> i32 {
+pub fn score_farm(player: &Player, player_quantities: &[usize; NUM_QUANTITIES]) -> i32 {
     let mut score = 0;
-    let mut res: Resources = player.resources;
     let mut num_fields: usize = 0;
+    let mut player_quantities = *player_quantities;
 
     let num_pastures = get_existing_pastures(&player.farm.farmyard_spaces)
         .iter()
@@ -37,8 +37,8 @@ pub fn score_farm(player: &Player) -> i32 {
             FarmyardSpace::Field(Some((seed, amt))) => {
                 num_fields += 1;
                 match seed {
-                    Seed::Grain => res[Grain.index()] += amt,
-                    Seed::Vegetable => res[Vegetable.index()] += amt,
+                    Seed::Grain => player_quantities[Grain.index()] += amt,
+                    Seed::Vegetable => player_quantities[Vegetable.index()] += amt,
                 }
             }
             _ => (),
@@ -47,11 +47,11 @@ pub fn score_farm(player: &Player) -> i32 {
 
     score += PASTURE_SCORE[num_pastures.min(PASTURE_SCORE.len() - 1)];
     score += FIELD_SCORE[num_fields.min(FIELD_SCORE.len() - 1)];
-    score += GRAIN_SCORE[res[Grain.index()].min(GRAIN_SCORE.len() - 1)];
-    score += VEGETABLE_SCORE[res[Vegetable.index()].min(VEGETABLE_SCORE.len() - 1)];
-    score += SHEEP_SCORE[res[Sheep.index()].min(SHEEP_SCORE.len() - 1)];
-    score += PIGS_SCORE[res[Boar.index()].min(PIGS_SCORE.len() - 1)];
-    score += CATTLE_SCORE[res[Cattle.index()].min(CATTLE_SCORE.len() - 1)];
+    score += GRAIN_SCORE[player_quantities[Grain.index()].min(GRAIN_SCORE.len() - 1)];
+    score += VEGETABLE_SCORE[player_quantities[Vegetable.index()].min(VEGETABLE_SCORE.len() - 1)];
+    score += SHEEP_SCORE[player_quantities[Sheep.index()].min(SHEEP_SCORE.len() - 1)];
+    score += PIGS_SCORE[player_quantities[Boar.index()].min(PIGS_SCORE.len() - 1)];
+    score += CATTLE_SCORE[player_quantities[Cattle.index()].min(CATTLE_SCORE.len() - 1)];
 
     score
 }

@@ -147,13 +147,33 @@ pub const NUM_QUANTITIES: usize = 20;
 pub const NUM_RESOURCES: usize = 10;
 
 pub type Resources = [usize; NUM_RESOURCES];
+pub type Quantities = [usize; NUM_QUANTITIES];
+
+pub trait QuantitiesImpl {
+    fn zero_resources(&mut self);
+    fn get_resources(&self) -> Resources;
+}
+
+impl QuantitiesImpl for Quantities {
+    fn zero_resources(&mut self) {
+        for res in self.iter_mut().take(NUM_RESOURCES) {
+            *res = 0;
+        }
+    }
+
+    fn get_resources(&self) -> Resources {
+        let mut resources = [0; NUM_RESOURCES];
+        resources[..NUM_RESOURCES].copy_from_slice(&self[..NUM_RESOURCES]);
+        resources
+    }
+}
 
 pub fn new_res() -> Resources {
     [0; NUM_RESOURCES]
 }
 
-pub fn can_pay_for_resource(cost: &Resources, store: &Resources) -> bool {
-    for it in cost.iter().zip(store.iter()) {
+pub fn can_pay_for_resource(cost: &Resources, store: &Quantities) -> bool {
+    for it in cost.iter().zip(store.iter()).take(NUM_RESOURCES) {
         let (a, b) = it;
         if a > b {
             return false;
@@ -162,16 +182,16 @@ pub fn can_pay_for_resource(cost: &Resources, store: &Resources) -> bool {
     true
 }
 
-pub fn pay_for_resource(cost: &Resources, store: &mut Resources) {
+pub fn pay_for_resource(cost: &Resources, store: &mut Quantities) {
     assert!(can_pay_for_resource(cost, store));
-    for it in cost.iter().zip(store.iter_mut()) {
+    for it in cost.iter().zip(store.iter_mut()).take(NUM_RESOURCES) {
         let (a, b) = it;
         *b -= a;
     }
 }
 
-pub fn take_resource(res: &Resources, store: &mut Resources) {
-    for it in res.iter().zip(store.iter_mut()) {
+pub fn take_resource(res: &Resources, store: &mut Quantities) {
+    for it in res.iter().zip(store.iter_mut()).take(NUM_RESOURCES) {
         let (a, b) = it;
         *b += a;
     }

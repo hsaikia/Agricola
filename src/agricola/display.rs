@@ -34,7 +34,7 @@ pub fn format_resources(res: &Resources) -> String {
 
 pub fn display_resources(state: &State, player_idx: usize) -> String {
     let player = &state.players[player_idx];
-    let res = &player.resources;
+    let res = state.player_quantities(player_idx);
     let mut ret = String::from("\n\n");
 
     for (i, num_res) in res.iter().enumerate() {
