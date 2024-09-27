@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use super::{actions::Action, algorithms::SimulationRecord};
 
-const MCTS_EXPLORATION_PARAM: f32 = 0.6;
+const MCTS_EXPLORATION_PARAM: f32 = 2.0;
 
 #[derive(Clone)]
 pub struct GameRecord {

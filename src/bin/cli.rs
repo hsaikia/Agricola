@@ -21,8 +21,8 @@ use ratatui::{
     Frame, Terminal,
 };
 
-const NUM_GAMES_TO_SIMULATE: usize = 100;
-const DEPTH: Option<usize> = Some(50);
+const NUM_GAMES_TO_SIMULATE: usize = 100000;
+const DEPTH: Option<usize> = None;
 
 #[derive(Clone, Copy, Debug)]
 enum PlayerSelection {
