@@ -510,7 +510,7 @@ impl State {
 
     pub fn set_can_build_stable(&mut self) {
         self.current_player_flags_mut()[CanBuildStable.index()] =
-            self.current_player_quantities()[Wood.index()] >= 2;
+            self.current_player_quantities()[Wood.index()] >= 2 && self.current_farm().can_build_stable();
     }
 
     pub fn can_build_stable(&self) -> bool {
@@ -522,6 +522,9 @@ impl State {
         assert!(self.can_build_stable());
         self.current_player_quantities_mut()[Wood.index()] -= 2;
         self.current_farm_mut().build_stable(*idx);
+        // Set flags
+        self.set_can_build_stable();
+        self.set_can_build_room();
     }
 
     pub fn stable_options(&self) -> Vec<usize> {
@@ -1016,16 +1019,51 @@ mod tests {
         assert!(state.current_player_flags()[WoodHouse.index()]);
 
         let room_positions = state.current_farm().possible_room_positions();
+
+        // There shouldbe 3 neighboring spots
         assert_eq!(room_positions.len(), 3);
 
+        // Add resources to enable building one room
         state.current_player_quantities_mut()[Wood.index()] = 5;
         state.current_player_quantities_mut()[Reed.index()] = 2;
 
+        // Flag isn't set, so room cannot be built yet
         assert!(!state.can_build_room());
+
+        // Set the flag
         state.set_can_build_room();
+
+        // Now room can be built
         assert!(state.can_build_room());
+
+        // Flag isn't set, so stable cannot be built yet
         assert!(!state.can_build_stable());
+
+        // Set the flag
         state.set_can_build_stable();
+
+        // Now stable can be built
         assert!(state.can_build_stable());
+
+        // Build two stable
+        state.build_stable(&0);
+        state.build_stable(&1);
+
+        // Now there isn't enough wood to build another stable
+        assert!(!state.can_build_stable());
+
+        // Add more wood
+        state.current_player_quantities_mut()[Wood.index()] = 10;
+        // Set flag again
+        state.set_can_build_stable();
+
+        assert!(state.can_build_stable());
+
+        // Build 2 more stables
+        state.build_stable(&2);
+        state.build_stable(&3);
+
+        // Now there still is enough wood to build another stable but MAX_STABLES is reached
+        assert!(!state.can_build_stable());
     }
 }
