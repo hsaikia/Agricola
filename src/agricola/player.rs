@@ -10,9 +10,6 @@ pub struct Player {
     // Animals in this resources array are the ones that are pets in the house and the ones that are kept in unfenced stables
     pub player_type: PlayerType,
     pub resources: Resources,
-    pub build_room_cost: Resources,
-    build_stable_cost: Resources,
-    pub renovation_cost: Resources,
     pub house: House,
     pub occupations: Vec<Occupation>,
     pub farm: Farm,
@@ -24,23 +21,9 @@ impl Player {
         let mut res = new_res();
         res[Food.index()] = food;
 
-        let mut room_cost = new_res();
-        room_cost[Wood.index()] = 5;
-        room_cost[Reed.index()] = 2;
-
-        let mut stable_cost = new_res();
-        stable_cost[Wood.index()] = 2;
-
-        let mut reno_cost = new_res();
-        reno_cost[Clay.index()] = 2;
-        reno_cost[Reed.index()] = 1;
-
         Player {
             player_type,
             resources: res,
-            build_room_cost: room_cost,
-            build_stable_cost: stable_cost,
-            renovation_cost: reno_cost,
             house: House::Wood,
             occupations: vec![],
             farm: Farm::new(),
@@ -111,65 +94,14 @@ impl Player {
             .is_empty()
     }
 
-    pub fn renovate(&mut self) {
-        assert!(self.can_renovate());
-        // TODO for cards like Conservator this must be implemented in a more general way
-        pay_for_resource(&self.renovation_cost, &mut self.resources);
-        let current_type = &self.house;
-        let rooms = self.farm.room_indices().len();
-
-        match current_type {
-            House::Wood => {
-                self.house = House::Clay;
-                self.build_room_cost[Wood.index()] = 0;
-                self.build_room_cost[Clay.index()] = 5;
-                self.renovation_cost[Stone.index()] = rooms;
-                self.renovation_cost[Clay.index()] = 0;
-            }
-            House::Clay => {
-                self.house = House::Stone;
-                self.build_room_cost[Clay.index()] = 0;
-                self.build_room_cost[Stone.index()] = 5;
-            }
-            House::Stone => (),
-        }
-    }
-
-    pub fn can_renovate(&self) -> bool {
-        if let House::Stone = self.house {
-            return false;
-        }
-        can_pay_for_resource(&self.renovation_cost, &self.resources)
-    }
-
     // Builds a single stable
     pub fn build_stable(&mut self, idx: &usize) {
-        pay_for_resource(&self.build_stable_cost, &mut self.resources);
+        self.resources[Wood.index()] -= 2;
         self.farm.build_stable(*idx);
     }
 
     pub fn add_new_field(&mut self, idx: &usize) {
         self.farm.add_field(*idx);
-    }
-
-    pub fn can_build_room(&self) -> bool {
-        !self.room_options().is_empty()
-    }
-
-    pub fn room_options(&self) -> Vec<usize> {
-        if can_pay_for_resource(&self.build_room_cost, &self.resources) {
-            return self.farm.possible_room_positions();
-        }
-        Vec::new()
-    }
-
-    pub fn stable_options(&self) -> Vec<usize> {
-        if can_pay_for_resource(&self.build_stable_cost, &self.resources)
-            && self.farm.can_build_stable()
-        {
-            return self.farm.possible_stable_positions();
-        }
-        Vec::new()
     }
 
     pub fn field_options(&self) -> Vec<usize> {

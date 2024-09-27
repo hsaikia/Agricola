@@ -1,7 +1,11 @@
 use crate::agricola::fencing::MAX_PASTURES;
 use crate::agricola::player::Player;
 
-use super::{farm::{FarmyardSpace, House, L, W}, quantity::*, state::State};
+use super::{
+    farm::{FarmyardSpace, House, L, W},
+    quantity::*,
+    state::State,
+};
 
 pub const RESOURCE_EMOJIS: [&str; NUM_RESOURCES] = [
     "\u{1f372}",
@@ -28,7 +32,7 @@ pub fn format_resources(res: &Resources) -> String {
     ret
 }
 
-pub fn display_resources(state: &State, player_idx : usize) -> String {
+pub fn display_resources(state: &State, player_idx: usize) -> String {
     let player = &state.players[player_idx];
     let res = &player.resources;
     let mut ret = String::from("\n\n");
@@ -44,9 +48,15 @@ pub fn display_resources(state: &State, player_idx : usize) -> String {
         ));
     }
 
-    ret.push_str(&format!("\n{:2} 👤", state.player_quantities(player_idx)[AdultMembers.index()]));
+    ret.push_str(&format!(
+        "\n{:2} 👤",
+        state.player_quantities(player_idx)[AdultMembers.index()]
+    ));
     if state.player_quantities(player_idx)[Children.index()] > 0 {
-        ret.push_str(&format!("\n{:2} 👶", state.player_quantities(player_idx)[Children.index()]));
+        ret.push_str(&format!(
+            "\n{:2} 👶",
+            state.player_quantities(player_idx)[Children.index()]
+        ));
     }
 
     for occ in &player.occupations {

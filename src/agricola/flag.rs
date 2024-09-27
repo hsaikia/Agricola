@@ -10,6 +10,9 @@ pub struct GotEnoughFood;
 pub struct HarvestPaid;
 pub struct HasRoomToGrow;
 pub struct BeforeRoundStart;
+pub struct CanRenovate;
+pub struct CanBuildRoom;
+pub struct CanBuildStable;
 
 impl Flag for WoodHouse {
     fn index(&self) -> usize {
@@ -59,4 +62,22 @@ impl Flag for BeforeRoundStart {
     }
 }
 
-pub const NUM_FLAGS: usize = 8;
+impl Flag for CanRenovate {
+    fn index(&self) -> usize {
+        8
+    }
+}
+
+impl Flag for CanBuildRoom {
+    fn index(&self) -> usize {
+        9
+    }
+}
+
+impl Flag for CanBuildStable {
+    fn index(&self) -> usize {
+        10
+    }
+}
+
+pub const NUM_FLAGS: usize = 11;

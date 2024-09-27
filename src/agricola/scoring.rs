@@ -55,4 +55,3 @@ pub fn score_farm(player: &Player) -> i32 {
 
     score
 }
-

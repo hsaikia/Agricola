@@ -167,8 +167,9 @@ impl State {
         player.harvest_fields();
     }
 
-    pub fn family_members(&self, player_idx : usize) -> usize {
-        self.player_quantities(player_idx)[AdultMembers.index()] + self.player_quantities(player_idx)[Children.index()]
+    pub fn family_members(&self, player_idx: usize) -> usize {
+        self.player_quantities(player_idx)[AdultMembers.index()]
+            + self.player_quantities(player_idx)[Children.index()]
     }
 
     fn food_required(&self) -> usize {
@@ -190,13 +191,16 @@ impl State {
     }
 
     pub fn can_grow_family_with_room(&self) -> bool {
-        self.family_members(self.current_player_idx) < MAX_FAMILY_MEMBERS && self.current_player_flags()[HasRoomToGrow.index()]
+        self.family_members(self.current_player_idx) < MAX_FAMILY_MEMBERS
+            && self.current_player_flags()[HasRoomToGrow.index()]
     }
 
     pub fn grow_family_with_room(&mut self) {
         assert!(self.can_grow_family_with_room());
         self.current_player_quantities_mut()[Children.index()] += 1;
-        if self.family_members(self.current_player_idx) >= self.current_player_quantities()[Rooms.index()] {
+        if self.family_members(self.current_player_idx)
+            >= self.current_player_quantities()[Rooms.index()]
+        {
             self.current_player_flags_mut()[HasRoomToGrow.index()] = false;
         }
     }
@@ -437,17 +441,38 @@ impl State {
         }
     }
 
+    pub fn set_can_build_room(&mut self) {
+        let room_material_idx = match self.player().house {
+            House::Wood => Wood.index(),
+            House::Clay => Clay.index(),
+            House::Stone => Stone.index(),
+        };
+
+        if !self.player().farm.possible_room_positions().is_empty()
+            && self.current_player_quantities()[room_material_idx] >= 5
+            && self.current_player_quantities()[Reed.index()] >= 2
+        {
+            self.current_player_flags_mut()[CanBuildRoom.index()] = true;
+        }
+        self.current_player_flags_mut()[CanBuildRoom.index()] = false;
+    }
+
+    pub fn can_build_room(&self) -> bool {
+        self.current_player_flags()[CanBuildRoom.index()]
+    }
+
     // Builds a single room
     pub fn build_room(&mut self, idx: &usize) {
-        let player = &mut self.players[self.current_player_idx];
-        pay_for_resource(&player.build_room_cost, &mut player.resources);
-        player.farm.build_room(*idx);
-
-        match player.house {
-            House::Wood => player.renovation_cost[Clay.index()] += 1,
-            House::Clay => player.renovation_cost[Stone.index()] += 1,
-            House::Stone => (),
-        }
+        assert!(self.can_build_room());
+        // By default Rooms cost 5 of the corresponding building resource (as the material of the house and 2 Reed)
+        let room_material_idx = match self.player().house {
+            House::Wood => Wood.index(),
+            House::Clay => Clay.index(),
+            House::Stone => Stone.index(),
+        };
+        self.current_player_quantities_mut()[room_material_idx] -= 5;
+        self.current_player_quantities_mut()[Reed.index()] -= 2;
+        self.player_mut().farm.build_room(*idx);
 
         // Increment player quantities
         self.current_player_quantities_mut()[Rooms.index()] += 1;
@@ -456,6 +481,78 @@ impl State {
         // Set the Can Grow flag
         if rooms > self.family_members(self.current_player_idx) {
             self.current_player_flags_mut()[HasRoomToGrow.index()] = true;
+        }
+
+        // Can Renovate flag is perhaps dirty, set it
+        self.set_can_renovate();
+
+        // Can Build Room flag is perhaps dirty, set it
+        self.set_can_build_room();
+    }
+
+    pub fn room_options(&self) -> Vec<usize> {
+        if self.can_build_room() {
+            return self.player().farm.possible_room_positions();
+        }
+        Vec::new()
+    }
+
+    pub fn set_can_build_stable(&mut self) {
+        if self.current_player_quantities()[Wood.index()] >= 2 {
+            self.current_player_flags_mut()[CanBuildStable.index()] = true;
+        }
+        self.current_player_flags_mut()[CanBuildStable.index()] = false;
+    }
+
+    pub fn can_build_stable(&self) -> bool {
+        self.current_player_flags()[CanBuildStable.index()]
+    }
+
+    // Builds a single stable
+    pub fn build_stable(&mut self, idx: &usize) {
+        assert!(self.can_build_stable());
+        self.current_player_quantities_mut()[Wood.index()] -= 2;
+        self.player_mut().farm.build_stable(*idx);
+    }
+
+    pub fn stable_options(&self) -> Vec<usize> {
+        if self.can_build_stable() {
+            return self.player().farm.possible_stable_positions();
+        }
+        Vec::new()
+    }
+
+    pub fn set_can_renovate(&mut self) {
+        if self.current_player_quantities()[Reed.index()] >= 1
+            && ((self.current_player_flags()[WoodHouse.index()]
+                && self.current_player_quantities()[Clay.index()]
+                    >= self.current_player_quantities()[Rooms.index()])
+                || (self.current_player_flags()[ClayHouse.index()]
+                    && self.current_player_quantities()[Stone.index()]
+                        >= self.current_player_quantities()[Rooms.index()]))
+        {
+            self.current_player_flags_mut()[CanRenovate.index()] = true;
+        }
+        self.current_player_flags_mut()[CanRenovate.index()] = false;
+    }
+
+    pub fn can_renovate(&self) -> bool {
+        self.current_player_flags()[CanRenovate.index()]
+    }
+
+    pub fn renovate(&mut self) {
+        assert!(self.current_player_flags()[CanRenovate.index()]);
+        // TODO for cards like Conservator this must be implemented in a more general way
+        let renovation_material_idx = match self.player().house {
+            House::Wood => Some(Clay.index()),
+            House::Clay => Some(Stone.index()),
+            House::Stone => None,
+        };
+
+        if let Some(renovation_material_idx) = renovation_material_idx {
+            self.current_player_quantities_mut()[renovation_material_idx] -=
+                self.current_player_quantities()[Rooms.index()];
+            self.current_player_quantities_mut()[Reed.index()] -= 1;
         }
     }
 
@@ -551,7 +648,8 @@ impl State {
         let food_required = self.food_required();
         self.current_player_flags_mut()[HarvestPaid.index()] = true;
         if food_required > self.player().resources[Food.index()] {
-            self.current_player_quantities_mut()[BeggingTokens.index()] += food_required - self.player().resources[Food.index()];
+            self.current_player_quantities_mut()[BeggingTokens.index()] +=
+                food_required - self.player().resources[Food.index()];
             self.player_mut().resources[Food.index()] = 0;
         } else {
             self.player_mut().resources[Food.index()] -= food_required;
@@ -562,11 +660,8 @@ impl State {
         self.remove_empty_stage();
     }
 
-    pub fn accommodate_animals(
-        &mut self,
-        breed: bool,
-    ) {
-        let mut res = self.player().resources.clone();
+    pub fn accommodate_animals(&mut self, breed: bool) {
+        let mut res = self.player().resources;
 
         if breed {
             if res[Sheep.index()] > 1 {
@@ -580,11 +675,7 @@ impl State {
             }
         }
 
-        let animals = [
-            res[Sheep.index()],
-            res[Boar.index()],
-            res[Cattle.index()],
-        ];
+        let animals = [res[Sheep.index()], res[Boar.index()], res[Cattle.index()]];
         let leftover = self.player_mut().farm.accommodate_animals(&animals);
 
         res[Sheep.index()] -= leftover[0];
@@ -604,8 +695,7 @@ impl State {
         if !owns_ch {
             for fp_idx in FIREPLACE_INDICES {
                 if Some(self.current_player_idx) == self.major_improvements[fp_idx].1 {
-                    res[Food.index()] +=
-                        2 * leftover[0] + 2 * leftover[1] + 3 * leftover[2];
+                    res[Food.index()] += 2 * leftover[0] + 2 * leftover[1] + 3 * leftover[2];
                     return;
                 }
             }
@@ -625,18 +715,18 @@ impl State {
         self.current_player_flags()[BeforeRoundStart.index()]
     }
 
-    pub fn score(&self, player_idx : usize) -> f32 {
+    pub fn score(&self, player_idx: usize) -> f32 {
         let mut ret: f32 = 0.0;
 
         let player = &self.players[player_idx];
-    
+
         // House, Family and Empty Spaces
         ret += 3.0 * self.family_members(player_idx) as f32;
         // Begging Tokens
         ret -= 3.0 * self.player_quantities(player_idx)[BeggingTokens.index()] as f32;
         // Score farm
         ret += score_farm(player) as f32;
-    
+
         ret
     }
 
@@ -656,11 +746,6 @@ impl State {
                 self.current_player_idx = (self.current_player_idx + 1) % self.players.len();
             }
         }
-    }
-
-    pub fn renovate(&mut self) {
-        let player = &mut self.players[self.current_player_idx];
-        player.renovate();
     }
 
     pub fn grow_family_without_room(&mut self) {
@@ -714,19 +799,19 @@ impl State {
         &mut self.players[self.current_player_idx]
     }
 
-    pub fn player_quantities(&self, player_idx : usize) -> &[usize; NUM_QUANTITIES] {
+    pub fn player_quantities(&self, player_idx: usize) -> &[usize; NUM_QUANTITIES] {
         &self.player_quantities[player_idx]
     }
 
-    pub fn player_quantities_mut(&mut self, player_idx : usize) -> &mut [usize; NUM_QUANTITIES] {
+    pub fn player_quantities_mut(&mut self, player_idx: usize) -> &mut [usize; NUM_QUANTITIES] {
         &mut self.player_quantities[player_idx]
     }
 
-    pub fn player_flags(&self, player_idx : usize) -> &[bool; NUM_FLAGS] {
+    pub fn player_flags(&self, player_idx: usize) -> &[bool; NUM_FLAGS] {
         &self.player_flags[player_idx]
     }
 
-    pub fn player_flags_mut(&mut self, player_idx : usize) -> &mut [bool; NUM_FLAGS] {
+    pub fn player_flags_mut(&mut self, player_idx: usize) -> &mut [bool; NUM_FLAGS] {
         &mut self.player_flags[player_idx]
     }
 

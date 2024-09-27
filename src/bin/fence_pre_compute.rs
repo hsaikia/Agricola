@@ -2,13 +2,13 @@ use std::collections::HashMap;
 
 use agricola_game::agricola::{farm::FarmyardSpace, fencing::*};
 
-fn test1() -> Vec<PastureConfig> {
-    let mut farmyard_spaces = [FarmyardSpace::Empty; 15];
-    farmyard_spaces[5] = FarmyardSpace::Room;
-    farmyard_spaces[10] = FarmyardSpace::Room;
+// fn test1() -> Vec<PastureConfig> {
+//     let mut farmyard_spaces = [FarmyardSpace::Empty; 15];
+//     farmyard_spaces[5] = FarmyardSpace::Room;
+//     farmyard_spaces[10] = FarmyardSpace::Room;
 
-    get_all_pasture_configs(&farmyard_spaces)
-}
+//     get_all_pasture_configs(&farmyard_spaces)
+// }
 
 fn test2() -> Vec<PastureConfig> {
     let mut farmyard_spaces = [FarmyardSpace::Empty; 15];

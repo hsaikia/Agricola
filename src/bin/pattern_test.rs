@@ -13,16 +13,14 @@ impl Pattern {
     fn matching(&self, state: &State, action: &Action) -> bool {
         match self {
             Self::Build => {
-                if state.player().can_build_room() {
+                if state.can_build_room() {
                     matches!(action, Action::BuildRoom(_))
                 } else {
                     false
                 }
             }
             Self::Grow => {
-                if state.can_grow_family_with_room()
-                    || state.can_grow_family_without_room()
-                {
+                if state.can_grow_family_with_room() || state.can_grow_family_without_room() {
                     matches!(action, Action::GrowFamily(_))
                 } else {
                     false

@@ -117,11 +117,11 @@ impl Action {
                 }
                 ret
             }
-            Self::UseFarmExpansion => Self::farm_expansion_choices(player),
+            Self::UseFarmExpansion => Self::farm_expansion_choices(state),
             Self::UseFencing => Self::fencing_choices(player),
             Self::UseGrainUtilization => Self::grain_utilization_choices(state, false),
             Self::BuildRoom(_) | Self::BuildStable(_) => {
-                ret.extend(Self::farm_expansion_choices(player));
+                ret.extend(Self::farm_expansion_choices(state));
                 ret.push(Self::EndTurn);
                 ret
             }
@@ -371,13 +371,13 @@ impl Action {
         ret
     }
 
-    fn farm_expansion_choices(player: &Player) -> Vec<Self> {
+    fn farm_expansion_choices(state: &State) -> Vec<Self> {
         let mut ret: Vec<Self> = Vec::new();
-        let room_options = player.room_options();
+        let room_options = state.room_options();
         for idx in room_options {
             ret.push(Self::BuildRoom(idx));
         }
-        let stable_options = player.stable_options();
+        let stable_options = state.stable_options();
         for idx in stable_options {
             ret.push(Self::BuildStable(idx));
         }
@@ -463,7 +463,7 @@ impl Action {
                     }
                 }
                 Self::UseFarmExpansion => {
-                    if player.room_options().is_empty() && player.stable_options().is_empty() {
+                    if state.room_options().is_empty() && state.stable_options().is_empty() {
                         continue;
                     }
                 }
@@ -487,7 +487,7 @@ impl Action {
                     }
                 }
                 Self::UseHouseRedevelopment | Self::UseFarmRedevelopment => {
-                    if !player.can_renovate() {
+                    if !state.can_renovate() {
                         continue;
                     }
                 }
@@ -583,12 +583,8 @@ impl Action {
         }
     }
 
-    pub fn collect_resources(
-        &self,
-        state: &mut State,
-        resource_idx: usize,
-    ) {
-        let mut res = state.resource_map[resource_idx].clone();
+    pub fn collect_resources(&self, state: &mut State, resource_idx: usize) {
+        let mut res = state.resource_map[resource_idx];
         match self {
             Self::UseCopse
             | Self::UseGrove
@@ -600,11 +596,11 @@ impl Action {
             | Self::UseFishing
             | Self::UseWesternQuarry
             | Self::UseEasternQuarry => {
-                take_resource(&mut res, &mut state.player_mut().resources);
+                take_resource(&res, &mut state.player_mut().resources);
                 res = new_res();
             }
             Self::UseSheepMarket | Self::UsePigMarket | Self::UseCattleMarket => {
-                take_resource(&mut res, &mut state.player_mut().resources);
+                take_resource(&res, &mut state.player_mut().resources);
                 res = new_res();
                 state.accommodate_animals(false);
             }
@@ -613,7 +609,7 @@ impl Action {
             | Self::UseGrainSeeds
             | Self::UseVegetableSeeds
             | Self::UseMeetingPlace => {
-                take_resource(&mut res, &mut state.player_mut().resources);
+                take_resource(&res, &mut state.player_mut().resources);
             }
             _ => (),
         }
@@ -786,7 +782,8 @@ impl Action {
                 // At the start of each round, if you have at least 3 rooms but only 2 people, you get 1 food and 1 crop of your choice (grain or vegetable).
                 state.player_mut().resources[*res] += 1;
                 state.player_mut().resources[Food.index()] += 1;
-                state.current_player_flags_mut()[BeforeRoundStart.index()] = false;            }
+                state.current_player_flags_mut()[BeforeRoundStart.index()] = false;
+            }
             Self::StartRound => {
                 state.init_new_round();
             }
@@ -837,10 +834,8 @@ impl Action {
 
         // Collect resources if possible
         if let Some(resource_idx) = self.resource_map_idx() {
-            self.collect_resources(
-                state,
-                resource_idx,
-            );
+            self.collect_resources(state, resource_idx);
+            state.set_can_renovate();
         }
     }
 }

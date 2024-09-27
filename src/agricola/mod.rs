@@ -1,5 +1,6 @@
 pub mod actions;
 pub mod algorithms;
+pub mod card;
 pub mod display;
 pub mod farm;
 pub mod fencing;
