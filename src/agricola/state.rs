@@ -2,7 +2,7 @@ use super::actions::{Action, NUM_RESOURCE_SPACES};
 use super::algorithms::PlayerType;
 use super::card::{NUM_CARDS, OCCUPATIONS_INDICES};
 use super::display::format_resources;
-use super::farm::Seed;
+use super::farm::{Farm, Seed};
 use super::fencing::PastureConfig;
 use super::flag::*;
 use super::major_improvements::{MajorImprovement, TOTAL_MAJOR_IMPROVEMENTS};
@@ -61,6 +61,7 @@ pub struct State {
     player_quantities: [[usize; NUM_QUANTITIES]; MAX_NUM_PLAYERS],
     player_flags: [[bool; NUM_FLAGS]; MAX_NUM_PLAYERS],
     player_cards: [[bool; NUM_CARDS]; MAX_NUM_PLAYERS],
+    farms: [Farm; MAX_NUM_PLAYERS],
     pub major_improvements: [(MajorImprovement, Option<usize>, usize); 10], // (Major, PlayerIdx, Number_of_times_used_in_harvest)
     pub current_player_idx: usize,
     pub starting_player_idx: usize,
@@ -113,6 +114,7 @@ impl State {
             player_quantities,
             player_flags,
             player_cards: [[false; NUM_CARDS]; MAX_NUM_PLAYERS],
+            farms: core::array::from_fn(|_| Farm::new()),
             current_player_idx: first_player_idx,
             starting_player_idx: first_player_idx,
             people_placed_this_round: 0,
@@ -164,7 +166,7 @@ impl State {
     }
 
     pub fn harvest_fields(&mut self) {
-        let crops = self.player_mut().farm.harvest_fields();
+        let crops = self.current_farm_mut().harvest_fields();
         for crop in crops {
             match crop {
                 Seed::Grain => self.current_player_quantities_mut()[Grain.index()] += 1,
@@ -403,6 +405,14 @@ impl State {
         }
     }
 
+    pub fn add_new_field(&mut self, idx: &usize) {
+        self.current_farm_mut().add_field(*idx);
+    }
+
+    pub fn field_options(&self) -> Vec<usize> {
+        self.current_farm().possible_field_positions()
+    }
+
     pub fn available_majors_to_build(&self) -> [bool; TOTAL_MAJOR_IMPROVEMENTS] {
         let mut available: [bool; TOTAL_MAJOR_IMPROVEMENTS] = [false; TOTAL_MAJOR_IMPROVEMENTS];
 
@@ -460,7 +470,7 @@ impl State {
     }
 
     pub fn set_can_build_room(&mut self) {
-        if !self.player().farm.possible_room_positions().is_empty()
+        if !self.current_farm().possible_room_positions().is_empty()
             && self.current_player_quantities()[self.room_material_idx()] >= 5
             && self.current_player_quantities()[Reed.index()] >= 2
         {
@@ -480,7 +490,7 @@ impl State {
         let room_material_idx = self.room_material_idx();
         self.current_player_quantities_mut()[room_material_idx] -= 5;
         self.current_player_quantities_mut()[Reed.index()] -= 2;
-        self.player_mut().farm.build_room(*idx);
+        self.current_farm_mut().build_room(*idx);
 
         // Increment player quantities
         self.current_player_quantities_mut()[Rooms.index()] += 1;
@@ -500,7 +510,7 @@ impl State {
 
     pub fn room_options(&self) -> Vec<usize> {
         if self.can_build_room() {
-            return self.player().farm.possible_room_positions();
+            return self.current_farm().possible_room_positions();
         }
         Vec::new()
     }
@@ -520,12 +530,12 @@ impl State {
     pub fn build_stable(&mut self, idx: &usize) {
         assert!(self.can_build_stable());
         self.current_player_quantities_mut()[Wood.index()] -= 2;
-        self.player_mut().farm.build_stable(*idx);
+        self.current_farm_mut().build_stable(*idx);
     }
 
     pub fn stable_options(&self) -> Vec<usize> {
         if self.can_build_stable() {
-            return self.player().farm.possible_stable_positions();
+            return self.current_farm().possible_stable_positions();
         }
         Vec::new()
     }
@@ -612,24 +622,21 @@ impl State {
     }
 
     pub fn fencing_choices(&self) -> Vec<PastureConfig> {
-        self.player()
-            .farm
+        self.current_farm()
             .fencing_options(self.current_player_quantities()[Wood.index()])
     }
 
     pub fn fence(&mut self, pasture_config: &PastureConfig) {
         assert!(self.can_fence());
         let mut wood = self.current_player_quantities()[Wood.index()];
-        self.player_mut()
-            .farm
+        self.current_farm_mut()
             .fence_spaces(pasture_config, &mut wood);
         self.current_player_quantities_mut()[Wood.index()] = wood;
     }
 
     pub fn can_fence(&self) -> bool {
         !self
-            .player()
-            .farm
+            .current_farm()
             .fencing_options(self.current_player_quantities()[Wood.index()])
             .is_empty()
     }
@@ -675,7 +682,7 @@ impl State {
     }
 
     pub fn sow_field(&mut self, seed: &Seed) {
-        self.player_mut().farm.sow_field(seed);
+        self.current_farm_mut().sow_field(seed);
         match seed {
             Seed::Grain => self.current_player_quantities_mut()[Grain.index()] -= 1,
             Seed::Vegetable => self.current_player_quantities_mut()[Vegetable.index()] -= 1,
@@ -685,7 +692,7 @@ impl State {
     pub fn can_sow(&self) -> bool {
         (self.current_player_quantities()[Grain.index()] > 0
             || self.current_player_quantities()[Vegetable.index()] > 0)
-            && self.player().farm.can_sow()
+            && self.current_farm().can_sow()
     }
 
     pub fn bake_bread(&mut self, num_grain_to_bake: usize) {
@@ -778,7 +785,7 @@ impl State {
             quantites[Boar.index()],
             quantites[Cattle.index()],
         ];
-        let leftover = self.player_mut().farm.accommodate_animals(&animals);
+        let leftover = self.current_farm_mut().accommodate_animals(&animals);
 
         quantites[Sheep.index()] -= leftover[0];
         quantites[Boar.index()] -= leftover[1];
@@ -999,5 +1006,17 @@ impl State {
 
     pub fn current_player_cards_mut(&mut self) -> &mut [bool; NUM_CARDS] {
         &mut self.player_cards[self.current_player_idx]
+    }
+
+    pub fn current_farm(&self) -> &Farm {
+        self.player_farm(self.current_player_idx)
+    }
+
+    pub fn current_farm_mut(&mut self) -> &mut Farm {
+        &mut self.farms[self.current_player_idx]
+    }
+
+    pub fn player_farm(&self, player_idx: usize) -> &Farm {
+        &self.farms[player_idx]
     }
 }

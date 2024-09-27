@@ -99,7 +99,6 @@ pub enum Action {
 impl Action {
     #[allow(clippy::too_many_lines)]
     pub fn next_choices(state: &State) -> Vec<Self> {
-        let player = state.player();
         let mut ret: Vec<Self> = Vec::new();
         match &state.last_action {
             Self::GetResourceFromChildless(_res) => vec![Self::PlaceWorker],
@@ -109,7 +108,7 @@ impl Action {
             Self::StartRound => vec![Self::PlaceWorker],
             Self::PlaceWorker => Self::place_worker_choices(state),
             Self::UseFarmland => {
-                let field_opt = player.field_options();
+                let field_opt = state.field_options();
                 if !field_opt.is_empty() {
                     for opt in field_opt {
                         ret.push(Self::Plow(CalledFromCultivation(false), opt));
@@ -170,7 +169,7 @@ impl Action {
                     state,
                     &CalledFromGrainUtilization(false, true),
                 ));
-                let field_opt = player.field_options();
+                let field_opt = state.field_options();
                 if !field_opt.is_empty() {
                     for opt in field_opt {
                         ret.push(Self::Plow(CalledFromCultivation(true), opt));
@@ -258,7 +257,7 @@ impl Action {
 
     fn day_laborer_choices(state: &State) -> Vec<Self> {
         let mut ret: Vec<Self> = Vec::new();
-        let field_opt = state.player().field_options();
+        let field_opt = state.field_options();
         if !field_opt.is_empty() && state.current_player_cards()[AssistantTiller.index()] {
             for opt in field_opt {
                 ret.push(Self::Plow(CalledFromCultivation(false), opt));
@@ -431,7 +430,6 @@ impl Action {
     }
 
     fn place_worker_choices(state: &State) -> Vec<Self> {
-        let player = state.player();
         let mut ret: Vec<Self> = Vec::new();
 
         // At the start of each round, if you have at least 3 rooms but only 2 people, you get 1 food and 1 crop of your choice (grain or vegetable).
@@ -455,7 +453,7 @@ impl Action {
 
             match action {
                 Self::UseFarmland => {
-                    if player.field_options().is_empty() {
+                    if state.field_options().is_empty() {
                         continue;
                     }
                 }
@@ -496,7 +494,7 @@ impl Action {
                     }
                 }
                 Self::UseCultivation => {
-                    if !state.can_sow() && player.field_options().is_empty() {
+                    if !state.can_sow() && state.field_options().is_empty() {
                         continue;
                     }
                 }
@@ -790,7 +788,7 @@ impl Action {
                 state.current_player_quantities_mut()[Food.index()] -= food_cost;
             }
             Self::Plow(_, pasture_idx) => {
-                state.player_mut().add_new_field(pasture_idx);
+                state.add_new_field(pasture_idx);
             }
             Self::Fence(pasture_config) => {
                 state.fence(pasture_config);

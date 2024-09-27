@@ -86,7 +86,7 @@ pub fn display_farm(state: &State, player_idx: usize) -> String {
     for i in 0..W {
         for j in 0..L {
             let idx = i * L + j;
-            match state.players[player_idx].farm.farmyard_spaces[idx] {
+            match state.player_farm(player_idx).farmyard_spaces[idx] {
                 FarmyardSpace::Empty => {
                     ret.push_str("[--]");
                 }

@@ -17,7 +17,6 @@ pub fn score_farm(state: &State, player_idx: usize) -> i32 {
     let mut score = 0;
     let mut num_fields: usize = 0;
     let mut player_quantities = *state.player_quantities(player_idx);
-    let player = &state.players[player_idx];
 
     let house_type_idx = if state.player_flags(player_idx)[WoodHouse.index()] {
         0
@@ -27,12 +26,12 @@ pub fn score_farm(state: &State, player_idx: usize) -> i32 {
         2
     };
 
-    let num_pastures = get_existing_pastures(&player.farm.farmyard_spaces)
+    let num_pastures = get_existing_pastures(&state.player_farm(player_idx).farmyard_spaces)
         .iter()
         .filter(|p| !p.is_empty())
         .count();
 
-    for space in &player.farm.farmyard_spaces {
+    for space in &state.player_farm(player_idx).farmyard_spaces {
         match *space {
             FarmyardSpace::Empty => score -= 1,
             FarmyardSpace::Room => score += HOUSE_SCORE[house_type_idx],
