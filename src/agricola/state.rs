@@ -433,6 +433,9 @@ impl State {
 
         // Can Build Room flag is perhaps dirty, set it
         self.set_can_build_room();
+
+        // Can Build Stable flag is perhaps dirty, set it
+        self.set_can_build_stable();
     }
 
     pub fn room_options(&self) -> Vec<usize> {

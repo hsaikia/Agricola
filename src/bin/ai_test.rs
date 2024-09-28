@@ -25,7 +25,7 @@ fn main() {
 
         if actions.len() == 1 {
             actions[0].apply_choice(&mut state);
-            //println!("{:?}", actions[0]);
+            println!("Auto-choosing single action [{:?}]", actions[0]);
             continue;
         }
 
@@ -41,7 +41,7 @@ fn main() {
         let records = ai_agent.sorted_records();
         records[0].action.apply_choice(&mut state);
         println!(
-            "Player {} choose action [{:?}]",
+            "Player {} chose action [{:?}]",
             state.current_player_idx, records[0].action
         );
     }

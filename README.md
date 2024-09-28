@@ -111,6 +111,12 @@ Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth Some(10)): 33.
 Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth Some(10)): 48.443808583s
 Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth None): 2041.044138666s
 
+[After flag/quantities refactor]
+Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth Some(10)): 194.857619166s
+Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth Some(10)): 316.395942083s
+Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth None): 768.650876208s
+Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth None): 890.991911792s
+
 ## Misc commands
 
 Show public functions and modules

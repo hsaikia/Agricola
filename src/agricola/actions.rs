@@ -836,17 +836,17 @@ impl Action {
 impl Debug for Action {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::UseCopse => write!(f, "Copse (🪵)"),
-            Self::UseGrove => write!(f, "Grove (🪵🪵)"),
-            Self::UseForest => write!(f, "Forest (🪵🪵🪵)"),
-            Self::UseResourceMarket => write!(f, "Resource Market"),
-            Self::UseHollow => write!(f, "Hollow"),
-            Self::UseClayPit => write!(f, "Clay Pit"),
-            Self::UseReedBank => write!(f, "Reed Bank"),
-            Self::UseTravelingPlayers => write!(f, "Traveling Players"),
-            Self::UseFishing => write!(f, "Fishing"),
-            Self::UseDayLaborer => write!(f, "Day Laborer"),
-            Self::UseGrainSeeds => write!(f, "Grain Seeds (🌾)"),
+            Self::UseCopse => write!(f, "Copse ({})", RESOURCE_EMOJIS[Wood.index()]),
+            Self::UseGrove => write!(f, "Grove ({})", RESOURCE_EMOJIS[Wood.index()].repeat(2)),
+            Self::UseForest => write!(f, "Forest ({})", RESOURCE_EMOJIS[Wood.index()].repeat(3)),
+            Self::UseResourceMarket => write!(f, "Resource Market ({} {} {})", RESOURCE_EMOJIS[Food.index()], RESOURCE_EMOJIS[Stone.index()], RESOURCE_EMOJIS[Reed.index()]),
+            Self::UseHollow => write!(f, "Hollow ({})", RESOURCE_EMOJIS[Clay.index()].repeat(2)),
+            Self::UseClayPit => write!(f, "Clay Pit ({})", RESOURCE_EMOJIS[Clay.index()]),
+            Self::UseReedBank => write!(f, "Reed Bank ({})", RESOURCE_EMOJIS[Reed.index()]),
+            Self::UseTravelingPlayers => write!(f, "Traveling Players ({})", RESOURCE_EMOJIS[Food.index()]),
+            Self::UseFishing => write!(f, "Fishing {}", RESOURCE_EMOJIS[Food.index()]),
+            Self::UseDayLaborer => write!(f, "Day Laborer ({})", RESOURCE_EMOJIS[Food.index()].repeat(2)),
+            Self::UseGrainSeeds => write!(f, "Grain Seeds ({})", RESOURCE_EMOJIS[Grain.index()]),
             Self::UseMeetingPlace => write!(f, "Meeting Place"),
             Self::UseFarmland => write!(f, "Farmland"),
             Self::UseFarmExpansion => write!(f, "Farm Expansion"),
@@ -892,12 +892,12 @@ impl Debug for Action {
                 RESOURCE_EMOJIS[Food.index()],
                 RESOURCE_EMOJIS[*res]
             ),
-            Self::UseSheepMarket => write!(f, "Sheep Market"),
-            Self::UseWesternQuarry => write!(f, "Western Quarry"),
-            Self::UsePigMarket => write!(f, "Pig Market"),
-            Self::UseVegetableSeeds => write!(f, "Vegetable Seeds"),
-            Self::UseEasternQuarry => write!(f, "Eastern Quarry"),
-            Self::UseCattleMarket => write!(f, "Cattle Market"),
+            Self::UseSheepMarket => write!(f, "Sheep Market ({})", RESOURCE_EMOJIS[Sheep.index()]),
+            Self::UseWesternQuarry => write!(f, "Western Quarry ({})", RESOURCE_EMOJIS[Stone.index()]),
+            Self::UsePigMarket => write!(f, "Pig Market ({})", RESOURCE_EMOJIS[Boar.index()]),
+            Self::UseVegetableSeeds => write!(f, "Vegetable Seeds ({})", RESOURCE_EMOJIS[Vegetable.index()]),
+            Self::UseEasternQuarry => write!(f, "Eastern Quarry ({})", RESOURCE_EMOJIS[Stone.index()]),
+            Self::UseCattleMarket => write!(f, "Cattle Market ({})", RESOURCE_EMOJIS[Cattle.index()]),
         }
     }
 }
