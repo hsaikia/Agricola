@@ -5,7 +5,6 @@ pub mod display;
 pub mod farm;
 pub mod fencing;
 pub mod flag;
-pub mod major_improvements;
 pub mod mcts;
 pub mod paranoid_ai;
 pub mod quantity;

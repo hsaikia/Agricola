@@ -1,14 +1,12 @@
-use super::card::AssistantTiller;
 use super::card::*;
+use super::display::RESOURCE_EMOJIS;
 use super::farm::Seed;
 use super::fencing::PastureConfig;
 use super::flag::*;
-use super::major_improvements::MajorImprovement;
 use super::quantity::*;
-use super::state::{
-    State, BAKING_MAJOR_IMPROVEMENT_INDICES, FIREPLACE_AND_COOKING_HEARTH_INDICES,
-    FIREPLACE_INDICES,
-};
+use super::state::State;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 pub const NUM_RESOURCE_SPACES: usize = 18;
 
 // Tuple <called from grain utilization, baked bread already>
@@ -42,7 +40,7 @@ pub enum ConversionStage {
     BeforePlayOccupation(bool),
 }
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Clone, Hash)]
 pub enum Action {
     UseCopse,
     UseGrove,
@@ -77,7 +75,7 @@ pub enum Action {
     PlaceWorker,
     BuildRoom(usize),
     BuildStable(usize),
-    BuildCard(MajorImprovement, ReturnFireplace),
+    BuildCard(usize, ReturnFireplace),
     Harvest,
     EndTurn,
     EndGame,
@@ -88,7 +86,7 @@ pub enum Action {
     GrowFamily(WithRoom),
     Fence(PastureConfig),
     Plow(CalledFromCultivation, usize),
-    Convert(ResourceExchange, Option<MajorImprovement>, ConversionStage),
+    Convert(ResourceExchange, Option<usize>, ConversionStage), // Exchange, harvest flag index, stage
     PreHarvest,
     PayFoodOrBeg,
     StartGame,
@@ -138,8 +136,10 @@ impl Action {
             }
             Self::UseImprovements => vec![Self::BuildMajor], // TODO : Add BuildMinor here
             Self::BuildMajor => Self::build_major_choices(state),
-            Self::BuildCard(MajorImprovement::ClayOven | MajorImprovement::StoneOven, _) => {
-                ret.extend(Self::baking_choices(state, false));
+            Self::BuildCard(idx, _) => {
+                if *idx == ClayOven.index() || *idx == StoneOven.index() {
+                    ret.extend(Self::baking_choices(state, false));
+                }
                 ret.push(Self::EndTurn);
                 ret
             }
@@ -326,9 +326,9 @@ impl Action {
             ));
         }
 
-        for idx in FIREPLACE_AND_COOKING_HEARTH_INDICES {
-            if Some(state.current_player_idx) == state.major_improvements[idx].1 {
-                for exchange in state.major_improvements[idx].0.exchanges() {
+        for (idx, owned) in state.current_player_cards().iter().enumerate() {
+            if *owned {
+                for exchange in anytime_exchanges(idx) {
                     if state.can_use_exchange(&exchange) {
                         ret.push(Self::Convert(exchange, None, stage.clone()));
                     }
@@ -341,18 +341,37 @@ impl Action {
 
     fn harvest_choices(state: &State) -> Vec<Self> {
         let mut ret: Vec<Self> = Vec::new();
-
         ret.extend(Self::anytime_conversions(state, &ConversionStage::Harvest));
 
-        for (major, opt_idx, _) in &state.major_improvements {
-            if Some(state.current_player_idx) == *opt_idx {
-                for exchange in major.exchanges() {
+        for (idx, owned) in state.current_player_cards().iter().enumerate() {
+            if *owned {
+                for exchange in harvest_exchanges(idx) {
                     if state.can_use_exchange(&exchange) {
-                        ret.push(Self::Convert(
-                            exchange,
-                            Some(major.clone()),
-                            ConversionStage::Harvest,
-                        ));
+                        if idx == Joinery.index()
+                            && !state.current_player_flags()[UsedJoinery.index()]
+                        {
+                            ret.push(Self::Convert(
+                                exchange,
+                                Some(UsedJoinery.index()),
+                                ConversionStage::Harvest,
+                            ));
+                        } else if idx == Pottery.index()
+                            && !state.current_player_flags()[UsedPottery.index()]
+                        {
+                            ret.push(Self::Convert(
+                                exchange,
+                                Some(UsedPottery.index()),
+                                ConversionStage::Harvest,
+                            ));
+                        } else if idx == BasketmakersWorkshop.index()
+                            && !state.current_player_flags()[UsedBasketmakersWorkshop.index()]
+                        {
+                            ret.push(Self::Convert(
+                                exchange,
+                                Some(UsedBasketmakersWorkshop.index()),
+                                ConversionStage::Harvest,
+                            ));
+                        }
                     }
                 }
             }
@@ -403,17 +422,18 @@ impl Action {
 
     fn baking_choices(state: &State, from_grain_util: bool) -> Vec<Self> {
         let mut ret: Vec<Self> = Vec::new();
-        for idx in BAKING_MAJOR_IMPROVEMENT_INDICES {
-            if Some(state.current_player_idx) == state.major_improvements[idx].1 {
-                for grain in 1..=state.current_player_quantities()[Grain.index()] {
-                    ret.push(Self::BakeBread(
-                        CalledFromGrainUtilization(from_grain_util, false),
-                        NumGrainToBake(grain),
-                    ));
-                }
-                break;
+        if BAKING_IMPROVEMENTS_INDICES
+            .iter()
+            .any(|&x| state.current_player_cards()[x])
+        {
+            for grain in 1..=state.current_player_quantities()[Grain.index()] {
+                ret.push(Self::BakeBread(
+                    CalledFromGrainUtilization(from_grain_util, false),
+                    NumGrainToBake(grain),
+                ));
             }
         }
+
         ret
     }
 
@@ -514,47 +534,26 @@ impl Action {
         ret
     }
 
-    fn cooking_hearth_choices(state: &State, cheaper: bool) -> Vec<Self> {
-        let mut ret: Vec<Self> = Vec::new();
-
-        for fp_idx in FIREPLACE_INDICES {
-            if Some(state.current_player_idx) == state.major_improvements[fp_idx].1 {
-                ret.push(Self::BuildCard(
-                    MajorImprovement::CookingHearth { cheaper },
-                    ReturnFireplace(true),
-                ));
-            }
-        }
-
-        if can_pay_for_resource(
-            &MajorImprovement::CookingHearth { cheaper }.cost(),
-            state.current_player_quantities(),
-        ) {
-            ret.push(Self::BuildCard(
-                MajorImprovement::CookingHearth { cheaper },
-                ReturnFireplace(false),
-            ));
-        }
-        ret
-    }
-
     fn build_major_choices(state: &State) -> Vec<Self> {
         let mut ret: Vec<Self> = Vec::new();
 
-        for (major_idx, available) in state.available_majors_to_build().iter().enumerate() {
-            if !available {
+        for major_idx in MAJOR_IMPROVEMENTS_INDICES {
+            if !state.card_available(major_idx) {
                 continue;
             }
-            match state.major_improvements[major_idx].0 {
-                MajorImprovement::CookingHearth { cheaper } => {
-                    ret.extend(Self::cooking_hearth_choices(state, cheaper));
-                }
-                _ => ret.push(Self::BuildCard(
-                    state.major_improvements[major_idx].0.clone(),
-                    ReturnFireplace(false),
-                )),
+
+            if (major_idx == CookingHearth1.index() || major_idx == CookingHearth2.index())
+                && (state.current_player_cards()[Fireplace1.index()]
+                    || state.current_player_cards()[Fireplace2.index()])
+            {
+                ret.push(Self::BuildCard(major_idx, ReturnFireplace(true)));
+            }
+
+            if can_pay_for_resource(&cost(major_idx), state.current_player_quantities()) {
+                ret.push(Self::BuildCard(major_idx, ReturnFireplace(false)));
             }
         }
+
         ret
     }
 
@@ -802,8 +801,8 @@ impl Action {
             Self::Sow(_called_from_grain_util, seed) => {
                 state.sow_field(seed);
             }
-            Self::BuildCard(major, return_fireplace) => {
-                state.build_major(major, return_fireplace.0);
+            Self::BuildCard(major_idx, return_fireplace) => {
+                state.build_major(*major_idx, return_fireplace.0);
             }
             Self::BakeBread(_called_from_grain_util, num_grain_to_bake) => {
                 state.bake_bread(num_grain_to_bake.0);
@@ -814,10 +813,10 @@ impl Action {
             Self::GrowFamily(with_room) => state.grow_family(with_room.0),
             Self::EndTurn => state.end_turn(),
             Self::PreHarvest => state.harvest_fields(),
-            Self::Convert(res_ex, opt_major, _) => {
+            Self::Convert(res_ex, opt_major_used, _) => {
                 state.use_exchange(res_ex);
-                if let Some(major) = opt_major {
-                    state.major_improvements[major.index()].2 += 1;
+                if let Some(used_major_idx) = opt_major_used {
+                    state.current_player_flags_mut()[*used_major_idx] = true;
                 }
             }
             Self::PayFoodOrBeg => state.pay_food_or_beg(),
@@ -830,6 +829,75 @@ impl Action {
             state.set_can_renovate();
             state.set_can_build_room();
             state.set_can_build_stable();
+        }
+    }
+}
+
+impl Debug for Action {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UseCopse => write!(f, "Copse (🪵)"),
+            Self::UseGrove => write!(f, "Grove (🪵🪵)"),
+            Self::UseForest => write!(f, "Forest (🪵🪵🪵)"),
+            Self::UseResourceMarket => write!(f, "Resource Market"),
+            Self::UseHollow => write!(f, "Hollow"),
+            Self::UseClayPit => write!(f, "Clay Pit"),
+            Self::UseReedBank => write!(f, "Reed Bank"),
+            Self::UseTravelingPlayers => write!(f, "Traveling Players"),
+            Self::UseFishing => write!(f, "Fishing"),
+            Self::UseDayLaborer => write!(f, "Day Laborer"),
+            Self::UseGrainSeeds => write!(f, "Grain Seeds (🌾)"),
+            Self::UseMeetingPlace => write!(f, "Meeting Place"),
+            Self::UseFarmland => write!(f, "Farmland"),
+            Self::UseFarmExpansion => write!(f, "Farm Expansion"),
+            Self::UseLessons(cheaper) => write!(f, "Lessons ({})", if *cheaper { 1 } else { 2 }),
+            Self::UseGrainUtilization => write!(f, "Grain Utilization"),
+            Self::UseFencing => write!(f, "Fencing"),
+            Self::UseImprovements => write!(f, "Improvements"),
+            Self::UseWishForChildren => write!(f, "Wish For Children"),
+            Self::UseHouseRedevelopment => write!(f, "House Redevelopment"),
+            Self::UseCultivation => write!(f, "Cultivation"),
+            Self::UseUrgentWishForChildren => write!(f, "Urgent Wish For Children"),
+            Self::UseFarmRedevelopment => write!(f, "Farm Redevelopment"),
+            Self::StartRound => write!(f, "Start Round"),
+            Self::PlaceWorker => write!(f, "Place Worker"),
+            Self::BuildRoom(idx) => write!(f, "Build Room ({})", idx),
+            Self::BuildStable(idx) => write!(f, "Build Stable ({})", idx),
+            Self::BuildCard(idx, _) => write!(f, "Build Card ({})", CARD_NAMES[*idx]),
+            Self::Harvest => write!(f, "Harvest"),
+            Self::EndTurn => write!(f, "End Turn"),
+            Self::EndGame => write!(f, "End Game"),
+            Self::BuildMajor => write!(f, "Build Major"),
+            Self::BakeBread(_, num) => write!(f, "Bake Bread from {} Grain", num.0),
+            Self::Sow(_, seed) => write!(f, "Sow ({:?})", seed),
+            Self::Renovate(_, _) => write!(f, "Renovate"),
+            Self::GrowFamily(_) => write!(f, "Grow Family"),
+            Self::Fence(pasture_config) => write!(f, "Fence {:?}", pasture_config),
+            Self::Plow(_, pasture_idx) => write!(f, "Plow ({})", pasture_idx),
+            Self::Convert(res_ex, _, _) => write!(
+                f,
+                "Convert ({}{} to {}{})",
+                res_ex.num_from,
+                RESOURCE_EMOJIS[res_ex.from],
+                res_ex.num_to,
+                RESOURCE_EMOJIS[res_ex.to]
+            ),
+            Self::PreHarvest => write!(f, "Pre Harvest"),
+            Self::PayFoodOrBeg => write!(f, "Pay Food (Or Beg)"),
+            Self::StartGame => write!(f, "Start Game"),
+            Self::PlayOccupation(occ, _) => write!(f, "Play Occupation ({})", CARD_NAMES[*occ]),
+            Self::GetResourceFromChildless(res) => write!(
+                f,
+                "Childless ({} + {})",
+                RESOURCE_EMOJIS[Food.index()],
+                RESOURCE_EMOJIS[*res]
+            ),
+            Self::UseSheepMarket => write!(f, "Sheep Market"),
+            Self::UseWesternQuarry => write!(f, "Western Quarry"),
+            Self::UsePigMarket => write!(f, "Pig Market"),
+            Self::UseVegetableSeeds => write!(f, "Vegetable Seeds"),
+            Self::UseEasternQuarry => write!(f, "Eastern Quarry"),
+            Self::UseCattleMarket => write!(f, "Cattle Market"),
         }
     }
 }

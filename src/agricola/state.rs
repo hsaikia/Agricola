@@ -1,14 +1,14 @@
 use super::actions::{Action, NUM_RESOURCE_SPACES};
 use super::algorithms::PlayerType;
-use super::card::{NUM_CARDS, OCCUPATIONS_INDICES};
+use super::card::*;
 use super::display::format_resources;
 use super::farm::{Farm, Seed};
 use super::fencing::PastureConfig;
 use super::flag::*;
-use super::major_improvements::{MajorImprovement, TOTAL_MAJOR_IMPROVEMENTS};
 use super::quantity::*;
 use super::scoring::score_farm;
 use core::panic;
+use derivative::Derivative;
 use rand::Rng;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -18,31 +18,6 @@ pub const NUM_ACTION_SPACES: usize = 30;
 const MAX_NUM_PLAYERS: usize = 4;
 const MAX_FAMILY_MEMBERS: usize = 5;
 
-pub const FIREPLACE_INDICES: [usize; 2] = [
-    MajorImprovement::Fireplace { cheaper: true }.index(),
-    MajorImprovement::Fireplace { cheaper: false }.index(),
-];
-pub const COOKING_HEARTH_INDICES: [usize; 2] = [
-    MajorImprovement::CookingHearth { cheaper: true }.index(),
-    MajorImprovement::CookingHearth { cheaper: false }.index(),
-];
-
-pub const FIREPLACE_AND_COOKING_HEARTH_INDICES: [usize; 4] = [
-    MajorImprovement::Fireplace { cheaper: true }.index(),
-    MajorImprovement::Fireplace { cheaper: false }.index(),
-    MajorImprovement::CookingHearth { cheaper: true }.index(),
-    MajorImprovement::CookingHearth { cheaper: false }.index(),
-];
-
-pub const BAKING_MAJOR_IMPROVEMENT_INDICES: [usize; 6] = [
-    MajorImprovement::Fireplace { cheaper: true }.index(),
-    MajorImprovement::Fireplace { cheaper: false }.index(),
-    MajorImprovement::CookingHearth { cheaper: true }.index(),
-    MajorImprovement::CookingHearth { cheaper: false }.index(),
-    MajorImprovement::ClayOven.index(),
-    MajorImprovement::StoneOven.index(),
-];
-
 #[derive(Clone, Hash, Debug)]
 pub struct Event {
     pub round: usize,
@@ -50,7 +25,7 @@ pub struct Event {
     pub func: fn(res: &mut [usize; NUM_QUANTITIES]),
 }
 
-#[derive(Clone, Hash)]
+#[derive(Clone, Derivative, Hash)]
 pub struct State {
     pub num_players: usize,
     pub resource_map: [Resources; NUM_RESOURCE_SPACES],
@@ -62,7 +37,6 @@ pub struct State {
     player_flags: [[bool; NUM_FLAGS]; MAX_NUM_PLAYERS],
     player_cards: [[bool; NUM_CARDS]; MAX_NUM_PLAYERS],
     farms: [Farm; MAX_NUM_PLAYERS],
-    pub major_improvements: [(MajorImprovement, Option<usize>, usize); 10], // (Major, PlayerIdx, Number_of_times_used_in_harvest)
     pub current_player_idx: usize,
     pub starting_player_idx: usize,
     pub people_placed_this_round: usize,
@@ -104,18 +78,6 @@ impl State {
             open_spaces: Action::initial_open_spaces(),
             occupied_spaces: Vec::new(),
             hidden_spaces: Action::initial_hidden_spaces(),
-            major_improvements: [
-                (MajorImprovement::Fireplace { cheaper: true }, None, 0),
-                (MajorImprovement::Fireplace { cheaper: false }, None, 0),
-                (MajorImprovement::CookingHearth { cheaper: true }, None, 0),
-                (MajorImprovement::CookingHearth { cheaper: false }, None, 0),
-                (MajorImprovement::Well, None, 0),
-                (MajorImprovement::ClayOven, None, 0),
-                (MajorImprovement::StoneOven, None, 0),
-                (MajorImprovement::Joinery, None, 0),
-                (MajorImprovement::Pottery, None, 0),
-                (MajorImprovement::BasketmakersWorkshop, None, 0),
-            ],
             player_types,
             player_quantities,
             player_flags,
@@ -281,42 +243,12 @@ impl State {
         fitness
     }
 
-    #[allow(clippy::cast_possible_wrap)]
-    fn score_cards(&self) -> [i32; MAX_NUM_PLAYERS] {
+    fn score_majors(&self) -> [i32; MAX_NUM_PLAYERS] {
         let mut ret: [i32; MAX_NUM_PLAYERS] = [0; MAX_NUM_PLAYERS];
-        // Score Majors
-        for (major, opt_idx, _) in &self.major_improvements {
-            if let Some(idx) = opt_idx {
-                ret[*idx] += major.points() as i32;
-                match major {
-                    MajorImprovement::Joinery => {
-                        if self.player_quantities(*idx)[Wood.index()] >= 7 {
-                            ret[*idx] += 3;
-                        } else if self.player_quantities(*idx)[Wood.index()] >= 5 {
-                            ret[*idx] += 2;
-                        } else if self.player_quantities(*idx)[Wood.index()] >= 3 {
-                            ret[*idx] += 1;
-                        }
-                    }
-                    MajorImprovement::Pottery => {
-                        if self.player_quantities(*idx)[Clay.index()] >= 7 {
-                            ret[*idx] += 3;
-                        } else if self.player_quantities(*idx)[Clay.index()] >= 5 {
-                            ret[*idx] += 2;
-                        } else if self.player_quantities(*idx)[Clay.index()] >= 3 {
-                            ret[*idx] += 1;
-                        }
-                    }
-                    MajorImprovement::BasketmakersWorkshop => {
-                        if self.player_quantities(*idx)[Reed.index()] >= 5 {
-                            ret[*idx] += 3;
-                        } else if self.player_quantities(*idx)[Reed.index()] >= 4 {
-                            ret[*idx] += 2;
-                        } else if self.player_quantities(*idx)[Reed.index()] >= 2 {
-                            ret[*idx] += 1;
-                        }
-                    }
-                    _ => (),
+        for (i, val) in ret.iter_mut().enumerate().take(self.num_players) {
+            for major_idx in MAJOR_IMPROVEMENTS_INDICES {
+                if self.player_cards[i][major_idx] {
+                    *val += points(major_idx, self.player_quantities(i)) as i32;
                 }
             }
         }
@@ -325,7 +257,7 @@ impl State {
 
     pub fn scores(&self) -> Vec<f32> {
         let mut scores: Vec<f32> = Vec::new();
-        let card_scores = self.score_cards();
+        let card_scores = self.score_majors();
         for (idx, card_score) in card_scores.iter().enumerate().take(self.num_players) {
             scores.push(self.score(idx) + *card_score as f32);
         }
@@ -366,10 +298,7 @@ impl State {
         self.reset_for_next_round();
         self.people_placed_this_round = 0;
 
-        // Reset majors if used in harvest
-        for (_, _, n_used) in &mut self.major_improvements {
-            *n_used = 0;
-        }
+        // TODO : Reset majors if used in harvest
 
         // Update accumulation spaces
         self.occupied_spaces.clear();
@@ -409,29 +338,31 @@ impl State {
         self.current_farm().possible_field_positions()
     }
 
-    pub fn available_majors_to_build(&self) -> [bool; TOTAL_MAJOR_IMPROVEMENTS] {
-        let mut available: [bool; TOTAL_MAJOR_IMPROVEMENTS] = [false; TOTAL_MAJOR_IMPROVEMENTS];
-
-        for f_idx in FIREPLACE_INDICES {
-            if Some(self.current_player_idx) == self.major_improvements[f_idx].1 {
-                for ch_idx in COOKING_HEARTH_INDICES {
-                    if self.major_improvements[ch_idx].1.is_none() {
-                        available[ch_idx] = true;
-                        break;
-                    }
-                }
-                break;
+    fn is_major_played(&self, major_idx: usize) -> bool {
+        for i in 0..self.num_players {
+            if self.player_cards[i][major_idx] {
+                return true;
             }
         }
+        false
+    }
 
-        for (idx, (major, player_idx, _)) in self.major_improvements.iter().enumerate() {
-            if player_idx.is_none()
-                && can_pay_for_resource(
-                    &major.cost(),
-                    self.player_quantities(self.current_player_idx),
-                )
+    pub fn available_majors_to_build(&self) -> [bool; NUM_CARDS] {
+        let mut available: [bool; NUM_CARDS] = [false; NUM_CARDS];
+
+        for major_idx in MAJOR_IMPROVEMENTS_INDICES {
+            if self.is_major_played(major_idx) {
+                continue;
+            }
+            if (major_idx == CookingHearth1.index() || major_idx == CookingHearth2.index())
+                && (self.current_player_cards()[Fireplace1.index()]
+                    || self.current_player_cards()[Fireplace2.index()])
             {
-                available[idx] = true;
+                available[major_idx] = true;
+                continue;
+            }
+            if can_pay_for_resource(&cost(major_idx), self.current_player_quantities()) {
+                available[major_idx] = true;
             }
         }
 
@@ -439,16 +370,19 @@ impl State {
     }
 
     pub fn replace_fireplace_with_cooking_hearth(&mut self) {
-        for f_idx in FIREPLACE_INDICES {
-            if Some(self.current_player_idx) == self.major_improvements[f_idx].1 {
-                for ch_idx in COOKING_HEARTH_INDICES {
-                    if self.major_improvements[ch_idx].1.is_none() {
-                        self.major_improvements[ch_idx].1 = Some(self.current_player_idx);
-                        self.major_improvements[f_idx].1 = None;
-                        break;
-                    }
-                }
-                break;
+        if self.current_player_cards()[Fireplace1.index()] {
+            self.current_player_cards_mut()[Fireplace1.index()] = false;
+            if !self.is_major_played(CookingHearth1.index()) {
+                self.current_player_cards_mut()[CookingHearth1.index()] = true;
+            } else if !self.is_major_played(CookingHearth2.index()) {
+                self.current_player_cards_mut()[CookingHearth2.index()] = true;
+            }
+        } else if self.current_player_cards()[Fireplace2.index()] {
+            self.current_player_cards_mut()[Fireplace2.index()] = false;
+            if !self.is_major_played(CookingHearth1.index()) {
+                self.current_player_cards_mut()[CookingHearth1.index()] = true;
+            } else if !self.is_major_played(CookingHearth2.index()) {
+                self.current_player_cards_mut()[CookingHearth2.index()] = true;
             }
         }
     }
@@ -510,7 +444,8 @@ impl State {
 
     pub fn set_can_build_stable(&mut self) {
         self.current_player_flags_mut()[CanBuildStable.index()] =
-            self.current_player_quantities()[Wood.index()] >= 2 && self.current_farm().can_build_stable();
+            self.current_player_quantities()[Wood.index()] >= 2
+                && self.current_farm().can_build_stable();
     }
 
     pub fn can_build_stable(&self) -> bool {
@@ -581,22 +516,20 @@ impl State {
         }
     }
 
-    pub fn build_major(&mut self, major: &MajorImprovement, return_fireplace: bool) {
-        match major {
-            &MajorImprovement::Fireplace { cheaper: _ }
-            | &MajorImprovement::CookingHearth { cheaper: _ } => {
-                self.current_player_flags_mut()[HasCookingImprovement.index()] = true;
-            }
-            _ => {}
+    pub fn build_major(&mut self, major_idx: usize, return_fireplace: bool) {
+        if COOKING_IMPROVEMENTS_INDICES.contains(&major_idx) {
+            self.current_player_flags_mut()[HasCookingImprovement.index()] = true;
         }
 
-        if return_fireplace && matches!(major, MajorImprovement::CookingHearth { cheaper: _ }) {
+        if return_fireplace
+            && (major_idx == CookingHearth1.index() || major_idx == CookingHearth2.index())
+        {
             self.replace_fireplace_with_cooking_hearth();
         } else {
-            pay_for_resource(&major.cost(), self.current_player_quantities_mut());
-            self.major_improvements[major.index()].1 = Some(self.current_player_idx);
+            pay_for_resource(&cost(major_idx), self.current_player_quantities_mut());
+            self.current_player_cards_mut()[major_idx] = true;
 
-            if matches!(major, MajorImprovement::Well) {
+            if major_idx == Well.index() {
                 let current_round = self.current_round();
                 let func = |res: &mut Quantities| {
                     res[Food.index()] += 1;
@@ -653,22 +586,9 @@ impl State {
     pub fn can_bake_bread(&self, player_idx: usize) -> bool {
         // Check if any of the baking improvements are present
         // And at least one grain in supply
-
-        (Some(player_idx) == self.major_improvements[MajorImprovement::ClayOven.index()].1
-            || Some(player_idx) == self.major_improvements[MajorImprovement::StoneOven.index()].1
-            || Some(player_idx)
-                == self.major_improvements[MajorImprovement::Fireplace { cheaper: true }.index()].1
-            || Some(player_idx)
-                == self.major_improvements[MajorImprovement::Fireplace { cheaper: false }.index()]
-                    .1
-            || Some(player_idx)
-                == self.major_improvements
-                    [MajorImprovement::CookingHearth { cheaper: true }.index()]
-                .1
-            || Some(player_idx)
-                == self.major_improvements
-                    [MajorImprovement::CookingHearth { cheaper: false }.index()]
-                .1)
+        BAKING_IMPROVEMENTS_INDICES
+            .iter()
+            .any(|&i| self.player_cards[player_idx][i])
             && self.current_player_quantities()[Grain.index()] > 0
     }
 
@@ -693,34 +613,28 @@ impl State {
             if self.current_player_quantities()[Grain.index()] == 0 {
                 break;
             }
-            if Some(self.current_player_idx)
-                == self.major_improvements[MajorImprovement::ClayOven.index()].1
-                && self.major_improvements[MajorImprovement::ClayOven.index()].2 == 0
+
+            if self.current_player_cards()[ClayOven.index()]
+                && !self.current_player_flags()[BakedOnceWithClayOven.index()]
             {
                 self.current_player_quantities_mut()[Food.index()] += 5;
-                self.major_improvements[MajorImprovement::ClayOven.index()].2 = 1;
-            } else if Some(self.current_player_idx)
-                == self.major_improvements[MajorImprovement::StoneOven.index()].1
-                && self.major_improvements[MajorImprovement::StoneOven.index()].2 < 2
+                self.current_player_flags_mut()[BakedOnceWithClayOven.index()] = true;
+            } else if self.current_player_cards()[StoneOven.index()]
+                && !self.current_player_flags()[BakedOnceWithStoneOven.index()]
             {
                 self.current_player_quantities_mut()[Food.index()] += 4;
-                self.major_improvements[MajorImprovement::StoneOven.index()].2 += 1;
-            } else if Some(self.current_player_idx)
-                == self.major_improvements
-                    [MajorImprovement::CookingHearth { cheaper: true }.index()]
-                .1
-                || Some(self.current_player_idx)
-                    == self.major_improvements
-                        [MajorImprovement::CookingHearth { cheaper: false }.index()]
-                    .1
+                self.current_player_flags_mut()[BakedOnceWithStoneOven.index()] = true;
+            } else if self.current_player_cards()[StoneOven.index()]
+                && !self.current_player_flags()[BakedTwiceWithStoneOven.index()]
+            {
+                self.current_player_quantities_mut()[Food.index()] += 4;
+                self.current_player_flags_mut()[BakedTwiceWithStoneOven.index()] = true;
+            } else if self.current_player_cards()[CookingHearth1.index()]
+                || self.current_player_cards()[CookingHearth2.index()]
             {
                 self.current_player_quantities_mut()[Food.index()] += 3;
-            } else if Some(self.current_player_idx)
-                == self.major_improvements[MajorImprovement::Fireplace { cheaper: true }.index()].1
-                || Some(self.current_player_idx)
-                    == self.major_improvements
-                        [MajorImprovement::Fireplace { cheaper: false }.index()]
-                    .1
+            } else if self.current_player_cards()[Fireplace1.index()]
+                || self.current_player_cards()[Fireplace2.index()]
             {
                 self.current_player_quantities_mut()[Food.index()] += 2;
             }
@@ -728,6 +642,10 @@ impl State {
             self.current_player_quantities_mut()[Grain.index()] -= 1;
             num_grain_to_bake -= 1;
         }
+
+        self.current_player_flags_mut()[BakedOnceWithClayOven.index()] = false;
+        self.current_player_flags_mut()[BakedOnceWithStoneOven.index()] = false;
+        self.current_player_flags_mut()[BakedTwiceWithStoneOven.index()] = false;
     }
 
     pub fn all_people_placed(&self) -> bool {
@@ -743,6 +661,10 @@ impl State {
     pub fn pay_food_or_beg(&mut self) {
         let food_required = self.food_required();
         self.current_player_flags_mut()[HarvestPaid.index()] = true;
+        self.current_player_flags_mut()[UsedJoinery.index()] = false;
+        self.current_player_flags_mut()[UsedPottery.index()] = false;
+        self.current_player_flags_mut()[UsedBasketmakersWorkshop.index()] = false;
+
         if food_required > self.current_player_quantities()[Food.index()] {
             self.current_player_quantities_mut()[BeggingTokens.index()] +=
                 food_required - self.current_player_quantities()[Food.index()];
@@ -785,7 +707,7 @@ impl State {
         // TODO: Don't just toss animals this way - give a choice to the player and re-org using that choice
         let mut owns_ch = false;
         for ch_idx in COOKING_HEARTH_INDICES {
-            if Some(self.current_player_idx) == self.major_improvements[ch_idx].1 {
+            if self.player_cards[self.current_player_idx][ch_idx] {
                 quantites[Food.index()] += 2 * leftover[0] + 3 * leftover[1] + 4 * leftover[2];
                 owns_ch = true;
                 break;
@@ -794,7 +716,7 @@ impl State {
 
         if !owns_ch {
             for fp_idx in FIREPLACE_INDICES {
-                if Some(self.current_player_idx) == self.major_improvements[fp_idx].1 {
+                if self.player_cards[self.current_player_idx][fp_idx] {
                     quantites[Food.index()] += 2 * leftover[0] + 2 * leftover[1] + 3 * leftover[2];
                     return;
                 }
@@ -921,17 +843,27 @@ impl State {
             }
         }
 
-        ret.push_str("\n\n=== Available majors ===\n");
-        for (major, owner, _) in &self.major_improvements {
-            ret.push_str(&format!("\n{major:?}"));
-            if owner.is_some() {
-                ret.push_str(&format!(". Owned by Player {}", owner.unwrap() + 1));
+        ret.push_str("\n\n=== Cards ===\n");
+
+        for (card_idx, card_name) in CARD_NAMES.iter().enumerate() {
+            if self.card_available(card_idx) {
+                ret.push_str(&format!("\n[-] {:?}", card_name));
+            } else {
+                let owner_idx = (0..self.num_players)
+                    .find(|i| self.player_cards[*i][card_idx])
+                    .unwrap();
+                ret.push_str(&format!(
+                    "\n[X] {:?} is owned by Player {}",
+                    card_name,
+                    owner_idx + 1
+                ));
             }
         }
+
         ret
     }
 
-    fn card_available(&self, card_idx: usize) -> bool {
+    pub fn card_available(&self, card_idx: usize) -> bool {
         (0..self.num_players).all(|i| !self.player_cards[i][card_idx])
     }
 
