@@ -152,6 +152,7 @@ impl App {
             }
             self.current_actions = Action::next_choices(state);
             self.num_selections_y = self.current_actions.len();
+            self.selection_y = 0;
         }
     }
 
