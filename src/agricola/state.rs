@@ -850,13 +850,13 @@ impl State {
 
         for (card_idx, card_name) in CARD_NAMES.iter().enumerate() {
             if self.card_available(card_idx) {
-                ret.push_str(&format!("\n[-] {:?}", card_name));
+                ret.push_str(&format!("\n[-] {}", card_name));
             } else {
                 let owner_idx = (0..self.num_players)
                     .find(|i| self.player_cards[*i][card_idx])
                     .unwrap();
                 ret.push_str(&format!(
-                    "\n[X] {:?} is owned by Player {}",
+                    "\n[X] {} is owned by Player {}",
                     card_name,
                     owner_idx + 1
                 ));
