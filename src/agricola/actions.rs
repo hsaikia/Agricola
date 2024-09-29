@@ -1,3 +1,4 @@
+use super::action_space::*;
 use super::card::*;
 use super::display::RESOURCE_EMOJIS;
 use super::farm::Seed;
@@ -70,7 +71,7 @@ pub enum Action {
     UseHouseRedevelopment,
     UseCultivation,
     UseUrgentWishForChildren,
-    UseFarmRedevelopment, // TODO
+    UseFarmRedevelopment,
     StartRound,
     PlaceWorker,
     BuildRoom(usize),
@@ -466,70 +467,66 @@ impl Action {
             return ret;
         }
 
-        for action in &state.open_spaces {
-            if state.occupied_spaces.contains(&action.action_idx()) {
+        for i in 0..OPEN_SPACES + state.current_round {
+            let idx = state.action_spaces[i];
+            if state.occupied[idx] {
                 continue;
             }
 
-            match action {
-                Self::UseFarmland => {
-                    if state.field_options().is_empty() {
-                        continue;
-                    }
-                }
-                Self::UseFarmExpansion => {
-                    if state.room_options().is_empty() && state.stable_options().is_empty() {
-                        continue;
-                    }
-                }
-                Self::UseImprovements => {
-                    // TODO : Also check minor builds here
-                    if !state.available_majors_to_build().iter().any(|x| *x) {
-                        continue;
-                    }
-                }
-                Self::UseFencing => {
-                    if !state.can_fence() {
-                        continue;
-                    }
-                }
-                Self::UseGrainUtilization => {
-                    if !state.can_sow() && !state.can_bake_bread(state.current_player_idx) {
-                        continue;
-                    }
-                }
-                Self::UseHouseRedevelopment | Self::UseFarmRedevelopment => {
-                    if !state.can_renovate() {
-                        continue;
-                    }
-                }
-                Self::UseWishForChildren => {
-                    if !state.can_grow_family_with_room() {
-                        continue;
-                    }
-                }
-                Self::UseUrgentWishForChildren => {
-                    if !state.can_grow_family_without_room() {
-                        continue;
-                    }
-                }
-                Self::UseCultivation => {
-                    if !state.can_sow() && state.field_options().is_empty() {
-                        continue;
-                    }
-                }
-
-                Self::UseLessons(cheaper) => {
-                    if state.occupations_available().is_empty()
-                        || !state.can_play_occupation(*cheaper)
-                    {
-                        continue;
-                    }
-                }
-                _ => (),
+            if idx == Farmland.index() && state.field_options().is_empty() {
+                continue;
+            }
+            if idx == FarmExpansion.index()
+                && state.room_options().is_empty()
+                && state.stable_options().is_empty()
+            {
+                continue;
             }
 
-            ret.push(action.clone());
+            if idx == Improvements.index() && !state.available_majors_to_build().iter().any(|x| *x)
+            {
+                continue;
+            }
+
+            if idx == Fencing.index() && !state.can_fence() {
+                continue;
+            }
+
+            if idx == GrainUtilization.index()
+                && !state.can_sow()
+                && !state.can_bake_bread(state.current_player_idx)
+            {
+                continue;
+            }
+
+            if idx == HouseRedevelopment.index() && !state.can_renovate() {
+                continue;
+            }
+
+            if idx == FarmRedevelopment.index() && !state.can_renovate() {
+                continue;
+            }
+
+            if idx == WishForChildren.index() && !state.can_grow_family_with_room() {
+                continue;
+            }
+
+            if idx == UrgentWishForChildren.index() && !state.can_grow_family_without_room() {
+                continue;
+            }
+
+            if idx == Cultivation.index() && !state.can_sow() && state.field_options().is_empty() {
+                continue;
+            }
+
+            if idx == Lessons1.index() && state.occupations_available().is_empty() {
+                continue;
+            }
+
+            if idx == Lessons2.index() && state.occupations_available().is_empty() {
+                continue;
+            }
+            ret.push(Self::action_space_idx_to_action(idx));
         }
         ret
     }
@@ -557,157 +554,44 @@ impl Action {
         ret
     }
 
-    pub fn update_resources_on_accumulation_spaces(&self, res: &mut Resources) {
-        match self {
-            Self::UseCopse => res[Wood.index()] += 1,
-            Self::UseGrove => res[Wood.index()] += 2,
-            Self::UseForest => res[Wood.index()] += 3,
-            Self::UseHollow => res[Clay.index()] += 2,
-            Self::UseClayPit => res[Clay.index()] += 1,
-            Self::UseReedBank => res[Reed.index()] += 1,
-            Self::UseTravelingPlayers | Self::UseFishing => res[Food.index()] += 1,
-            Self::UseWesternQuarry | Self::UseEasternQuarry => res[Stone.index()] += 1,
-            Self::UseSheepMarket => res[Sheep.index()] += 1,
-            Self::UsePigMarket => res[Boar.index()] += 1,
-            Self::UseCattleMarket => res[Cattle.index()] += 1,
-            _ => (),
-        }
-    }
-
-    pub fn collect_resources(&self, state: &mut State, resource_idx: usize) {
-        let mut res = state.resource_map[resource_idx];
-        match self {
-            Self::UseCopse
-            | Self::UseGrove
-            | Self::UseForest
-            | Self::UseHollow
-            | Self::UseClayPit
-            | Self::UseReedBank
-            | Self::UseTravelingPlayers
-            | Self::UseFishing
-            | Self::UseWesternQuarry
-            | Self::UseEasternQuarry => {
-                take_resource(&res, state.current_player_quantities_mut());
-                res = new_res();
-            }
-            Self::UseSheepMarket | Self::UsePigMarket | Self::UseCattleMarket => {
-                take_resource(&res, state.current_player_quantities_mut());
-                res = new_res();
-                state.accommodate_animals(false);
-            }
-            Self::UseResourceMarket
-            | Self::UseDayLaborer
-            | Self::UseGrainSeeds
-            | Self::UseVegetableSeeds
-            | Self::UseMeetingPlace => {
-                take_resource(&res, state.current_player_quantities_mut());
-            }
-            _ => (),
-        }
-        state.resource_map[resource_idx] = res;
-    }
-
-    pub fn resource_map_idx(&self) -> Option<usize> {
-        match self {
-            Self::UseCopse => Some(0),
-            Self::UseGrove => Some(1),
-            Self::UseForest => Some(2),
-            Self::UseResourceMarket => Some(3),
-            Self::UseHollow => Some(4),
-            Self::UseClayPit => Some(5),
-            Self::UseReedBank => Some(6),
-            Self::UseTravelingPlayers => Some(7),
-            Self::UseFishing => Some(8),
-            Self::UseDayLaborer => Some(9),
-            Self::UseGrainSeeds => Some(10),
-            Self::UseMeetingPlace => Some(11),
-            Self::UseSheepMarket => Some(12),
-            Self::UseWesternQuarry => Some(13),
-            Self::UsePigMarket => Some(14),
-            Self::UseVegetableSeeds => Some(15),
-            Self::UseEasternQuarry => Some(16),
-            Self::UseCattleMarket => Some(17),
-            _ => None,
-        }
-    }
-
-    pub fn init_resource_map() -> [Resources; NUM_RESOURCE_SPACES] {
-        let mut resource_map = [new_res(); NUM_RESOURCE_SPACES];
-        resource_map[Self::UseResourceMarket.resource_map_idx().unwrap()] = {
-            let mut res = new_res();
-            res[Food.index()] = 1;
-            res[Stone.index()] = 1;
-            res[Reed.index()] = 1;
-            res
-        };
-        resource_map[Self::UseDayLaborer.resource_map_idx().unwrap()] = {
-            let mut res = new_res();
-            res[Food.index()] = 2;
-            res
-        };
-        resource_map[Self::UseGrainSeeds.resource_map_idx().unwrap()] = {
-            let mut res = new_res();
-            res[Grain.index()] = 1;
-            res
-        };
-        resource_map[Self::UseVegetableSeeds.resource_map_idx().unwrap()] = {
-            let mut res = new_res();
-            res[Vegetable.index()] = 1;
-            res
-        };
-        resource_map[Self::UseMeetingPlace.resource_map_idx().unwrap()] = {
-            let mut res = new_res();
-            res[Food.index()] = 1;
-            res
-        };
-        resource_map
-    }
-
     pub fn display(&self) {
         println!("\nChosen Action : {self:?}");
     }
 
-    pub fn initial_open_spaces() -> Vec<Self> {
-        vec![
-            Self::UseCopse,
-            Self::UseGrove,
-            Self::UseForest,
-            Self::UseResourceMarket,
-            Self::UseHollow,
-            Self::UseClayPit,
-            Self::UseReedBank,
-            Self::UseTravelingPlayers,
-            Self::UseFishing,
-            Self::UseDayLaborer,
-            Self::UseGrainSeeds,
-            Self::UseMeetingPlace,
-            Self::UseFarmland,
-            Self::UseFarmExpansion,
-            Self::UseLessons(true),
-            Self::UseLessons(false),
-        ]
-    }
-
-    // Since a Vector acts like a stack, it's easier to pop from the back.
-    // Hence, the stages are in reverse order.
-    pub fn initial_hidden_spaces() -> Vec<Vec<Self>> {
-        vec![
-            vec![Self::UseFarmRedevelopment],
-            vec![Self::UseCultivation, Self::UseUrgentWishForChildren],
-            vec![Self::UseEasternQuarry, Self::UseCattleMarket],
-            vec![Self::UsePigMarket, Self::UseVegetableSeeds],
-            vec![
-                Self::UseWesternQuarry,
-                Self::UseWishForChildren,
-                Self::UseHouseRedevelopment,
-            ],
-            vec![
-                Self::UseGrainUtilization,
-                Self::UseFencing,
-                Self::UseSheepMarket,
-                Self::UseImprovements,
-            ],
-        ]
+    fn action_space_idx_to_action(idx: usize) -> Action {
+        match idx {
+            0 => Self::UseCopse,
+            1 => Self::UseGrove,
+            2 => Self::UseForest,
+            3 => Self::UseResourceMarket,
+            4 => Self::UseHollow,
+            5 => Self::UseClayPit,
+            6 => Self::UseReedBank,
+            7 => Self::UseTravelingPlayers,
+            8 => Self::UseFishing,
+            9 => Self::UseDayLaborer,
+            10 => Self::UseGrainSeeds,
+            11 => Self::UseMeetingPlace,
+            12 => Self::UseFarmland,
+            13 => Self::UseFarmExpansion,
+            14 => Self::UseLessons(true),
+            15 => Self::UseLessons(false),
+            16 => Self::UseSheepMarket,
+            17 => Self::UseGrainUtilization,
+            18 => Self::UseFencing,
+            19 => Self::UseImprovements,
+            20 => Self::UseWishForChildren,
+            21 => Self::UseWesternQuarry,
+            22 => Self::UseHouseRedevelopment,
+            23 => Self::UsePigMarket,
+            24 => Self::UseVegetableSeeds,
+            25 => Self::UseEasternQuarry,
+            26 => Self::UseCattleMarket,
+            27 => Self::UseCultivation,
+            28 => Self::UseUrgentWishForChildren,
+            29 => Self::UseFarmRedevelopment,
+            _ => panic!("Invalid action space index"),
+        }
     }
 
     pub fn action_idx(&self) -> usize {
@@ -728,12 +612,12 @@ impl Action {
             Self::UseFarmExpansion => 13,
             Self::UseLessons(true) => 14,
             Self::UseLessons(false) => 15,
-            Self::UseGrainUtilization => 16,
-            Self::UseFencing => 17,
-            Self::UseSheepMarket => 18,
+            Self::UseSheepMarket => 16,
+            Self::UseGrainUtilization => 17,
+            Self::UseFencing => 18,
             Self::UseImprovements => 19,
-            Self::UseWesternQuarry => 20,
-            Self::UseWishForChildren => 21,
+            Self::UseWishForChildren => 20,
+            Self::UseWesternQuarry => 21,
             Self::UseHouseRedevelopment => 22,
             Self::UsePigMarket => 23,
             Self::UseVegetableSeeds => 24,
@@ -824,8 +708,25 @@ impl Action {
         }
 
         // Collect resources if possible
-        if let Some(resource_idx) = self.resource_map_idx() {
-            self.collect_resources(state, resource_idx);
+        if ACCUMULATION_SPACE_INDICES.contains(&self.action_idx()) {
+            let res = state.accumulated_resources[self.action_idx()];
+            take_resources(state.current_player_quantities_mut(), &res);
+
+            if self.action_idx() == SheepMarket.index()
+                || self.action_idx() == PigMarket.index()
+                || self.action_idx() == CattleMarket.index()
+            {
+                state.accommodate_animals(false);
+            }
+
+            state.accumulated_resources[self.action_idx()] = new_res();
+            state.set_can_renovate();
+            state.set_can_build_room();
+            state.set_can_build_stable();
+        }
+
+        if RESOURCE_SPACE_INDICES.contains(&self.action_idx()) {
+            get_resource(self.action_idx(), state.current_player_quantities_mut());
             state.set_can_renovate();
             state.set_can_build_room();
             state.set_can_build_stable();
@@ -839,13 +740,25 @@ impl Debug for Action {
             Self::UseCopse => write!(f, "Copse ({})", RESOURCE_EMOJIS[Wood.index()]),
             Self::UseGrove => write!(f, "Grove ({})", RESOURCE_EMOJIS[Wood.index()].repeat(2)),
             Self::UseForest => write!(f, "Forest ({})", RESOURCE_EMOJIS[Wood.index()].repeat(3)),
-            Self::UseResourceMarket => write!(f, "Resource Market ({} {} {})", RESOURCE_EMOJIS[Food.index()], RESOURCE_EMOJIS[Stone.index()], RESOURCE_EMOJIS[Reed.index()]),
+            Self::UseResourceMarket => write!(
+                f,
+                "Resource Market ({} {} {})",
+                RESOURCE_EMOJIS[Food.index()],
+                RESOURCE_EMOJIS[Stone.index()],
+                RESOURCE_EMOJIS[Reed.index()]
+            ),
             Self::UseHollow => write!(f, "Hollow ({})", RESOURCE_EMOJIS[Clay.index()].repeat(2)),
             Self::UseClayPit => write!(f, "Clay Pit ({})", RESOURCE_EMOJIS[Clay.index()]),
             Self::UseReedBank => write!(f, "Reed Bank ({})", RESOURCE_EMOJIS[Reed.index()]),
-            Self::UseTravelingPlayers => write!(f, "Traveling Players ({})", RESOURCE_EMOJIS[Food.index()]),
+            Self::UseTravelingPlayers => {
+                write!(f, "Traveling Players ({})", RESOURCE_EMOJIS[Food.index()])
+            }
             Self::UseFishing => write!(f, "Fishing {}", RESOURCE_EMOJIS[Food.index()]),
-            Self::UseDayLaborer => write!(f, "Day Laborer ({})", RESOURCE_EMOJIS[Food.index()].repeat(2)),
+            Self::UseDayLaborer => write!(
+                f,
+                "Day Laborer ({})",
+                RESOURCE_EMOJIS[Food.index()].repeat(2)
+            ),
             Self::UseGrainSeeds => write!(f, "Grain Seeds ({})", RESOURCE_EMOJIS[Grain.index()]),
             Self::UseMeetingPlace => write!(f, "Meeting Place"),
             Self::UseFarmland => write!(f, "Farmland"),
@@ -893,11 +806,21 @@ impl Debug for Action {
                 RESOURCE_EMOJIS[*res]
             ),
             Self::UseSheepMarket => write!(f, "Sheep Market ({})", RESOURCE_EMOJIS[Sheep.index()]),
-            Self::UseWesternQuarry => write!(f, "Western Quarry ({})", RESOURCE_EMOJIS[Stone.index()]),
+            Self::UseWesternQuarry => {
+                write!(f, "Western Quarry ({})", RESOURCE_EMOJIS[Stone.index()])
+            }
             Self::UsePigMarket => write!(f, "Pig Market ({})", RESOURCE_EMOJIS[Boar.index()]),
-            Self::UseVegetableSeeds => write!(f, "Vegetable Seeds ({})", RESOURCE_EMOJIS[Vegetable.index()]),
-            Self::UseEasternQuarry => write!(f, "Eastern Quarry ({})", RESOURCE_EMOJIS[Stone.index()]),
-            Self::UseCattleMarket => write!(f, "Cattle Market ({})", RESOURCE_EMOJIS[Cattle.index()]),
+            Self::UseVegetableSeeds => write!(
+                f,
+                "Vegetable Seeds ({})",
+                RESOURCE_EMOJIS[Vegetable.index()]
+            ),
+            Self::UseEasternQuarry => {
+                write!(f, "Eastern Quarry ({})", RESOURCE_EMOJIS[Stone.index()])
+            }
+            Self::UseCattleMarket => {
+                write!(f, "Cattle Market ({})", RESOURCE_EMOJIS[Cattle.index()])
+            }
         }
     }
 }

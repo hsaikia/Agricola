@@ -14,7 +14,7 @@ fn main() {
     let mut ai_agent = AI::new();
     let mut state = opt_state.unwrap();
     const NUM_GAMES_TO_SIMULATE: usize = 100;
-    const OPT_DEPTH: Option<usize> = Some(10);
+    const OPT_DEPTH: Option<usize> = None;
 
     loop {
         let actions = Action::next_choices(&state);

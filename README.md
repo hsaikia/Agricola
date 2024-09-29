@@ -102,20 +102,25 @@ The score/fitness probability can be given as `(x_i - a_i) / (b_i - a_i) + sqrt(
 
 ### Runtime benchmarks
 
-Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth 10): 76.32497875s
-Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth 10): 114.238166042s
-Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth None): 3151.147589625s
+#### Previous
+- Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth 10): 76.32497875s
+- Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth 10): 114.238166042s
+- Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth None): 3151.147589625s
 
-[After Major Improvements optimization]
-Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth Some(10)): 33.720103291s
-Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth Some(10)): 48.443808583s
-Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth None): 2041.044138666s
+#### After Major Improvements optimization
+- Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth Some(10)): 33.720103291s
+- Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth Some(10)): 48.443808583s
+- Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth None): 2041.044138666s
 
-[After flag/quantities refactor]
-Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth Some(10)): 194.857619166s
-Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth Some(10)): 316.395942083s
-Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth None): 768.650876208s
-Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth None): 890.991911792s
+#### After flag/quantities refactor
+- Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth Some(10)): 194.857619166s
+- Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth Some(10)): 316.395942083s
+- Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth None): 768.650876208s
+- Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth None): 890.991911792s
+
+#### After Action Space refactor
+- Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth Some(10)): 199.060876167s
+- Time taken in a 2 player MCTS AI game (Simulated Games 100, Depth None): 700.431857958s
 
 ## Misc commands
 

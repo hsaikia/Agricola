@@ -1,4 +1,5 @@
-use super::actions::{Action, NUM_RESOURCE_SPACES};
+use super::action_space::*;
+use super::actions::Action;
 use super::algorithms::PlayerType;
 use super::card::*;
 use super::display::format_resources;
@@ -13,8 +14,8 @@ use rand::Rng;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-const INITIAL_OPEN_SPACES: usize = 16;
-pub const NUM_ACTION_SPACES: usize = 30;
+// const INITIAL_OPEN_SPACES: usize = 16;
+// pub const NUM_ACTION_SPACES: usize = 30;
 const MAX_NUM_PLAYERS: usize = 4;
 const MAX_FAMILY_MEMBERS: usize = 5;
 
@@ -28,10 +29,11 @@ pub struct Event {
 #[derive(Clone, Derivative, Hash)]
 pub struct State {
     pub num_players: usize,
-    pub resource_map: [Resources; NUM_RESOURCE_SPACES],
-    pub open_spaces: Vec<Action>,
-    pub occupied_spaces: Vec<usize>,
-    pub hidden_spaces: Vec<Vec<Action>>,
+    pub current_round: usize,
+    pub accumulated_resources: [Resources; NUM_ACTION_SPACES], // Only accumulation spaces are used
+    pub action_spaces: [usize; NUM_ACTION_SPACES],
+    pub occupied: [bool; NUM_ACTION_SPACES],
+    pub harvest_done: bool,
     player_types: [PlayerType; MAX_NUM_PLAYERS],
     player_quantities: [[usize; NUM_QUANTITIES]; MAX_NUM_PLAYERS],
     player_flags: [[bool; NUM_FLAGS]; MAX_NUM_PLAYERS],
@@ -74,10 +76,14 @@ impl State {
 
         let state = State {
             num_players: players.len(),
-            resource_map: Action::init_resource_map(),
-            open_spaces: Action::initial_open_spaces(),
-            occupied_spaces: Vec::new(),
-            hidden_spaces: Action::initial_hidden_spaces(),
+            current_round: 0,
+            accumulated_resources: [[0; NUM_RESOURCES]; NUM_ACTION_SPACES],
+            action_spaces: (0..NUM_ACTION_SPACES)
+                .collect::<Vec<usize>>()
+                .try_into()
+                .unwrap(),
+            occupied: [false; NUM_ACTION_SPACES],
+            harvest_done: false,
             player_types,
             player_quantities,
             player_flags,
@@ -92,14 +98,12 @@ impl State {
         Some(state)
     }
 
-    pub fn current_round(&self) -> usize {
-        self.open_spaces.len() - INITIAL_OPEN_SPACES
-    }
-
     pub fn add_action(&mut self, action: &Action) {
         // Set space to occupied of action corresponds to an action space
         if action.action_idx() < NUM_ACTION_SPACES {
-            self.occupied_spaces.push(action.action_idx());
+            // This only works because the indices of actions and action spaces are the same.
+            // TODO : Fix this duplication
+            self.occupied[action.action_idx()] = true;
         }
 
         // Add action to the sequence of actions taken by the current player
@@ -112,12 +116,19 @@ impl State {
 
     pub fn can_init_new_round(&self) -> bool {
         // If all stages are done
-        if self.hidden_spaces.is_empty() {
+        if OPEN_SPACES + self.current_round == NUM_ACTION_SPACES {
             return false;
         }
 
         // If stages left or last stage, but harvest is yet to be completed
-        if self.hidden_spaces.last().unwrap().is_empty() {
+        if (self.current_round == 4
+            || self.current_round == 7
+            || self.current_round == 9
+            || self.current_round == 11
+            || self.current_round == 13
+            || self.current_round == 14)
+            && !self.harvest_done
+        {
             return false;
         }
         true
@@ -125,10 +136,13 @@ impl State {
 
     // When all rounds in the previous stage are played - it is time for harvest
     pub fn is_harvest(&self) -> bool {
-        if self.hidden_spaces.last().is_some() && self.hidden_spaces.last().unwrap().is_empty() {
-            return true;
-        }
-        false
+        (self.current_round == 4
+            || self.current_round == 7
+            || self.current_round == 9
+            || self.current_round == 11
+            || self.current_round == 13
+            || self.current_round == 14)
+            && !self.harvest_done
     }
 
     pub fn harvest_fields(&mut self) {
@@ -155,13 +169,6 @@ impl State {
         2 * self.current_player_quantities()[AdultMembers.index()]
             + self.current_player_quantities()[Children.index()]
             <= self.current_player_quantities()[Food.index()]
-    }
-
-    // After paying for harvest - this function needs to be called to clear the empty hidden space
-    pub fn remove_empty_stage(&mut self) {
-        if self.hidden_spaces.last().is_some() && self.hidden_spaces.last().unwrap().is_empty() {
-            self.hidden_spaces.pop();
-        }
     }
 
     pub fn can_grow_family_with_room(&self) -> bool {
@@ -279,42 +286,24 @@ impl State {
 
     pub fn init_new_round(&mut self) {
         assert!(self.can_init_new_round());
-
-        let maybe_curr_stage = self.hidden_spaces.pop();
-        if let Some(mut curr_stage) = maybe_curr_stage {
-            assert!(!curr_stage.is_empty());
-            let random_idx = rand::thread_rng().gen_range(0..curr_stage.len());
-            let last_idx = curr_stage.len() - 1;
-            curr_stage.swap(random_idx, last_idx);
-            let next_action_space = curr_stage.pop().unwrap();
-
-            // Reveal the new action space
-            self.open_spaces.push(next_action_space);
-            // Put the rest of the hidden spaces in the current stage back
-            self.hidden_spaces.push(curr_stage);
-        }
+        self.current_round += 1;
+        randomize_action_spaces(&mut self.action_spaces, self.current_round);
 
         // Reset workers
         self.reset_for_next_round();
         self.people_placed_this_round = 0;
 
-        // TODO : Reset majors if used in harvest
+        self.occupied = [false; NUM_ACTION_SPACES];
 
         // Update accumulation spaces
-        self.occupied_spaces.clear();
-        for action in &self.open_spaces {
-            if action.resource_map_idx().is_none() {
-                continue;
-            }
-            let res = &mut self.resource_map[action.resource_map_idx().unwrap()];
-            action.update_resources_on_accumulation_spaces(res);
+        for i in 0..OPEN_SPACES + self.current_round {
+            let idx = self.action_spaces[i];
+            accumulate(idx, &mut self.accumulated_resources[idx]);
         }
 
-        // Current Round
-        let current_round = self.current_round();
-
         // Delete old events
-        self.start_round_events.retain(|e| e.round >= current_round);
+        self.start_round_events
+            .retain(|e| e.round >= self.current_round);
 
         // Reset start player
         self.current_player_idx = self.starting_player_idx;
@@ -323,11 +312,14 @@ impl State {
         let start_round_events = self.start_round_events.clone();
         for event in start_round_events {
             for i in 0..self.num_players {
-                if event.round == current_round && event.player_idx == i {
+                if event.round == self.current_round && event.player_idx == i {
                     (event.func)(self.player_quantities_mut(i));
                 }
             }
         }
+
+        // Reset harvest flag
+        self.harvest_done = false;
     }
 
     pub fn add_new_field(&mut self, idx: &usize) {
@@ -533,13 +525,12 @@ impl State {
             self.current_player_cards_mut()[major_idx] = true;
 
             if major_idx == Well.index() {
-                let current_round = self.current_round();
                 let func = |res: &mut Quantities| {
                     res[Food.index()] += 1;
                 };
                 for i in 1..=5 {
                     self.start_round_events.push(Event {
-                        round: current_round + i,
+                        round: self.current_round + i,
                         player_idx: self.current_player_idx,
                         func,
                     });
@@ -559,6 +550,9 @@ impl State {
         self.current_farm_mut()
             .fence_spaces(pasture_config, &mut wood);
         self.current_player_quantities_mut()[Wood.index()] = wood;
+        // Set flags
+        self.set_can_build_stable();
+        self.set_can_build_room();
     }
 
     pub fn can_fence(&self) -> bool {
@@ -678,7 +672,11 @@ impl State {
 
         self.accommodate_animals(true);
         self.current_player_idx = (self.current_player_idx + 1) % self.num_players;
-        self.remove_empty_stage();
+
+        // When all players have paid for harvest, set the global flag to true
+        if (0..self.num_players).all(|i| self.player_flags(i)[HarvestPaid.index()]) {
+            self.harvest_done = true;
+        }
     }
 
     pub fn accommodate_animals(&mut self, breed: bool) {
@@ -832,16 +830,15 @@ impl State {
 
     pub fn format(&self) -> String {
         let mut ret: String = String::new();
-        for action in &self.open_spaces {
-            let idx = action.action_idx();
-            if self.occupied_spaces.contains(&idx) {
-                ret.push_str(&format!("\n[X] {:?} is occupied", action));
+
+        for i in (0..NUM_ACTION_SPACES).take(OPEN_SPACES + self.current_round) {
+            let idx = self.action_spaces[i];
+            if self.occupied[idx] {
+                ret.push_str(&format!("\n[X] {}", ACTION_SPACE_NAMES[idx]));
             } else {
-                ret.push_str(&format!("\n[-] {:?}", action));
-                if action.resource_map_idx().is_some() {
-                    ret.push_str(&format_resources(
-                        &self.resource_map[action.resource_map_idx().unwrap()],
-                    ));
+                ret.push_str(&format!("\n[-] {}", ACTION_SPACE_NAMES[idx]));
+                if ACCUMULATION_SPACE_INDICES.contains(&idx) {
+                    ret.push_str(&format_resources(&self.accumulated_resources[idx]));
                 }
             }
         }
