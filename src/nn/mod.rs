@@ -49,9 +49,9 @@ impl NeuralNetwork {
 
     pub fn feed_forward(&mut self, inputs: &[f32]) -> Vec<f32> {
         let mut outputs = inputs.to_vec();
-        for layer in self.layers.iter_mut() {
+        for layer in &mut self.layers {
             let mut new_outputs = Vec::new();
-            for neuron in layer.neurons.iter_mut() {
+            for neuron in &mut layer.neurons {
                 let mut sum = 1.0; // Bias
                 for (input, weight) in outputs.iter().zip(neuron.input_weights.iter()) {
                     sum += input * weight;
@@ -83,7 +83,7 @@ impl NeuralNetwork {
     fn calculate_hidden_layer_error(layer1: &mut Layer, layer2: &Layer) {
         for (i, neuron1) in layer1.neurons.iter_mut().enumerate() {
             let mut sum = 0.0;
-            for neuron2 in layer2.neurons.iter() {
+            for neuron2 in &layer2.neurons {
                 sum += neuron2.error * neuron2.input_weights[i];
             }
             neuron1.error = sum;
@@ -98,8 +98,8 @@ impl NeuralNetwork {
             NeuralNetwork::calculate_hidden_layer_error(&mut layer1[0], &layer2[0]);
         }
         let mut outputs = inputs.to_vec();
-        for layer in self.layers.iter_mut() {
-            for neuron in layer.neurons.iter_mut() {
+        for layer in &mut self.layers {
+            for neuron in &mut layer.neurons {
                 for (i, input) in outputs.iter().enumerate() {
                     neuron.input_weights[i] -=
                         learning_rate * neuron.error * input * neuron.gradient;

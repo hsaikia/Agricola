@@ -65,8 +65,8 @@ fn merge_stats(overall: &mut [Statistics], new_stat: &[Statistics]) {
     }
 }
 
-fn add_to_stats(stats: &mut Vec<Statistics>, state: &State, action: &Action) {
-    for stat in stats {
+fn add_to_stats(statistics: &mut Vec<Statistics>, state: &State, action: &Action) {
+    for stat in statistics {
         if stat.pattern.matching(state, action) {
             stat.appeared[state.current_player_idx] += 1;
         }
@@ -76,7 +76,7 @@ fn add_to_stats(stats: &mut Vec<Statistics>, state: &State, action: &Action) {
 fn sim_one_game(players: &[PlayerType]) -> Vec<Statistics> {
     let opt_state = State::new(players);
     let mut state = opt_state.unwrap();
-    let mut stats = empty_stats(players.len());
+    let mut statistics = empty_stats(players.len());
 
     loop {
         let choices = Action::next_choices(&state);
@@ -93,30 +93,30 @@ fn sim_one_game(players: &[PlayerType]) -> Vec<Statistics> {
         };
 
         choices[action_idx].apply_choice(&mut state);
-        add_to_stats(&mut stats, &state, &choices[action_idx]);
+        add_to_stats(&mut statistics, &state, &choices[action_idx]);
     }
 
     let fitness = state.fitness();
 
-    for stat in stats.iter_mut() {
-        stat.average_fitness = fitness.clone();
+    for stat in &mut statistics {
+        stat.average_fitness.clone_from(&fitness);
     }
 
-    stats
+    statistics
 }
 
 fn main() {
+    const NUM_SIMS: usize = 100;
     env::set_var("RUN_BACKTRACE", "1");
     let players = vec![PlayerType::MCTSMachine, PlayerType::MCTSMachine];
 
-    let mut stats = empty_stats(players.len());
-    const NUM_SIMS: usize = 100;
+    let mut statistics = empty_stats(players.len());
 
     for i in 0..NUM_SIMS {
-        println!("#{} {:?}", i, stats);
+        println!("#{i} {statistics:?}");
         let stat = sim_one_game(&players);
-        merge_stats(&mut stats, &stat);
+        merge_stats(&mut statistics, &stat);
     }
 
-    println!("{:?}", stats);
+    println!("{statistics:?}");
 }

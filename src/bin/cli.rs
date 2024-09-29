@@ -103,13 +103,13 @@ impl App {
         let mut ret: String = "Choose the Player Types : ".to_string();
         for (i, player_selection) in self.player_selections.iter().enumerate() {
             if i == self.selection_x {
-                ret = format!("{ret}[{:?}] ", player_selection);
+                ret.push_str(&format!("[{player_selection:?}] "));
             } else {
-                ret = format!("{ret}{:?} ", player_selection);
+                ret.push_str(&format!("{player_selection:?} "));
             }
         }
 
-        ret = format!("{ret}\nPress 'Enter' to Start a New Game ");
+        ret.push_str("\nPress 'Enter' to Start a New Game ");
         ret
     }
 
@@ -162,7 +162,7 @@ impl App {
             match player_selection {
                 PlayerSelection::Human => players.push(PlayerType::Human),
                 PlayerSelection::MctsAI => players.push(PlayerType::MCTSMachine),
-                _ => (),
+                PlayerSelection::Empty => (),
             }
         }
         self.ai.cache.clear();
@@ -189,12 +189,12 @@ impl App {
                 PlayerType::Human => {
                     for (i, action) in self.current_actions.iter().enumerate() {
                         if i == self.selection_y {
-                            ret = format!("{}\n>> {:?}", ret, action);
+                            ret.push_str(&format!("\n>> {action:?}"));
                             if let Action::Fence(_) = action {
                                 additional_stuff = display_farm(state, state.current_player_idx);
                             }
                         } else {
-                            ret = format!("{}\n{:?}", ret, action);
+                            ret.push_str(&format!("\n{action:?}"));
                         }
                     }
                 }
@@ -227,7 +227,7 @@ impl App {
                 }
             }
 
-            ret = format!("{ret}\n\n\n{}", additional_stuff);
+            ret = format!("{ret}\n\n\n{additional_stuff}");
         }
         ret
     }
@@ -355,7 +355,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         f.render_widget(text, chunks[0]);
 
         // Player farms
-        let n = state.num_players as u16;
+        let n = u16::try_from(state.num_players).unwrap();
         let padding: u16 = 2;
         let board_size = (100 - padding * (n - 1)) / n;
         let mut constraints = vec![Constraint::Percentage(board_size)];

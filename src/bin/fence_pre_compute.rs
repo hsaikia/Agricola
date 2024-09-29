@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use agricola_game::agricola::{farm::FarmyardSpace, fencing::*};
+use agricola_game::agricola::{
+    farm::FarmyardSpace,
+    fencing::{get_all_pasture_configs, pasture_sizes_from_hash, PastureConfig},
+};
 
 // fn test1() -> Vec<PastureConfig> {
 //     let mut farmyard_spaces = [FarmyardSpace::Empty; 15];
@@ -25,7 +28,7 @@ fn test2() -> Vec<PastureConfig> {
 fn main() {
     let pasture_configs = test2();
     let mut size_config_map: HashMap<u64, Vec<PastureConfig>> = HashMap::new();
-    for pasture_config in pasture_configs.iter() {
+    for pasture_config in &pasture_configs {
         println!(
             "Pastures {:?} Wood {} Sizes {:?}",
             pasture_config.pastures,
@@ -38,7 +41,7 @@ fn main() {
             .push(pasture_config.clone());
     }
 
-    for (k, v) in size_config_map.iter() {
+    for (k, v) in &size_config_map {
         println!(
             "Pasture size {:?} configs {}",
             pasture_sizes_from_hash(*k),
