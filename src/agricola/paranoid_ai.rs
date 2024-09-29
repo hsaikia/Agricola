@@ -6,10 +6,10 @@ pub fn search(
     state: &State,
     player_idx: usize,
     depth: u8,
-    alpha: &mut f32,
-    beta: &mut f32,
+    alpha: &mut f64,
+    beta: &mut f64,
     num_seen: &mut usize,
-) -> f32 {
+) -> f64 {
     if depth == MAX_DEPTH {
         return state.scores()[player_idx];
     }
@@ -27,7 +27,7 @@ pub fn search(
     }
 
     if state.current_player_idx == player_idx {
-        let mut best: f32 = -100000.0;
+        let mut best: f64 = -100_000.0;
         for action in &actions {
             let mut state_tmp = state.clone();
             action.apply_choice(&mut state_tmp);
@@ -44,7 +44,7 @@ pub fn search(
         }
         best
     } else {
-        let mut best: f32 = 100000.0;
+        let mut best: f64 = 100_000.0;
         for action in &actions {
             let mut state_tmp = state.clone();
             action.apply_choice(&mut state_tmp);
@@ -63,6 +63,7 @@ pub fn search(
     }
 }
 
+#[must_use]
 pub fn best_move(state: &State) -> Option<Action> {
     let actions = Action::next_choices(state);
     if actions.is_empty() {
@@ -77,7 +78,7 @@ pub fn best_move(state: &State) -> Option<Action> {
     let player_idx = state.current_player_idx;
 
     let mut best_action: Option<Action> = None;
-    let mut best: f32 = -100000.0;
+    let mut best: f64 = -100_000.0;
     let mut num_seen: usize = 0;
 
     for action in &actions {
@@ -87,8 +88,8 @@ pub fn best_move(state: &State) -> Option<Action> {
             &state_tmp,
             player_idx,
             0,
-            &mut -100000.0,
-            &mut 100000.0,
+            &mut -100_000.0,
+            &mut 100_000.0,
             &mut num_seen,
         );
         if best < v {
@@ -97,10 +98,7 @@ pub fn best_move(state: &State) -> Option<Action> {
         }
     }
 
-    println!(
-        "Player {} chooses Action {:?}. Position searched {}",
-        player_idx, best_action, num_seen
-    );
+    println!("Player {player_idx} chooses Action {best_action:?}. Position searched {num_seen}");
 
     best_action
 }

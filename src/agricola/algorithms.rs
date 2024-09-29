@@ -11,7 +11,7 @@ pub enum PlayerType {
 #[derive(Clone)]
 pub struct SimulationRecord {
     pub games: usize,
-    pub fitness: f32,
+    pub fitness: f64,
     pub action: Action,
     pub action_hash: u64,
 }
@@ -29,6 +29,7 @@ impl Default for AI {
 }
 
 impl AI {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             num_games_sampled: 0,
@@ -56,6 +57,9 @@ impl AI {
         }
     }
 
+    /// # Panics
+    /// If `partial_cmp` fails
+    #[must_use]
     pub fn sorted_records(&self) -> Vec<SimulationRecord> {
         let mut records = self.records.clone();
         records.sort_by(|a, b| b.fitness.partial_cmp(&a.fitness).unwrap());
@@ -106,7 +110,7 @@ impl AI {
                 let selected_sub_action =
                     GameRecord::choose_uct(tmp_game.current_player_idx, &sub_records, &self.cache);
                 if debug {
-                    print!("{:?}", selected_sub_action);
+                    print!("{selected_sub_action:?}");
                 }
                 selected_sub_action.apply_choice(&mut tmp_game);
             }

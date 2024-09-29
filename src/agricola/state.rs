@@ -1,12 +1,29 @@
-use super::action_space::*;
+use super::action_space::{
+    accumulate, randomize_action_spaces, ACCUMULATION_SPACE_INDICES, ACTION_SPACE_NAMES,
+    NUM_ACTION_SPACES, OPEN_SPACES,
+};
 use super::actions::Action;
 use super::algorithms::PlayerType;
-use super::card::*;
+use super::card::{
+    cost, points, Card, ClayOven, CookingHearth1, CookingHearth2, Fireplace1, Fireplace2,
+    StoneOven, Well, BAKING_IMPROVEMENTS_INDICES, CARD_NAMES, COOKING_HEARTH_INDICES,
+    COOKING_IMPROVEMENTS_INDICES, FIREPLACE_INDICES, MAJOR_IMPROVEMENTS_INDICES, NUM_CARDS,
+    OCCUPATIONS_INDICES,
+};
 use super::display::format_resources;
 use super::farm::{Farm, Seed};
 use super::fencing::PastureConfig;
-use super::flag::*;
-use super::quantity::*;
+use super::flag::{
+    BakedOnceWithClayOven, BakedOnceWithStoneOven, BakedTwiceWithStoneOven, BeforeRoundStart,
+    CanBuildRoom, CanBuildStable, CanRenovate, ClayHouse, Flag, HarvestPaid, HasCookingImprovement,
+    HasRoomToGrow, StoneHouse, UsedBasketmakersWorkshop, UsedJoinery, UsedPottery, WoodHouse,
+    NUM_FLAGS,
+};
+use super::quantity::{
+    can_pay_for_resource, pay_for_resource, AdultMembers, BeggingTokens, Boar, Cattle, Children,
+    Clay, Food, Grain, MembersPlacedThisRound, Quantities, Quantity, Reed, ResourceExchange,
+    Resources, Rooms, Sheep, Stone, Vegetable, Wood, NUM_QUANTITIES, NUM_RESOURCES,
+};
 use super::scoring::score_farm;
 use core::panic;
 use derivative::Derivative;
@@ -18,6 +35,7 @@ use std::hash::{Hash, Hasher};
 // pub const NUM_ACTION_SPACES: usize = 30;
 const MAX_NUM_PLAYERS: usize = 4;
 const MAX_FAMILY_MEMBERS: usize = 5;
+const EPSILON: f64 = 1e-6;
 
 #[derive(Clone, Hash, Debug)]
 pub struct Event {
@@ -47,6 +65,9 @@ pub struct State {
 }
 
 impl State {
+    /// # Panics
+    /// Will panic if initialization fails
+    #[must_use]
     pub fn new(players: &[PlayerType]) -> Option<Self> {
         if players.is_empty() {
             return None;
@@ -110,10 +131,12 @@ impl State {
         self.last_action = action.clone();
     }
 
+    #[must_use]
     pub fn harvest_paid(&self) -> bool {
         self.current_player_flags()[HarvestPaid.index()]
     }
 
+    #[must_use]
     pub fn can_init_new_round(&self) -> bool {
         // If all stages are done
         if OPEN_SPACES + self.current_round == NUM_ACTION_SPACES {
@@ -135,6 +158,7 @@ impl State {
     }
 
     // When all rounds in the previous stage are played - it is time for harvest
+    #[must_use]
     pub fn is_harvest(&self) -> bool {
         (self.current_round == 4
             || self.current_round == 7
@@ -155,6 +179,7 @@ impl State {
         }
     }
 
+    #[must_use]
     pub fn family_members(&self, player_idx: usize) -> usize {
         self.player_quantities(player_idx)[AdultMembers.index()]
             + self.player_quantities(player_idx)[Children.index()]
@@ -165,17 +190,21 @@ impl State {
             + self.current_player_quantities()[Children.index()]
     }
 
+    #[must_use]
     pub fn got_enough_food(&self) -> bool {
         2 * self.current_player_quantities()[AdultMembers.index()]
             + self.current_player_quantities()[Children.index()]
             <= self.current_player_quantities()[Food.index()]
     }
 
+    #[must_use]
     pub fn can_grow_family_with_room(&self) -> bool {
         self.family_members(self.current_player_idx) < MAX_FAMILY_MEMBERS
             && self.current_player_flags()[HasRoomToGrow.index()]
     }
 
+    /// # Panics
+    /// Will panic if the family cannot grow without room
     pub fn grow_family_with_room(&mut self) {
         assert!(self.can_grow_family_with_room());
         self.current_player_quantities_mut()[Children.index()] += 1;
@@ -186,6 +215,7 @@ impl State {
         }
     }
 
+    #[must_use]
     pub fn get_hash(&self) -> u64 {
         let mut s = DefaultHasher::new();
         self.hash(&mut s);
@@ -220,11 +250,15 @@ impl State {
         }
     }
 
+    #[must_use]
     pub fn player_type(&self, player_idx: usize) -> PlayerType {
         self.player_types[player_idx]
     }
 
-    pub fn fitness(&self) -> Vec<f32> {
+    /// # Panics
+    /// Will panic if partial comparison fails
+    #[must_use]
+    pub fn fitness(&self) -> Vec<f64> {
         let scores = self.scores();
 
         if scores.len() == 1 {
@@ -240,7 +274,7 @@ impl State {
         // Fitness of winner is defined by the margin of victory = so difference from own score and second best score
         // Fitness of losers are defined by the margin of defeat = so difference from own score and best score
         for f in &mut fitness {
-            if *f == sorted_scores[0] {
+            if (*f - sorted_scores[0]).abs() < EPSILON {
                 // winner
                 *f -= sorted_scores[1];
             } else {
@@ -250,6 +284,7 @@ impl State {
         fitness
     }
 
+    #[allow(clippy::cast_possible_wrap)]
     fn score_majors(&self) -> [i32; MAX_NUM_PLAYERS] {
         let mut ret: [i32; MAX_NUM_PLAYERS] = [0; MAX_NUM_PLAYERS];
         for (i, val) in ret.iter_mut().enumerate().take(self.num_players) {
@@ -262,11 +297,12 @@ impl State {
         ret
     }
 
-    pub fn scores(&self) -> Vec<f32> {
-        let mut scores: Vec<f32> = Vec::new();
+    #[must_use]
+    pub fn scores(&self) -> Vec<f64> {
+        let mut scores: Vec<f64> = Vec::new();
         let card_scores = self.score_majors();
         for (idx, card_score) in card_scores.iter().enumerate().take(self.num_players) {
-            scores.push(self.score(idx) + *card_score as f32);
+            scores.push(self.score(idx) + f64::from(*card_score));
         }
         scores
     }
@@ -284,6 +320,9 @@ impl State {
         });
     }
 
+    /// # Panics
+    ///
+    /// Will panic if a new round cannot be initialized
     pub fn init_new_round(&mut self) {
         assert!(self.can_init_new_round());
         self.current_round += 1;
@@ -326,6 +365,7 @@ impl State {
         self.current_farm_mut().add_field(*idx);
     }
 
+    #[must_use]
     pub fn field_options(&self) -> Vec<usize> {
         self.current_farm().possible_field_positions()
     }
@@ -339,6 +379,7 @@ impl State {
         false
     }
 
+    #[must_use]
     pub fn available_majors_to_build(&self) -> [bool; NUM_CARDS] {
         let mut available: [bool; NUM_CARDS] = [false; NUM_CARDS];
 
@@ -398,11 +439,14 @@ impl State {
                 && self.current_player_quantities()[Reed.index()] >= 2;
     }
 
+    #[must_use]
     pub fn can_build_room(&self) -> bool {
         self.current_player_flags()[CanBuildRoom.index()]
     }
 
-    // Builds a single room
+    /// Builds a single room
+    /// # Panics
+    /// Will panic if the player cannot build a room
     pub fn build_room(&mut self, idx: &usize) {
         assert!(self.can_build_room());
         // By default Rooms cost 5 of the corresponding building resource (as the material of the house and 2 Reed)
@@ -430,6 +474,7 @@ impl State {
         self.set_can_build_stable();
     }
 
+    #[must_use]
     pub fn room_options(&self) -> Vec<usize> {
         if self.can_build_room() {
             return self.current_farm().possible_room_positions();
@@ -443,11 +488,14 @@ impl State {
                 && self.current_farm().can_build_stable();
     }
 
+    #[must_use]
     pub fn can_build_stable(&self) -> bool {
         self.current_player_flags()[CanBuildStable.index()]
     }
 
-    // Builds a single stable
+    /// Builds a single stable
+    /// # Panics
+    /// Will panic if the player cannot build a stable
     pub fn build_stable(&mut self, idx: &usize) {
         assert!(self.can_build_stable());
         self.current_player_quantities_mut()[Wood.index()] -= 2;
@@ -457,6 +505,7 @@ impl State {
         self.set_can_build_room();
     }
 
+    #[must_use]
     pub fn stable_options(&self) -> Vec<usize> {
         if self.can_build_stable() {
             return self.current_farm().possible_stable_positions();
@@ -475,6 +524,7 @@ impl State {
                             >= self.current_player_quantities()[Rooms.index()]));
     }
 
+    #[must_use]
     pub fn can_renovate(&self) -> bool {
         self.current_player_flags()[CanRenovate.index()]
     }
@@ -489,6 +539,8 @@ impl State {
         }
     }
 
+    /// # Panics
+    /// Will panic if the player cannot renovate
     pub fn renovate(&mut self) {
         assert!(self.current_player_flags()[CanRenovate.index()]);
         // TODO for cards like Conservator this must be implemented in a more general way
@@ -539,11 +591,14 @@ impl State {
         }
     }
 
+    #[must_use]
     pub fn fencing_choices(&self) -> Vec<PastureConfig> {
         self.current_farm()
             .fencing_options(self.current_player_quantities()[Wood.index()])
     }
 
+    /// # Panics
+    /// Will panic if the player cannot fence
     pub fn fence(&mut self, pasture_config: &PastureConfig) {
         assert!(self.can_fence());
         let mut wood = self.current_player_quantities()[Wood.index()];
@@ -555,6 +610,7 @@ impl State {
         self.set_can_build_room();
     }
 
+    #[must_use]
     pub fn can_fence(&self) -> bool {
         !self
             .current_farm()
@@ -562,16 +618,20 @@ impl State {
             .is_empty()
     }
 
+    #[must_use]
     pub fn can_use_exchange(&self, res_ex: &ResourceExchange) -> bool {
         self.current_player_quantities()[res_ex.from] >= res_ex.num_from
     }
 
+    /// # Panics
+    /// Will panic if the player cannot use the exchange
     pub fn use_exchange(&mut self, res_ex: &ResourceExchange) {
         assert!(self.can_use_exchange(res_ex));
         self.current_player_quantities_mut()[res_ex.from] -= res_ex.num_from;
         self.current_player_quantities_mut()[res_ex.to] += res_ex.num_to;
     }
 
+    #[must_use]
     pub fn has_resources_to_cook(&self) -> bool {
         self.current_player_quantities()[Sheep.index()]
             + self.current_player_quantities()[Boar.index()]
@@ -580,6 +640,7 @@ impl State {
             > 0
     }
 
+    #[must_use]
     pub fn can_bake_bread(&self, player_idx: usize) -> bool {
         // Check if any of the baking improvements are present
         // And at least one grain in supply
@@ -597,12 +658,15 @@ impl State {
         }
     }
 
+    #[must_use]
     pub fn can_sow(&self) -> bool {
         (self.current_player_quantities()[Grain.index()] > 0
             || self.current_player_quantities()[Vegetable.index()] > 0)
             && self.current_farm().can_sow()
     }
 
+    /// # Panics
+    /// Will panic if the player cannot bake
     pub fn bake_bread(&mut self, num_grain_to_bake: usize) {
         assert!(self.can_bake_bread(self.current_player_idx));
         let mut num_grain_to_bake = num_grain_to_bake;
@@ -645,6 +709,7 @@ impl State {
         self.current_player_flags_mut()[BakedTwiceWithStoneOven.index()] = false;
     }
 
+    #[must_use]
     pub fn all_people_placed(&self) -> bool {
         self.current_player_quantities()[MembersPlacedThisRound.index()]
             == self.current_player_quantities()[AdultMembers.index()]
@@ -727,6 +792,7 @@ impl State {
         *self.current_player_quantities_mut() = quantites;
     }
 
+    #[must_use]
     pub fn total_workers(&self) -> usize {
         self.player_quantities
             .iter()
@@ -734,18 +800,21 @@ impl State {
             .sum()
     }
 
+    #[must_use]
     pub fn before_round_start(&self) -> bool {
         self.current_player_flags()[BeforeRoundStart.index()]
     }
 
-    pub fn score(&self, player_idx: usize) -> f32 {
-        let mut ret: f32 = 0.0;
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)]
+    pub fn score(&self, player_idx: usize) -> f64 {
+        let mut ret: f64 = 0.0;
         // House, Family and Empty Spaces
-        ret += 3.0 * self.family_members(player_idx) as f32;
+        ret += 3.0 * self.family_members(player_idx) as f64;
         // Begging Tokens
-        ret -= 3.0 * self.player_quantities(player_idx)[BeggingTokens.index()] as f32;
+        ret -= 3.0 * self.player_quantities(player_idx)[BeggingTokens.index()] as f64;
         // Score farm
-        ret += score_farm(self, player_idx) as f32;
+        ret += f64::from(score_farm(self, player_idx));
 
         ret
     }
@@ -768,11 +837,14 @@ impl State {
         }
     }
 
+    /// # Panics
+    /// Will panic if the assertion fails
     pub fn grow_family_without_room(&mut self) {
         assert!(self.can_grow_family_without_room());
         self.current_player_quantities_mut()[Children.index()] += 1;
     }
 
+    #[must_use]
     pub fn can_grow_family_without_room(&self) -> bool {
         self.family_members(self.current_player_idx) < MAX_FAMILY_MEMBERS
     }
@@ -785,6 +857,7 @@ impl State {
         }
     }
 
+    #[must_use]
     pub fn num_occupations_played(&self) -> usize {
         OCCUPATIONS_INDICES.iter().fold(0, |acc, idx| {
             if self.player_cards[self.current_player_idx][*idx] {
@@ -795,6 +868,7 @@ impl State {
         })
     }
 
+    #[must_use]
     pub fn can_play_occupation(&self, cheaper: bool) -> bool {
         let mut required_food = if cheaper { 1 } else { 2 };
         if self.num_occupations_played() == 0 && cheaper {
@@ -828,6 +902,9 @@ impl State {
         false
     }
 
+    /// # Panics
+    /// Will panic if a card has a wrong player idx
+    #[must_use]
     pub fn format(&self) -> String {
         let mut ret: String = String::new();
 
@@ -847,7 +924,7 @@ impl State {
 
         for (card_idx, card_name) in CARD_NAMES.iter().enumerate() {
             if self.card_available(card_idx) {
-                ret.push_str(&format!("\n[-] {}", card_name));
+                ret.push_str(&format!("\n[-] {card_name}"));
             } else {
                 let owner_idx = (0..self.num_players)
                     .find(|i| self.player_cards[*i][card_idx])
@@ -863,10 +940,12 @@ impl State {
         ret
     }
 
+    #[must_use]
     pub fn card_available(&self, card_idx: usize) -> bool {
         (0..self.num_players).all(|i| !self.player_cards[i][card_idx])
     }
 
+    #[must_use]
     pub fn occupations_available(&self) -> Vec<usize> {
         OCCUPATIONS_INDICES
             .iter()
@@ -875,6 +954,7 @@ impl State {
             .collect()
     }
 
+    #[must_use]
     pub fn player_quantities(&self, player_idx: usize) -> &[usize; NUM_QUANTITIES] {
         &self.player_quantities[player_idx]
     }
@@ -883,6 +963,7 @@ impl State {
         &mut self.player_quantities[player_idx]
     }
 
+    #[must_use]
     pub fn player_flags(&self, player_idx: usize) -> &[bool; NUM_FLAGS] {
         &self.player_flags[player_idx]
     }
@@ -891,6 +972,7 @@ impl State {
         &mut self.player_flags[player_idx]
     }
 
+    #[must_use]
     pub fn current_player_quantities(&self) -> &[usize; NUM_QUANTITIES] {
         &self.player_quantities[self.current_player_idx]
     }
@@ -899,6 +981,7 @@ impl State {
         &mut self.player_quantities[self.current_player_idx]
     }
 
+    #[must_use]
     pub fn current_player_flags(&self) -> &[bool; NUM_FLAGS] {
         &self.player_flags[self.current_player_idx]
     }
@@ -907,6 +990,7 @@ impl State {
         &mut self.player_flags[self.current_player_idx]
     }
 
+    #[must_use]
     pub fn player_cards(&self, player_idx: usize) -> &[bool; NUM_CARDS] {
         &self.player_cards[player_idx]
     }
@@ -915,6 +999,7 @@ impl State {
         &mut self.player_cards[player_idx]
     }
 
+    #[must_use]
     pub fn current_player_cards(&self) -> &[bool; NUM_CARDS] {
         &self.player_cards[self.current_player_idx]
     }
@@ -923,6 +1008,7 @@ impl State {
         &mut self.player_cards[self.current_player_idx]
     }
 
+    #[must_use]
     pub fn current_farm(&self) -> &Farm {
         self.player_farm(self.current_player_idx)
     }
@@ -931,6 +1017,7 @@ impl State {
         &mut self.farms[self.current_player_idx]
     }
 
+    #[must_use]
     pub fn player_farm(&self, player_idx: usize) -> &Farm {
         &self.farms[player_idx]
     }

@@ -1,10 +1,10 @@
-use super::flag::*;
+use super::flag::{ClayHouse, Flag};
 use crate::agricola::{fencing::MAX_PASTURES, flag::WoodHouse};
 
 use super::{
     card::CARD_NAMES,
     farm::{FarmyardSpace, L, W},
-    quantity::*,
+    quantity::{AdultMembers, Children, Quantity, Resources, NUM_RESOURCES},
     state::State,
 };
 
@@ -21,23 +21,25 @@ pub const RESOURCE_EMOJIS: [&str; NUM_RESOURCES] = [
     "\u{1f404}",
 ];
 
-pub fn format_resources(res: &Resources) -> String {
+#[must_use]
+pub fn format_resources(resource: &Resources) -> String {
     let mut ret = String::new();
-    let available = res.iter().enumerate().filter(|&(_, x)| x > &0);
+    let available = resource.iter().enumerate().filter(|&(_, x)| x > &0);
     for (i, n) in available {
         if !ret.is_empty() {
-            ret = format!("{} +", ret);
+            ret.push_str(" +");
         }
-        ret = format!("{} {}{}", ret, n, RESOURCE_EMOJIS[i]);
+        ret.push_str(&format!(" {}{}", n, RESOURCE_EMOJIS[i]));
     }
     ret
 }
 
-pub fn display_resources(state: &State, player_idx: usize) -> String {
-    let res = state.player_quantities(player_idx);
+#[must_use]
+pub fn print_resources(state: &State, player_idx: usize) -> String {
+    let resource = state.player_quantities(player_idx);
     let mut ret = String::from("\n");
 
-    for (i, num_res) in res.iter().take(NUM_RESOURCES).enumerate() {
+    for (i, num_res) in resource.iter().take(NUM_RESOURCES).enumerate() {
         if num_res == &0 {
             continue;
         }
@@ -67,7 +69,12 @@ pub fn display_resources(state: &State, player_idx: usize) -> String {
     ret
 }
 
-pub fn display_farm(state: &State, player_idx: usize) -> String {
+#[must_use]
+pub fn print_farm(state: &State, player_idx: usize) -> String {
+    const PASTURE_EMOJIS: [[&str; MAX_PASTURES]; 2] = [
+        ["[p1]", "[p2]", "[p3]", "[p4]"],
+        ["[P1]", "[P2]", "[P3]", "[P4]"],
+    ];
     let mut ret = String::from("\n\n\n");
 
     let room_emoji = if state.player_flags(player_idx)[WoodHouse.index()] {
@@ -77,11 +84,6 @@ pub fn display_farm(state: &State, player_idx: usize) -> String {
     } else {
         "[SR]"
     };
-
-    const PASTURE_EMOJIS: [[&str; MAX_PASTURES]; 2] = [
-        ["[p1]", "[p2]", "[p3]", "[p4]"],
-        ["[P1]", "[P2]", "[P3]", "[P4]"],
-    ];
 
     for i in 0..W {
         for j in 0..L {

@@ -24,7 +24,13 @@ fn dsigmoid(y: f32) -> f32 {
     y * (1.0 - y)
 }
 
+/// A simple feedforward neural network
 impl NeuralNetwork {
+    /// # Panics
+    ///
+    /// If `rand_distr::Normal::new` fails
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)]
     pub fn new(layer_sizes: &[usize]) -> Self {
         let mut rng = rand::thread_rng();
 

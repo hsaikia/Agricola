@@ -168,10 +168,12 @@ impl QuantitiesImpl for Quantities {
     }
 }
 
+#[must_use]
 pub fn new_res() -> Resources {
     [0; NUM_RESOURCES]
 }
 
+#[must_use]
 pub fn can_pay_for_resource(cost: &Resources, store: &Quantities) -> bool {
     for it in cost.iter().zip(store.iter()).take(NUM_RESOURCES) {
         let (a, b) = it;
@@ -182,6 +184,8 @@ pub fn can_pay_for_resource(cost: &Resources, store: &Quantities) -> bool {
     true
 }
 
+/// # Panics
+/// If assertion `can_pay_for_resource` returns false
 pub fn pay_for_resource(cost: &Resources, store: &mut Quantities) {
     assert!(can_pay_for_resource(cost, store));
     for it in cost.iter().zip(store.iter_mut()).take(NUM_RESOURCES) {

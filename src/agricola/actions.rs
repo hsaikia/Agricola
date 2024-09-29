@@ -1,10 +1,22 @@
-use super::action_space::*;
-use super::card::*;
+use super::action_space::{
+    get_resource, take_resources, ActionSpace, CattleMarket, Cultivation, FarmExpansion,
+    FarmRedevelopment, Farmland, Fencing, GrainUtilization, HouseRedevelopment, Improvements,
+    Lessons1, Lessons2, PigMarket, SheepMarket, UrgentWishForChildren, WishForChildren,
+    ACCUMULATION_SPACE_INDICES, OPEN_SPACES, RESOURCE_SPACE_INDICES,
+};
+use super::card::{
+    anytime_exchanges, cost, harvest_exchanges, AssistantTiller, BasketmakersWorkshop, Card,
+    Childless, ClayOven, CookingHearth1, CookingHearth2, Fireplace1, Fireplace2, Joinery, Pottery,
+    StoneOven, BAKING_IMPROVEMENTS_INDICES, CARD_NAMES, MAJOR_IMPROVEMENTS_INDICES,
+};
 use super::display::RESOURCE_EMOJIS;
 use super::farm::Seed;
 use super::fencing::PastureConfig;
-use super::flag::*;
-use super::quantity::*;
+use super::flag::{BeforeRoundStart, Flag, UsedBasketmakersWorkshop, UsedJoinery, UsedPottery};
+use super::quantity::{
+    can_pay_for_resource, new_res, Boar, Cattle, Clay, Food, Grain, Quantity, Reed,
+    ResourceExchange, Sheep, Stone, Vegetable, Wood,
+};
 use super::state::State;
 use std::fmt::Debug;
 use std::fmt::Formatter;
@@ -97,6 +109,7 @@ pub enum Action {
 
 impl Action {
     #[allow(clippy::too_many_lines)]
+    #[must_use]
     pub fn next_choices(state: &State) -> Vec<Self> {
         let mut ret: Vec<Self> = Vec::new();
         match &state.last_action {
@@ -171,12 +184,12 @@ impl Action {
                     &CalledFromGrainUtilization(false, true),
                 ));
                 let field_opt = state.field_options();
-                if !field_opt.is_empty() {
+                if field_opt.is_empty() {
+                    ret.push(Self::EndTurn);
+                } else {
                     for opt in field_opt {
                         ret.push(Self::Plow(CalledFromCultivation(true), opt));
                     }
-                } else {
-                    ret.push(Self::EndTurn);
                 }
                 ret
             }
@@ -299,7 +312,7 @@ impl Action {
         ret
     }
 
-    fn anytime_conversions(state: &State, stage: &ConversionStage) -> Vec<Self> {
+    fn anytime_conversions(state: &State, conversion_stage: &ConversionStage) -> Vec<Self> {
         let mut ret: Vec<Self> = Vec::new();
         if state.current_player_quantities()[Grain.index()] > 0 {
             ret.push(Self::Convert(
@@ -310,7 +323,7 @@ impl Action {
                     num_to: 1,
                 },
                 None,
-                stage.clone(),
+                conversion_stage.clone(),
             ));
         }
 
@@ -323,7 +336,7 @@ impl Action {
                     num_to: 1,
                 },
                 None,
-                stage.clone(),
+                conversion_stage.clone(),
             ));
         }
 
@@ -331,7 +344,7 @@ impl Action {
             if *owned {
                 for exchange in anytime_exchanges(idx) {
                     if state.can_use_exchange(&exchange) {
-                        ret.push(Self::Convert(exchange, None, stage.clone()));
+                        ret.push(Self::Convert(exchange, None, conversion_stage.clone()));
                     }
                 }
             }
@@ -594,6 +607,7 @@ impl Action {
         }
     }
 
+    #[must_use]
     pub fn action_idx(&self) -> usize {
         match self {
             Self::UseCopse => 0,
@@ -774,19 +788,19 @@ impl Debug for Action {
             Self::UseFarmRedevelopment => write!(f, "Farm Redevelopment"),
             Self::StartRound => write!(f, "Start Round"),
             Self::PlaceWorker => write!(f, "Place Worker"),
-            Self::BuildRoom(idx) => write!(f, "Build Room ({})", idx),
-            Self::BuildStable(idx) => write!(f, "Build Stable ({})", idx),
+            Self::BuildRoom(idx) => write!(f, "Build Room ({idx})"),
+            Self::BuildStable(idx) => write!(f, "Build Stable ({idx})"),
             Self::BuildCard(idx, _) => write!(f, "Build Card ({})", CARD_NAMES[*idx]),
             Self::Harvest => write!(f, "Harvest"),
             Self::EndTurn => write!(f, "End Turn"),
             Self::EndGame => write!(f, "End Game"),
             Self::BuildMajor => write!(f, "Build Major"),
             Self::BakeBread(_, num) => write!(f, "Bake Bread from {} Grain", num.0),
-            Self::Sow(_, seed) => write!(f, "Sow ({:?})", seed),
+            Self::Sow(_, seed) => write!(f, "Sow ({seed:?})"),
             Self::Renovate(_, _) => write!(f, "Renovate"),
             Self::GrowFamily(_) => write!(f, "Grow Family"),
-            Self::Fence(pasture_config) => write!(f, "Fence {:?}", pasture_config),
-            Self::Plow(_, pasture_idx) => write!(f, "Plow ({})", pasture_idx),
+            Self::Fence(pasture_config) => write!(f, "Fence {pasture_config:?}"),
+            Self::Plow(_, pasture_idx) => write!(f, "Plow ({pasture_idx})"),
             Self::Convert(res_ex, _, _) => write!(
                 f,
                 "Convert ({}{} to {}{})",

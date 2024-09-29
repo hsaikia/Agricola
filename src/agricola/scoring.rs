@@ -1,7 +1,7 @@
 use super::farm::{FarmyardSpace, Seed};
 use super::fencing::get_existing_pastures;
-use super::flag::*;
-use super::quantity::*;
+use super::flag::{ClayHouse, Flag, WoodHouse};
+use super::quantity::{Boar, Cattle, Grain, Quantity, Sheep, Vegetable};
 use super::state::State;
 
 const FIELD_SCORE: [i32; 6] = [-1, -1, 1, 2, 3, 4];
@@ -13,6 +13,7 @@ const PIGS_SCORE: [i32; 8] = [-1, 1, 1, 2, 2, 3, 3, 4];
 const CATTLE_SCORE: [i32; 7] = [-1, 1, 2, 2, 3, 3, 4];
 const HOUSE_SCORE: [i32; 3] = [0, 1, 2];
 
+#[must_use]
 pub fn score_farm(state: &State, player_idx: usize) -> i32 {
     let mut score = 0;
     let mut num_fields: usize = 0;

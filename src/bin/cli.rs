@@ -2,7 +2,7 @@ use std::env;
 use std::time::{Duration, Instant};
 use std::{error::Error, io};
 
-use agricola_game::agricola::display::{display_farm, display_resources};
+use agricola_game::agricola::display::{print_farm, print_resources};
 use agricola_game::agricola::state::State;
 use agricola_game::agricola::{
     actions::Action,
@@ -191,7 +191,7 @@ impl App {
                         if i == self.selection_y {
                             ret.push_str(&format!("\n>> {action:?}"));
                             if let Action::Fence(_) = action {
-                                additional_stuff = display_farm(state, state.current_player_idx);
+                                additional_stuff = print_farm(state, state.current_player_idx);
                             }
                         } else {
                             ret.push_str(&format!("\n{action:?}"));
@@ -399,13 +399,13 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                 )
                 .split(farm_areas[2 * i]);
 
-            let farm_strings = display_farm(state, i);
+            let farm_strings = print_farm(state, i);
             let main_farm = Paragraph::new(farm_strings.to_string())
                 .style(Style::default())
                 .alignment(ratatui::layout::Alignment::Center);
             f.render_widget(main_farm, displays[0]);
 
-            let resource_text = Paragraph::new(display_resources(state, i));
+            let resource_text = Paragraph::new(print_resources(state, i));
             f.render_widget(resource_text, displays[2]);
         }
 

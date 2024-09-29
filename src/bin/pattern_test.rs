@@ -34,7 +34,7 @@ impl Pattern {
 struct Statistics {
     pattern: Pattern,
     appeared: Vec<usize>,
-    average_fitness: Vec<f32>,
+    average_fitness: Vec<f64>,
 }
 
 fn empty_stats(num_players: usize) -> Vec<Statistics> {
@@ -52,14 +52,15 @@ fn empty_stats(num_players: usize) -> Vec<Statistics> {
     ]
 }
 
+#[allow(clippy::cast_precision_loss)]
 fn merge_stats(overall: &mut [Statistics], new_stat: &[Statistics]) {
     for (a, b) in overall.iter_mut().zip(new_stat.iter()) {
         for idx in 0..a.appeared.len() {
-            a.average_fitness[idx] = a.average_fitness[idx] * a.appeared[idx] as f32
-                + b.average_fitness[idx] * b.appeared[idx] as f32;
+            a.average_fitness[idx] = a.average_fitness[idx] * a.appeared[idx] as f64
+                + b.average_fitness[idx] * b.appeared[idx] as f64;
             a.appeared[idx] += b.appeared[idx];
             if a.appeared[idx] > 0 {
-                a.average_fitness[idx] /= a.appeared[idx] as f32;
+                a.average_fitness[idx] /= a.appeared[idx] as f64;
             }
         }
     }

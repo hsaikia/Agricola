@@ -1,4 +1,7 @@
-use super::quantity::*;
+use super::quantity::{
+    new_res, Boar, Cattle, Clay, Food, Grain, Quantities, Quantity, Reed, ResourceExchange,
+    Resources, Sheep, Stone, Vegetable, Wood,
+};
 
 pub trait Card {
     fn index(&self) -> usize;
@@ -484,6 +487,7 @@ impl MajorImprovement for BasketmakersWorkshop {
     }
 }
 
+#[must_use]
 pub fn anytime_exchanges(major_idx: usize) -> Vec<ResourceExchange> {
     match major_idx {
         0 => Fireplace1.anytime_exchanges(),
@@ -494,6 +498,7 @@ pub fn anytime_exchanges(major_idx: usize) -> Vec<ResourceExchange> {
     }
 }
 
+#[must_use]
 pub fn baking_exchanges(major_idx: usize) -> Vec<ResourceExchange> {
     match major_idx {
         0 => Fireplace1.baking_exchanges(),
@@ -506,6 +511,7 @@ pub fn baking_exchanges(major_idx: usize) -> Vec<ResourceExchange> {
     }
 }
 
+#[must_use]
 pub fn harvest_exchanges(major_idx: usize) -> Vec<ResourceExchange> {
     match major_idx {
         7 => Joinery.harvest_exchanges(),
@@ -515,6 +521,7 @@ pub fn harvest_exchanges(major_idx: usize) -> Vec<ResourceExchange> {
     }
 }
 
+#[must_use]
 pub fn points(major_idx: usize, quantities: &Quantities) -> u32 {
     match major_idx {
         0 => Fireplace1.points(quantities),
@@ -531,6 +538,7 @@ pub fn points(major_idx: usize, quantities: &Quantities) -> u32 {
     }
 }
 
+#[must_use]
 pub fn cost(major_idx: usize) -> Resources {
     match major_idx {
         0 => Fireplace1.cost(),

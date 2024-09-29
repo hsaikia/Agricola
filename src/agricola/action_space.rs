@@ -1,6 +1,9 @@
 use rand::Rng;
 
-use super::quantity::*;
+use super::quantity::{
+    Boar, Cattle, Clay, Food, Grain, Quantities, Quantity, Reed, Resources, Sheep, Stone,
+    Vegetable, Wood,
+};
 
 pub fn take_resources(player_quantities: &mut Quantities, resources: &Resources) {
     for (a, b) in resources.iter().zip(player_quantities.iter_mut()) {
@@ -281,23 +284,17 @@ pub fn accumulate(idx: usize, res: &mut Resources) {
         6 => {
             res[Reed.index()] += 1;
         }
-        7 => {
-            res[Food.index()] += 1;
-        }
-        8 => {
+        7 | 8 => {
             res[Food.index()] += 1;
         }
         16 => {
             res[Sheep.index()] += 1;
         }
-        21 => {
+        21 | 25 => {
             res[Stone.index()] += 1;
         }
         23 => {
             res[Boar.index()] += 1;
-        }
-        25 => {
-            res[Stone.index()] += 1;
         }
         26 => {
             res[Cattle.index()] += 1;

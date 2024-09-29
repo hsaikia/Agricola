@@ -68,9 +68,10 @@ impl Default for Farm {
 }
 
 impl Farm {
+    #[must_use]
     pub fn new() -> Self {
         let mut farmyard_spaces = [FarmyardSpace::Empty; NUM_FARMYARD_SPACES];
-        for idx in ROOM_INDICES.iter() {
+        for idx in &ROOM_INDICES {
             farmyard_spaces[*idx] = FarmyardSpace::Room;
         }
 
@@ -81,13 +82,16 @@ impl Farm {
         }
     }
 
-    // Animals in order S, P, C. Capacities for various pastures. Returns leftover [S, P, C] which couldn't be accommodated
+    /// Animals in order S, P, C. Capacities for various pastures. Returns leftover [S, P, C] which couldn't be accommodated
+    /// # Panics
+    /// If max of array fails
+    #[must_use]
     pub fn accommodate_animals(&self, animals: &[usize]) -> [usize; 3] {
         let mut ret: [usize; 3] = [animals[0], animals[1], animals[2]];
         let mut capacities = get_existing_pasture_capacities(&self.farmyard_spaces);
         // Sort in descending order
         capacities.sort_by(|a, b| b.cmp(a));
-        for c in capacities.iter() {
+        for c in &capacities {
             let max_animals_of_one_type = *ret.iter().max().unwrap();
             let max_animal_bin = ret.iter_mut().max().unwrap();
             if *max_animal_bin > 0 {
@@ -99,6 +103,7 @@ impl Farm {
         ret
     }
 
+    #[must_use]
     pub fn fencing_options(&self, wood: usize) -> Vec<PastureConfig> {
         get_rand_fence_options(&self.fence_options_cache, self.fences_used, wood)
     }
@@ -126,6 +131,7 @@ impl Farm {
         self.fence_options_cache = get_all_pasture_configs(&self.farmyard_spaces);
     }
 
+    #[must_use]
     pub fn possible_field_positions(&self) -> Vec<usize> {
         let field_idxs = self.field_indices();
 
@@ -136,6 +142,7 @@ impl Farm {
         self.neighbor_empty_indices(&field_idxs)
     }
 
+    #[must_use]
     pub fn possible_room_positions(&self) -> Vec<usize> {
         let room_idxs = self.room_indices();
 
@@ -145,6 +152,7 @@ impl Farm {
         self.neighbor_empty_indices(&room_idxs)
     }
 
+    #[must_use]
     pub fn possible_stable_positions(&self) -> Vec<usize> {
         (0..NUM_FARMYARD_SPACES)
             .filter(|&i| {
@@ -156,6 +164,7 @@ impl Farm {
             .collect()
     }
 
+    #[must_use]
     pub fn neighbor_empty_indices(&self, indices: &[usize]) -> Vec<usize> {
         indices
             .iter()
@@ -164,36 +173,45 @@ impl Farm {
             .collect::<Vec<_>>()
     }
 
+    #[must_use]
     pub fn room_indices(&self) -> Vec<usize> {
         (0..NUM_FARMYARD_SPACES)
             .filter(|&i| matches!(self.farmyard_spaces[i], FarmyardSpace::Room))
             .collect()
     }
 
+    #[must_use]
     pub fn field_indices(&self) -> Vec<usize> {
         (0..NUM_FARMYARD_SPACES)
             .filter(|&i| matches!(self.farmyard_spaces[i], FarmyardSpace::Field(_)))
             .collect()
     }
 
+    #[must_use]
     pub fn empty_indices(&self) -> Vec<usize> {
         (0..NUM_FARMYARD_SPACES)
             .filter(|&i| matches!(self.farmyard_spaces[i], FarmyardSpace::Empty))
             .collect()
     }
 
+    /// # Panics
+    /// If cannot add field
     pub fn add_field(&mut self, idx: usize) {
         assert!(self.farmyard_spaces[idx] == FarmyardSpace::Empty);
         self.farmyard_spaces[idx] = FarmyardSpace::Field(None);
         self.fence_options_cache = get_all_pasture_configs(&self.farmyard_spaces);
     }
 
+    /// # Panics
+    /// If cannot build room
     pub fn build_room(&mut self, idx: usize) {
         assert!(self.farmyard_spaces[idx] == FarmyardSpace::Empty);
         self.farmyard_spaces[idx] = FarmyardSpace::Room;
         self.fence_options_cache = get_all_pasture_configs(&self.farmyard_spaces);
     }
 
+    /// # Panics
+    /// If cannot build stable
     pub fn build_stable(&mut self, idx: usize) {
         let available = matches!(
             self.farmyard_spaces[idx],
@@ -205,22 +223,23 @@ impl Farm {
         match self.farmyard_spaces[idx] {
             FarmyardSpace::Empty => self.farmyard_spaces[idx] = FarmyardSpace::UnfencedStable,
             FarmyardSpace::FencedPasture(false, pasture_idx) => {
-                self.farmyard_spaces[idx] = FarmyardSpace::FencedPasture(true, pasture_idx)
+                self.farmyard_spaces[idx] = FarmyardSpace::FencedPasture(true, pasture_idx);
             }
             _ => (),
         }
     }
 
+    #[must_use]
     pub fn can_build_stable(&self) -> bool {
         let mut num_stables = 0;
         let mut candidate_spaces = 0;
         for fs in &self.farmyard_spaces {
             match *fs {
                 FarmyardSpace::UnfencedStable | FarmyardSpace::FencedPasture(true, _) => {
-                    num_stables += 1
+                    num_stables += 1;
                 }
                 FarmyardSpace::Empty | FarmyardSpace::FencedPasture(false, _) => {
-                    candidate_spaces += 1
+                    candidate_spaces += 1;
                 }
                 _ => (),
             }
@@ -233,12 +252,15 @@ impl Farm {
         false
     }
 
+    #[must_use]
     pub fn can_sow(&self) -> bool {
         self.farmyard_spaces
             .iter()
             .any(|f| matches!(f, FarmyardSpace::Field(None)))
     }
 
+    /// # Panics
+    /// If there are no empty fields
     pub fn sow_field(&mut self, seed: &Seed) {
         assert!(self.can_sow());
         let opt_empty_field = self
