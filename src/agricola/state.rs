@@ -31,9 +31,7 @@ use rand::Rng;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-// const INITIAL_OPEN_SPACES: usize = 16;
-// pub const NUM_ACTION_SPACES: usize = 30;
-const MAX_NUM_PLAYERS: usize = 4;
+pub const MAX_NUM_PLAYERS: usize = 4;
 const MAX_FAMILY_MEMBERS: usize = 5;
 const EPSILON: f64 = 1e-6;
 
@@ -90,7 +88,7 @@ impl State {
             player_flags[WoodHouse.index()] = true;
         }
 
-        let mut player_types = [PlayerType::MCTSMachine; MAX_NUM_PLAYERS];
+        let mut player_types = [PlayerType::MctsAI; MAX_NUM_PLAYERS];
         for (i, player_type) in player_types.iter_mut().enumerate().take(players.len()) {
             *player_type = players[i];
         }
@@ -222,7 +220,7 @@ impl State {
         s.finish()
     }
 
-    pub fn play_random(&mut self, path: &mut Vec<u64>, opt_depth: Option<usize>) {
+    pub fn play_random(&mut self, opt_depth: Option<usize>) {
         let mut d: usize = 0;
         loop {
             if let Some(depth) = opt_depth {
@@ -246,7 +244,6 @@ impl State {
             // Chose a random action
             let action_idx = rand::thread_rng().gen_range(0..choices.len());
             choices[action_idx].apply_choice(self);
-            path.push(self.get_hash());
         }
     }
 
@@ -258,14 +255,14 @@ impl State {
     /// # Panics
     /// Will panic if partial comparison fails
     #[must_use]
-    pub fn fitness(&self) -> Vec<f64> {
+    pub fn fitness(&self) -> [f64; MAX_NUM_PLAYERS] {
         let scores = self.scores();
 
         if scores.len() == 1 {
             return scores;
         }
 
-        let mut fitness = scores.clone();
+        let mut fitness = scores;
         let mut sorted_scores = scores;
 
         // Sort in decreasing order
@@ -298,11 +295,11 @@ impl State {
     }
 
     #[must_use]
-    pub fn scores(&self) -> Vec<f64> {
-        let mut scores: Vec<f64> = Vec::new();
+    pub fn scores(&self) -> [f64; MAX_NUM_PLAYERS] {
+        let mut scores: [f64; MAX_NUM_PLAYERS] = [0.0; MAX_NUM_PLAYERS];
         let card_scores = self.score_majors();
         for (idx, card_score) in card_scores.iter().enumerate().take(self.num_players) {
-            scores.push(self.score(idx) + f64::from(*card_score));
+            scores[idx] = self.score(idx) + f64::from(*card_score);
         }
         scores
     }
@@ -784,7 +781,7 @@ impl State {
             for fp_idx in FIREPLACE_INDICES {
                 if self.player_cards[self.current_player_idx][fp_idx] {
                     quantites[Food.index()] += 2 * leftover[0] + 2 * leftover[1] + 3 * leftover[2];
-                    return;
+                    break;
                 }
             }
         }

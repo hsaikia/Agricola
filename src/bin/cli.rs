@@ -2,8 +2,9 @@ use std::env;
 use std::time::{Duration, Instant};
 use std::{error::Error, io};
 
+use agricola_game::agricola::algorithms::SimulationRecord;
 use agricola_game::agricola::display::{print_farm, print_resources};
-use agricola_game::agricola::state::State;
+use agricola_game::agricola::state::{State, MAX_NUM_PLAYERS};
 use agricola_game::agricola::{
     actions::Action,
     algorithms::{PlayerType, AI},
@@ -21,20 +22,22 @@ use ratatui::{
     Frame, Terminal,
 };
 
-const NUM_GAMES_TO_SIMULATE: usize = 10;
-const DEPTH: Option<usize> = Some(3);
+const NUM_GAMES_TO_SIMULATE: usize = 100;
+const DEPTH: Option<usize> = None;
 
 #[derive(Clone, Copy, Debug)]
 enum PlayerSelection {
     Empty,
     Human,
     MctsAI,
+    TdAI,
 }
 
-const PLAYER_TYPES: [PlayerSelection; 3] = [
+const PLAYER_TYPES: [PlayerSelection; 4] = [
     PlayerSelection::Empty,
     PlayerSelection::Human,
     PlayerSelection::MctsAI,
+    PlayerSelection::TdAI,
 ];
 
 struct App {
@@ -45,7 +48,8 @@ struct App {
     menu_active: bool,
     num_selections_y: usize,
     move_selected: bool,
-    ai: AI,
+    ai: [Option<AI>; MAX_NUM_PLAYERS],
+    records: Vec<SimulationRecord>,
     current_actions: Vec<Action>,
 }
 
@@ -59,7 +63,8 @@ impl App {
             menu_active: false,
             num_selections_y: 1,
             move_selected: false,
-            ai: AI::new(),
+            ai: [const { None }; MAX_NUM_PLAYERS],
+            records: Vec::new(),
             current_actions: Vec::new(),
         }
     }
@@ -133,19 +138,20 @@ impl App {
                         self.current_actions[self.selection_y].apply_choice(state);
                         self.move_selected = false;
                     }
-                    PlayerType::MCTSMachine => {
-                        if self.ai.num_games_sampled == 0 {
-                            self.ai.init_records(&self.current_actions, state);
+                    PlayerType::MctsAI | PlayerType::TdAI => {
+                        let ai = self.ai[state.current_player_idx].as_mut().unwrap();
+                        if ai.num_games_sampled == 0 {
+                            self.records = AI::get_simulation_records(state);
                         }
 
-                        if !self.move_selected && self.ai.num_games_sampled < NUM_GAMES_TO_SIMULATE
-                        {
-                            self.ai.sample_once(state, DEPTH, false);
+                        if !self.move_selected && ai.num_games_sampled < NUM_GAMES_TO_SIMULATE {
+                            ai.sample_once(&mut self.records, state, DEPTH);
+                            AI::sort_records(&mut self.records);
                             return;
                         }
-                        let records = self.ai.sorted_records();
-                        records[0].action.apply_choice(state);
-                        self.ai.reset();
+
+                        self.records[0].action.apply_choice(state);
+                        ai.reset();
                         self.move_selected = false;
                     }
                 }
@@ -158,15 +164,20 @@ impl App {
 
     fn start_new_game(&mut self) {
         let mut players = Vec::new();
-        for player_selection in self.player_selections {
+        for (i, player_selection) in self.player_selections.iter().enumerate() {
             match player_selection {
                 PlayerSelection::Human => players.push(PlayerType::Human),
-                PlayerSelection::MctsAI => players.push(PlayerType::MCTSMachine),
+                PlayerSelection::MctsAI => {
+                    players.push(PlayerType::MctsAI);
+                    self.ai[i] = Some(AI::new());
+                }
+                PlayerSelection::TdAI => {
+                    players.push(PlayerType::TdAI);
+                    self.ai[i] = Some(AI::new());
+                }
                 PlayerSelection::Empty => (),
             }
         }
-        self.ai.cache.clear();
-        self.ai.reset();
         self.state = State::new(&players);
         if let Some(state) = &self.state {
             if self.menu_active {
@@ -198,20 +209,20 @@ impl App {
                         }
                     }
                 }
-                PlayerType::MCTSMachine => {
+                PlayerType::MctsAI | PlayerType::TdAI => {
+                    let ai = self.ai[state.current_player_idx].as_ref().unwrap();
                     ret = format!(
                         "{}/{} Games Simulated..\nCache Size {}\n",
-                        self.ai.num_games_sampled,
+                        ai.num_games_sampled,
                         NUM_GAMES_TO_SIMULATE,
-                        self.ai.cache.len()
+                        ai.cache.len()
                     );
 
-                    let records = self.ai.sorted_records();
-                    for (i, rec) in records.iter().enumerate() {
+                    for (i, rec) in self.records.iter().enumerate() {
                         if i == 0 {
                             ret = format!(
                                 "{}\n>> {:?} [{} / {}]",
-                                ret, rec.action, rec.fitness, rec.games
+                                ret, rec.action, rec.score, rec.games
                             );
 
                             if let Action::Fence(_) = &rec.action {
@@ -220,7 +231,7 @@ impl App {
                         } else {
                             ret = format!(
                                 "{}\n{:?} [{} / {}]",
-                                ret, rec.action, rec.fitness, rec.games
+                                ret, rec.action, rec.score, rec.games
                             );
                         }
                     }
@@ -368,11 +379,12 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
             .constraints(constraints)
             .split(chunks[1]);
         for i in 0..state.num_players {
+            let scores = state.scores();
             let mut title_string = format!(
                 " Player {} | {:?} | {} Points",
                 i + 1,
                 state.player_type(i),
-                state.score(i)
+                scores[i]
             );
 
             if i == state.starting_player_idx {

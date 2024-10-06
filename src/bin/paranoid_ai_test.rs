@@ -4,7 +4,7 @@ use agricola_game::agricola::{algorithms::PlayerType, paranoid_ai::best_move, st
 
 fn main() {
     env::set_var("RUN_BACKTRACE", "1");
-    let opt_state = State::new(&[PlayerType::MCTSMachine, PlayerType::MCTSMachine]);
+    let opt_state = State::new(&[PlayerType::MctsAI, PlayerType::MctsAI]);
     let mut state = opt_state.unwrap();
 
     loop {

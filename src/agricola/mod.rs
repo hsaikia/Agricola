@@ -6,7 +6,6 @@ pub mod display;
 pub mod farm;
 pub mod fencing;
 pub mod flag;
-pub mod mcts;
 pub mod paranoid_ai;
 pub mod quantity;
 pub mod scoring;

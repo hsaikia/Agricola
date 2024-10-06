@@ -12,7 +12,7 @@ fn main() {
     const OPT_DEPTH: Option<usize> = None;
     env::set_var("RUN_BACKTRACE", "1");
     let start = Instant::now();
-    let opt_state = State::new(&[PlayerType::MCTSMachine, PlayerType::MCTSMachine]);
+    let opt_state = State::new(&[PlayerType::MctsAI, PlayerType::MctsAI]);
     let mut ai_agent = AI::new();
     let mut state = opt_state.unwrap();
 
@@ -29,16 +29,15 @@ fn main() {
             continue;
         }
 
-        ai_agent.init_records(&actions, &state);
+        let mut records = AI::get_simulation_records(&state);
         let bar = ProgressBar::new(NUM_GAMES_TO_SIMULATE as u64);
         for _ in 0..NUM_GAMES_TO_SIMULATE {
             bar.inc(1);
-            ai_agent.sample_once(&state, OPT_DEPTH, false);
+            ai_agent.sample_once(&mut records, &state, OPT_DEPTH);
         }
         bar.finish();
 
         println!("Scores {:?}", state.scores());
-        let records = ai_agent.sorted_records();
         records[0].action.apply_choice(&mut state);
         println!(
             "Player {} chose action [{:?}]",

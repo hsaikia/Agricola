@@ -78,12 +78,11 @@ Fitness [-17, 8, -8, -16]
 ## TODO
 
 - Refactor state to be more optimized. Use Quantity and Flag traits to represent most / all logic.
-- All action spaces should be an enum with resources / state stored within the enum. Like GrainUtil should have a has_sown or has_baked flag. Copse should have a resource state etc.
 - Refactor Actions to consist of a plain c-like `enum Action` for all Actions, then have a `next_actions : HashMap<Action,Vec<Action>>` static hash table to represent the entire game flow as a State Machine. Implement one method `fn is_action_available(&State) -> bool` and another `fn apply_action(&mut State)` on the Action enum. 
 - Fix segfaults in fencing
 - ImplementNN based training by replacing the MCTS playoff decision based on UCT to be done by the NN. 
-- Change display to be easier - fenced pasture to use different symbols ♠︎ ♤ ♣︎ ♧ ♥︎ ♡ ♦︎ ♢ 
 - Display action taken and people placed
+- Add colors for the different players
 - Allow MCTS params to be changed from UI
 - Implement OCCs
 - Implement Minors

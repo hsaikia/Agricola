@@ -1,6 +1,10 @@
 use std::env;
 
-use agricola_game::agricola::{actions::Action, algorithms::PlayerType, state::State};
+use agricola_game::agricola::{
+    actions::Action,
+    algorithms::PlayerType,
+    state::{State, MAX_NUM_PLAYERS},
+};
 use rand::Rng;
 
 #[derive(Debug, Eq, PartialEq, Hash)]
@@ -34,7 +38,7 @@ impl Pattern {
 struct Statistics {
     pattern: Pattern,
     appeared: Vec<usize>,
-    average_fitness: Vec<f64>,
+    average_fitness: [f64; MAX_NUM_PLAYERS],
 }
 
 fn empty_stats(num_players: usize) -> Vec<Statistics> {
@@ -42,12 +46,12 @@ fn empty_stats(num_players: usize) -> Vec<Statistics> {
         Statistics {
             pattern: Pattern::Build,
             appeared: vec![0; num_players],
-            average_fitness: vec![0.0; num_players],
+            average_fitness: [0.0; MAX_NUM_PLAYERS],
         },
         Statistics {
             pattern: Pattern::Grow,
             appeared: vec![0; num_players],
-            average_fitness: vec![0.0; num_players],
+            average_fitness: [0.0; MAX_NUM_PLAYERS],
         },
     ]
 }
@@ -109,7 +113,7 @@ fn sim_one_game(players: &[PlayerType]) -> Vec<Statistics> {
 fn main() {
     const NUM_SIMS: usize = 100;
     env::set_var("RUN_BACKTRACE", "1");
-    let players = vec![PlayerType::MCTSMachine, PlayerType::MCTSMachine];
+    let players = vec![PlayerType::MctsAI, PlayerType::MctsAI];
 
     let mut statistics = empty_stats(players.len());
 
