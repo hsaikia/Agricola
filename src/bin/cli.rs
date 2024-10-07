@@ -22,7 +22,7 @@ use ratatui::{
     Frame, Terminal,
 };
 
-const NUM_GAMES_TO_SIMULATE: usize = 100;
+const NUM_GAMES_TO_SIMULATE: usize = 200;
 const DEPTH: Option<usize> = None;
 
 #[derive(Clone, Copy, Debug)]
@@ -220,19 +220,19 @@ impl App {
 
                     for (i, rec) in self.records.iter().enumerate() {
                         if i == 0 {
-                            ret = format!(
-                                "{}\n>> {:?} [{} / {}]",
-                                ret, rec.action, rec.score, rec.games
-                            );
+                            ret.push_str(&format!(
+                                "\n>> [{:.2} / {}] {:?}",
+                                rec.score, rec.games, rec.action
+                            ));
 
                             if let Action::Fence(_) = &rec.action {
                                 additional_stuff = String::from("Fence Layout : TODO");
                             }
                         } else {
-                            ret = format!(
-                                "{}\n{:?} [{} / {}]",
-                                ret, rec.action, rec.score, rec.games
-                            );
+                            ret.push_str(&format!(
+                                "\n[{:.2} / {}] {:?}",
+                                rec.score, rec.games, rec.action
+                            ));
                         }
                     }
                 }
