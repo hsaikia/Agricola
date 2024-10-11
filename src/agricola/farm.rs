@@ -2,7 +2,7 @@ use derivative::Derivative;
 
 use super::fencing::{get_existing_pasture_capacities, PastureConfig};
 use crate::agricola::fencing::{get_all_pasture_configs, get_rand_fence_options};
-use std::hash::Hash;
+use std::{collections::VecDeque, hash::Hash};
 
 pub const L: usize = 5;
 pub const W: usize = 3;
@@ -103,6 +103,55 @@ impl Farm {
         ret
     }
 
+    fn spread(indices: &mut [bool], empty_indices: &[bool]) {
+        let mut q = VecDeque::new();
+        for (idx, v) in indices.iter().enumerate() {
+            if *v {
+                q.push_back(idx);
+            }
+        }
+        while !q.is_empty() {
+            let idx = q.pop_front().unwrap();
+
+            indices[idx] = true;
+
+            for &neighbor in NEIGHBOR_SPACES[idx].iter().flatten() {
+                if !indices[neighbor] && empty_indices[neighbor] {
+                    q.push_back(neighbor);
+                }
+            }
+        }
+    }
+
+    pub fn flexibility(&self) -> usize {
+        let mut future_room = [false; NUM_FARMYARD_SPACES];
+        let mut future_field = [false; NUM_FARMYARD_SPACES];
+        let mut future_stable = [false; NUM_FARMYARD_SPACES];
+        let mut future_pasture = [false; NUM_FARMYARD_SPACES];
+        let mut empty = [false; NUM_FARMYARD_SPACES];
+
+        for (idx, space) in self.farmyard_spaces.iter().enumerate() {
+            match space {
+                FarmyardSpace::Room => future_room[idx] = true,
+                FarmyardSpace::Field(_) => future_field[idx] = true,
+                FarmyardSpace::UnfencedStable => future_stable[idx] = true,
+                FarmyardSpace::FencedPasture(stable, _) => {
+                    future_pasture[idx] = true;
+                    future_stable[idx] = *stable;
+                }
+                FarmyardSpace::Empty => empty[idx] = true,
+            }
+        }
+
+        Self::spread(&mut future_room, &empty);
+        Self::spread(&mut future_field, &empty);
+        Self::spread(&mut future_pasture, &empty);
+        let sum_future_room = future_room.iter().filter(|&x| *x).count();
+        let sum_future_field = future_field.iter().filter(|&x| *x).count();
+        let sum_future_pasture = future_pasture.iter().filter(|&x| *x).count();
+        sum_future_room + sum_future_field + sum_future_pasture
+    }
+
     #[must_use]
     pub fn fencing_options(&self, wood: usize) -> Vec<PastureConfig> {
         get_rand_fence_options(&self.fence_options_cache, self.fences_used, wood)
@@ -166,11 +215,13 @@ impl Farm {
 
     #[must_use]
     pub fn neighbor_empty_indices(&self, indices: &[usize]) -> Vec<usize> {
-        indices
+        let mut ret = indices
             .iter()
             .flat_map(|i| NEIGHBOR_SPACES[*i].into_iter().flatten())
             .filter(|&i| matches!(self.farmyard_spaces[i], FarmyardSpace::Empty))
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>();
+        ret.dedup();
+        ret
     }
 
     #[must_use]

@@ -1,8 +1,7 @@
 use agricola_game::agricola::{farm::Farm, fencing::get_all_pasture_configs};
 
 fn main() {
-    let mut farm = Farm::new();
-    farm.add_field(14);
+    let farm = Farm::new();
 
     // Find best room placement
     let room_positions = farm.possible_room_positions();
