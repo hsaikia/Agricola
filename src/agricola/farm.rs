@@ -154,6 +154,9 @@ impl Farm {
 
     #[must_use]
     pub fn fencing_options(&self, wood: usize) -> Vec<PastureConfig> {
+        if self.fences_used >= MAX_FENCES {
+            return Vec::new();
+        }
         get_rand_fence_options(&self.fence_options_cache, self.fences_used, wood)
     }
 

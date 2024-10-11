@@ -224,6 +224,9 @@ fn contained_in(p1: &[usize], p2: &[usize]) -> bool {
 
 // If p1 is a future extension of p2
 fn is_future_extension(pastures1: &[Vec<usize>], pastures2: &[Vec<usize>]) -> bool {
+    if pastures1 == pastures2 {
+        return false;
+    }
     // A pasture config can be extended in the future by adding more wood
     // Pastures can either be created adjacent to the existing pastures or existing pastures can be split into two or more pastures
     // In all those cases, such a (future) pasture config is considered an extension
@@ -326,13 +329,13 @@ fn all_possible_fence_configs(
         Default::default();
 
     for (ps, wood) in &all_pastures {
-        let hash = pasture_config_hash(ps);
-        let min_wood = pasture_config_to_min_wood_map.get(&hash).unwrap();
+        //let hash = pasture_config_hash(ps);
+        //let min_wood = pasture_config_to_min_wood_map.get(&hash).unwrap();
 
-        // Reject a multi-pasture if the wood required to build the exact same config is greater than the min_wood required to build that config
-        if wood > min_wood {
-            continue;
-        }
+        // // Reject a multi-pasture if the wood required to build the exact same config is greater than the min_wood required to build that config
+        // if wood > min_wood {
+        //     continue;
+        // }
 
         possible_pastures_from_wood[*wood].push(ps.clone());
     }
@@ -387,6 +390,7 @@ pub fn get_existing_pastures(farmyard_spaces: &[FarmyardSpace]) -> [Pasture; MAX
         }
     }
 
+    existing_pastures.sort();
     existing_pastures
 }
 
@@ -397,7 +401,10 @@ pub fn get_all_pasture_configs(farmyard_spaces: &[FarmyardSpace]) -> Vec<Pasture
         false, false,
     ];
 
-    let existing_pastures_configs = get_existing_pastures(farmyard_spaces);
+    let existing_pastures_configs = get_existing_pastures(farmyard_spaces)
+        .into_iter()
+        .filter(|p| !p.is_empty())
+        .collect::<Vec<Pasture>>();
 
     for (idx, space) in farmyard_spaces.iter().enumerate() {
         match space {
@@ -429,6 +436,7 @@ pub fn get_all_pasture_configs(farmyard_spaces: &[FarmyardSpace]) -> Vec<Pasture
         for (w, all_pastures) in possible_pasture_configs_for_wood.iter().enumerate() {
             for pastures in all_pastures {
                 if is_future_extension(pastures, &existing_pastures_configs) {
+                    //println!("{:?} is a future extension of {:?}", pastures, existing_pastures_configs);
                     ret.push(PastureConfig {
                         pastures: pastures.clone(),
                         wood: w,

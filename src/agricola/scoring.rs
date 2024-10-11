@@ -4,8 +4,8 @@ use super::flag::{ClayHouse, Flag, WoodHouse};
 use super::quantity::{Boar, Cattle, Grain, Quantity, Sheep, Vegetable};
 use super::state::State;
 
-const FIELD_SCORE: [i32; 6] = [-1, -1, 1, 2, 3, 4];
-const PASTURE_SCORE: [i32; 5] = [-1, 1, 2, 3, 4];
+pub const FIELD_SCORE: [i32; 6] = [-1, -1, 1, 2, 3, 4];
+pub const PASTURE_SCORE: [i32; 5] = [-1, 1, 2, 3, 4];
 const GRAIN_SCORE: [i32; 9] = [-1, 1, 1, 1, 2, 2, 3, 3, 4];
 const VEGETABLE_SCORE: [i32; 5] = [-1, 1, 2, 3, 4];
 const SHEEP_SCORE: [i32; 9] = [-1, 1, 1, 1, 2, 2, 3, 3, 4];
