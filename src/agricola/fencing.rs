@@ -468,6 +468,10 @@ pub fn get_all_pasture_configs(farmyard_spaces: &[FarmyardSpace]) -> Vec<Pasture
     ret
 }
 
+pub fn remove_farmyard_idx(all_pasture_configs: &mut Vec<PastureConfig>, idx: usize) {
+    all_pasture_configs.retain(|x| x.pastures.iter().flatten().all(|&y| y != idx));
+}
+
 /// Get a random pasture configuration from all possible pasture configurations for a given pasture size configuration
 #[must_use]
 pub fn get_best_fence_options(

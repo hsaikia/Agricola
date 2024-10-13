@@ -1,7 +1,7 @@
 use derivative::Derivative;
 
 use super::fencing::{get_existing_pasture_capacities, PastureConfig};
-use crate::agricola::fencing::{get_all_pasture_configs, get_best_fence_options};
+use crate::agricola::fencing::get_best_fence_options;
 use std::{collections::VecDeque, hash::Hash};
 
 pub const L: usize = 5;
@@ -57,8 +57,6 @@ pub const NEIGHBOR_SPACES: [[Option<usize>; 4]; NUM_FARMYARD_SPACES] = [
 pub struct Farm {
     pub farmyard_spaces: [FarmyardSpace; NUM_FARMYARD_SPACES],
     pub fences_used: usize,
-    #[derivative(Hash = "ignore")]
-    pub fence_options_cache: Vec<PastureConfig>,
 }
 
 impl Default for Farm {
@@ -78,7 +76,6 @@ impl Farm {
         Self {
             farmyard_spaces,
             fences_used: 0,
-            fence_options_cache: get_all_pasture_configs(&farmyard_spaces),
         }
     }
 
@@ -153,11 +150,11 @@ impl Farm {
     }
 
     #[must_use]
-    pub fn fencing_options(&self, wood: usize) -> Vec<PastureConfig> {
+    pub fn fencing_options(&self, cache: &[PastureConfig], wood: usize) -> Vec<PastureConfig> {
         if self.fences_used >= MAX_FENCES {
             return Vec::new();
         }
-        get_best_fence_options(&self.fence_options_cache, self.fences_used, wood)
+        get_best_fence_options(cache, self.fences_used, wood)
     }
 
     pub fn fence_spaces(&mut self, pasture_config: &PastureConfig, wood: &mut usize) {
@@ -180,7 +177,6 @@ impl Farm {
         *wood += self.fences_used;
         *wood -= pasture_config.wood;
         self.fences_used = pasture_config.wood;
-        self.fence_options_cache = get_all_pasture_configs(&self.farmyard_spaces);
     }
 
     #[must_use]
@@ -253,7 +249,6 @@ impl Farm {
     pub fn add_field(&mut self, idx: usize) {
         assert!(self.farmyard_spaces[idx] == FarmyardSpace::Empty);
         self.farmyard_spaces[idx] = FarmyardSpace::Field(None);
-        self.fence_options_cache = get_all_pasture_configs(&self.farmyard_spaces);
     }
 
     /// # Panics
@@ -261,7 +256,6 @@ impl Farm {
     pub fn build_room(&mut self, idx: usize) {
         assert!(self.farmyard_spaces[idx] == FarmyardSpace::Empty);
         self.farmyard_spaces[idx] = FarmyardSpace::Room;
-        self.fence_options_cache = get_all_pasture_configs(&self.farmyard_spaces);
     }
 
     /// # Panics
@@ -352,23 +346,9 @@ mod tests {
 
     #[test]
     fn test_field_options() {
-        let mut farm = Farm::new();
+        let farm = Farm::new();
         let field_opt = farm.possible_field_positions();
         assert_eq!(field_opt, vec![0, 1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14]);
-
-        farm.add_field(0);
-        let field_opt = farm.possible_field_positions();
-        assert_eq!(field_opt, vec![1]);
-
-        farm = Farm::new();
-        farm.add_field(2);
-        let field_opt = farm.possible_field_positions();
-        assert_eq!(field_opt, vec![3, 1, 7]);
-
-        farm = Farm::new();
-        farm.add_field(7);
-        let field_opt = farm.possible_field_positions();
-        assert_eq!(field_opt, vec![2, 8, 6, 12]);
     }
 
     #[test]

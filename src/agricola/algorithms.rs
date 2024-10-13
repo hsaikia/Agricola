@@ -1,4 +1,5 @@
 use super::actions::Action;
+use super::heuristics::{BuildRoomHeuristic, Heuristic};
 use super::state::{State, MAX_NUM_PLAYERS};
 use std::collections::HashMap;
 
@@ -110,11 +111,18 @@ impl AI {
         let mut records: Vec<SimulationRecord> = Vec::new();
         let actions = Action::next_choices(state);
         for action in actions {
+            // Apply Heuristics
+            let mut heuristic_score = 0.0;
+            if BuildRoomHeuristic::is_valid_state(state) && matches!(action, Action::BuildRoom(_)) {
+                heuristic_score += 100.0;
+            }
+
             let mut tmp_state = state.clone();
             action.apply_choice(&mut tmp_state);
             records.push(SimulationRecord {
                 games: 0,
-                score: 0.0,
+                score: heuristic_score,
+                //score: 0.0,
                 action: action.clone(),
                 action_hash: tmp_state.get_hash(),
             });

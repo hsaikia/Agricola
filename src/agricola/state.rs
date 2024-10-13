@@ -1,3 +1,5 @@
+use crate::agricola::fencing::{is_future_extension, remove_farmyard_idx};
+
 use super::action_space::{
     accumulate, randomize_action_spaces, ACCUMULATION_SPACE_INDICES, ACTION_SPACE_NAMES,
     NUM_ACTION_SPACES, OPEN_SPACES,
@@ -12,7 +14,7 @@ use super::card::{
 };
 use super::display::format_resources;
 use super::farm::{Farm, Seed};
-use super::fencing::PastureConfig;
+use super::fencing::{get_all_pasture_configs, PastureConfig};
 use super::flag::{
     BakedOnceWithClayOven, BakedOnceWithStoneOven, BakedTwiceWithStoneOven, BeforeRoundStart,
     CanBuildRoom, CanBuildStable, CanRenovate, ClayHouse, Flag, HarvestPaid, HasCookingImprovement,
@@ -60,6 +62,8 @@ pub struct State {
     pub people_placed_this_round: usize,
     pub last_action: Action,
     pub start_round_events: Vec<Event>,
+    #[derivative(Hash = "ignore")]
+    pub fence_options_cache: [Vec<PastureConfig>; MAX_NUM_PLAYERS],
 }
 
 impl State {
@@ -93,6 +97,9 @@ impl State {
             *player_type = players[i];
         }
 
+        let farm = Farm::new();
+        let all_fence_options = get_all_pasture_configs(&farm.farmyard_spaces);
+
         let state = State {
             num_players: players.len(),
             current_round: 0,
@@ -113,6 +120,7 @@ impl State {
             people_placed_this_round: 0,
             last_action: Action::StartGame,
             start_round_events: vec![],
+            fence_options_cache: core::array::from_fn(|_| all_fence_options.clone()),
         };
         Some(state)
     }
@@ -360,6 +368,7 @@ impl State {
 
     pub fn add_new_field(&mut self, idx: &usize) {
         self.current_farm_mut().add_field(*idx);
+        remove_farmyard_idx(&mut self.fence_options_cache[self.current_player_idx], *idx);
     }
 
     #[must_use]
@@ -451,6 +460,7 @@ impl State {
         self.current_player_quantities_mut()[room_material_idx] -= 5;
         self.current_player_quantities_mut()[Reed.index()] -= 2;
         self.current_farm_mut().build_room(*idx);
+        remove_farmyard_idx(&mut self.fence_options_cache[self.current_player_idx], *idx);
 
         // Increment player quantities
         self.current_player_quantities_mut()[Rooms.index()] += 1;
@@ -590,8 +600,10 @@ impl State {
 
     #[must_use]
     pub fn fencing_choices(&self) -> Vec<PastureConfig> {
-        self.current_farm()
-            .fencing_options(self.current_player_quantities()[Wood.index()])
+        self.current_farm().fencing_options(
+            &self.fence_options_cache[self.current_player_idx],
+            self.current_player_quantities()[Wood.index()],
+        )
     }
 
     /// # Panics
@@ -602,6 +614,8 @@ impl State {
         self.current_farm_mut()
             .fence_spaces(pasture_config, &mut wood);
         self.current_player_quantities_mut()[Wood.index()] = wood;
+        self.fence_options_cache[self.current_player_idx]
+            .retain(|x| is_future_extension(&x.pastures, &pasture_config.pastures));
         // Set flags
         self.set_can_build_stable();
         self.set_can_build_room();
@@ -611,7 +625,10 @@ impl State {
     pub fn can_fence(&self) -> bool {
         !self
             .current_farm()
-            .fencing_options(self.current_player_quantities()[Wood.index()])
+            .fencing_options(
+                &self.fence_options_cache[self.current_player_idx],
+                self.current_player_quantities()[Wood.index()],
+            )
             .is_empty()
     }
 
