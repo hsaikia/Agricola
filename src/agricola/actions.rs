@@ -799,7 +799,11 @@ impl Debug for Action {
             Self::Sow(_, seed) => write!(f, "Sow ({seed:?})"),
             Self::Renovate(_, _) => write!(f, "Renovate"),
             Self::GrowFamily(_) => write!(f, "Grow Family"),
-            Self::Fence(pasture_config) => write!(f, "Fence {pasture_config:?}"),
+            Self::Fence(pasture_config) => write!(
+                f,
+                "Fence [{:?}] Wood {}",
+                pasture_config.pastures, pasture_config.wood
+            ),
             Self::Plow(_, pasture_idx) => write!(f, "Plow ({pasture_idx})"),
             Self::Convert(res_ex, _, _) => write!(
                 f,

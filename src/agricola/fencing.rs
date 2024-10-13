@@ -1,4 +1,3 @@
-use rand::Rng;
 use std::collections::{HashMap, VecDeque};
 
 use super::farm::{FarmyardSpace, MAX_FENCES, NEIGHBOR_SPACES, NUM_FARMYARD_SPACES};
@@ -20,6 +19,7 @@ pub struct PastureConfig {
     pub pastures: Vec<Pasture>,
     pub wood: usize,
     pub hash: u64,
+    pub extensions: usize,
 }
 
 // Get all arrangements of fences for a single pasture
@@ -223,7 +223,7 @@ fn contained_in(p1: &[usize], p2: &[usize]) -> bool {
 }
 
 // If p1 is a future extension of p2
-fn is_future_extension(pastures1: &[Vec<usize>], pastures2: &[Vec<usize>]) -> bool {
+pub fn is_future_extension(pastures1: &[Vec<usize>], pastures2: &[Vec<usize>]) -> bool {
     if pastures1 == pastures2 {
         return false;
     }
@@ -429,6 +429,7 @@ pub fn get_all_pasture_configs(farmyard_spaces: &[FarmyardSpace]) -> Vec<Pasture
                     pastures: pastures.clone(),
                     wood: w,
                     hash: pasture_config_hash(pastures),
+                    extensions: 0,
                 });
             }
         }
@@ -441,10 +442,27 @@ pub fn get_all_pasture_configs(farmyard_spaces: &[FarmyardSpace]) -> Vec<Pasture
                         pastures: pastures.clone(),
                         wood: w,
                         hash: pasture_config_hash(pastures),
+                        extensions: 0,
                     });
                 }
             }
         }
+    }
+
+    let mut extensions = Vec::new();
+
+    for pasture_config in &ret {
+        let mut num_extensions = 0;
+        for pasture_config_other in &ret {
+            if is_future_extension(&pasture_config_other.pastures, &pasture_config.pastures) {
+                num_extensions += 1;
+            }
+        }
+        extensions.push(num_extensions);
+    }
+
+    for (i, pasture_config) in ret.iter_mut().enumerate() {
+        pasture_config.extensions = extensions[i];
     }
 
     ret
@@ -452,7 +470,7 @@ pub fn get_all_pasture_configs(farmyard_spaces: &[FarmyardSpace]) -> Vec<Pasture
 
 /// Get a random pasture configuration from all possible pasture configurations for a given pasture size configuration
 #[must_use]
-pub fn get_rand_fence_options(
+pub fn get_best_fence_options(
     all_pasture_configs: &[PastureConfig],
     fences_used: usize,
     wood_available: usize,
@@ -472,9 +490,12 @@ pub fn get_rand_fence_options(
 
     let mut ret = Vec::new();
     for v in size_config_map.values() {
-        // TODO : Instead of picking a random pasture config, pick the one that maximizes the capacity
-        let idx = v[rand::thread_rng().gen_range(0..v.len())];
-        ret.push(all_pasture_configs[idx].clone());
+        // Pick the pasture with the largest number of extensions
+        let idx = v
+            .iter()
+            .max_by_key(|&i| all_pasture_configs[*i].extensions)
+            .unwrap();
+        ret.push(all_pasture_configs[*idx].clone());
     }
     ret
 }

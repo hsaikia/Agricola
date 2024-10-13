@@ -1,7 +1,7 @@
 use derivative::Derivative;
 
 use super::fencing::{get_existing_pasture_capacities, PastureConfig};
-use crate::agricola::fencing::{get_all_pasture_configs, get_rand_fence_options};
+use crate::agricola::fencing::{get_all_pasture_configs, get_best_fence_options};
 use std::{collections::VecDeque, hash::Hash};
 
 pub const L: usize = 5;
@@ -157,7 +157,7 @@ impl Farm {
         if self.fences_used >= MAX_FENCES {
             return Vec::new();
         }
-        get_rand_fence_options(&self.fence_options_cache, self.fences_used, wood)
+        get_best_fence_options(&self.fence_options_cache, self.fences_used, wood)
     }
 
     pub fn fence_spaces(&mut self, pasture_config: &PastureConfig, wood: &mut usize) {

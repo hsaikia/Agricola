@@ -7,8 +7,11 @@ use agricola_game::agricola::{
 
 fn test1() -> Vec<PastureConfig> {
     let mut farmyard_spaces = [FarmyardSpace::Empty; 15];
+
     farmyard_spaces[5] = FarmyardSpace::Room;
     farmyard_spaces[10] = FarmyardSpace::Room;
+
+    //farmyard_spaces[0] = FarmyardSpace::Room;
 
     get_all_pasture_configs(&farmyard_spaces)
 }
@@ -30,10 +33,11 @@ fn main() {
     let mut size_config_map: HashMap<u64, Vec<PastureConfig>> = HashMap::new();
     for pasture_config in &pasture_configs {
         println!(
-            "Pastures {:?} Wood {} Sizes {:?}",
+            "Pastures {:?} Wood {} Sizes {:?} Extensions {}",
             pasture_config.pastures,
             pasture_config.wood,
-            pasture_sizes_from_hash(pasture_config.hash)
+            pasture_sizes_from_hash(pasture_config.hash),
+            pasture_config.extensions
         );
         size_config_map
             .entry(pasture_config.hash)
