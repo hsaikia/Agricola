@@ -222,7 +222,8 @@ fn contained_in(p1: &[usize], p2: &[usize]) -> bool {
     true
 }
 
-// If p1 is a future extension of p2
+/// If p1 is a future extension of p2
+#[must_use]
 pub fn is_future_extension(pastures1: &[Vec<usize>], pastures2: &[Vec<usize>]) -> bool {
     if pastures1 == pastures2 {
         return false;
@@ -473,6 +474,8 @@ pub fn remove_farmyard_idx(all_pasture_configs: &mut Vec<PastureConfig>, idx: us
 }
 
 /// Get a random pasture configuration from all possible pasture configurations for a given pasture size configuration
+/// # Panics
+/// Panics if no pasture configurations are available for the given pasture size configuration
 #[must_use]
 pub fn get_best_fence_options(
     all_pasture_configs: &[PastureConfig],

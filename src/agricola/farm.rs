@@ -120,6 +120,7 @@ impl Farm {
         }
     }
 
+    #[must_use]
     pub fn flexibility(&self) -> usize {
         let mut future_room = [false; NUM_FARMYARD_SPACES];
         let mut future_field = [false; NUM_FARMYARD_SPACES];

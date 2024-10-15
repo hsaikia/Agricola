@@ -5,7 +5,7 @@ fn main() {
 
     // Find best room placement
     let room_positions = farm.possible_room_positions();
-    println!("Room positions {:?}", room_positions);
+    println!("Room positions {room_positions:?}");
     for room_position in room_positions {
         let mut tmp_farm = farm.clone();
         tmp_farm.build_room(room_position);
@@ -15,13 +15,12 @@ fn main() {
         let num_pasture_configs = get_all_pasture_configs(&tmp_farm.farmyard_spaces).len();
 
         println!(
-            "R {} => S {} F {} P {}",
-            room_position, num_stable_positions, num_field_positions, num_pasture_configs
+            "R {room_position} => S {num_stable_positions} F {num_field_positions} P {num_pasture_configs}"
         );
     }
 
     let stable_positions = farm.possible_stable_positions();
-    println!("Stable positions {:?}", stable_positions);
+    println!("Stable positions {stable_positions:?}");
     for stable_position in stable_positions {
         let mut tmp_farm = farm.clone();
         tmp_farm.build_stable(stable_position);
@@ -31,13 +30,12 @@ fn main() {
         let num_pasture_configs = get_all_pasture_configs(&tmp_farm.farmyard_spaces).len();
 
         println!(
-            "S {} => R {} F {} P {}",
-            stable_position, num_room_positions, num_field_positions, num_pasture_configs
+            "S {stable_position} => R {num_room_positions} F {num_field_positions} P {num_pasture_configs}"
         );
     }
 
     let field_positions = farm.possible_field_positions();
-    println!("Field positions {:?}", field_positions);
+    println!("Field positions {field_positions:?}",);
     for field_position in field_positions {
         let mut tmp_farm = farm.clone();
         tmp_farm.add_field(field_position);
@@ -47,8 +45,7 @@ fn main() {
         let num_pasture_configs = get_all_pasture_configs(&tmp_farm.farmyard_spaces).len();
 
         println!(
-            "F {} => R {} S {} P {}",
-            field_position, num_room_positions, num_stable_positions, num_pasture_configs
+            "F {field_position} => R {num_room_positions} S {num_stable_positions} P {num_pasture_configs}"
         );
     }
 

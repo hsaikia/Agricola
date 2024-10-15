@@ -64,7 +64,7 @@ fn score(farm: &Farm) -> i32 {
             }
             FarmyardSpace::Room => score += 1, // Assuming a clay house
             FarmyardSpace::Empty => score -= 1,
-            _ => (),
+            FarmyardSpace::UnfencedStable => (),
         }
     }
 
@@ -87,19 +87,19 @@ fn sim(farm: &Farm) -> i32 {
         //println!("Choice {} Can build room {} Can build field {} Can build stable {} Can fence {}", choice, can_build_room, can_build_field, can_build_stable, can_fence);
         if choice == 0 {
             let room_positions = farm.possible_room_positions();
-            if !room_positions.is_empty() {
+            if room_positions.is_empty() {
+                can_build_room = false;
+            } else {
                 let room_position = room_positions[rng.gen_range(0..room_positions.len())];
                 farm.build_room(room_position);
-            } else {
-                can_build_room = false;
             }
         } else if choice == 1 {
             let field_positions = farm.possible_field_positions();
-            if !field_positions.is_empty() {
+            if field_positions.is_empty() {
+                can_build_field = false;
+            } else {
                 let field_position = field_positions[rng.gen_range(0..field_positions.len())];
                 farm.add_field(field_position);
-            } else {
-                can_build_field = false;
             }
         } else if choice == 2 {
             let stable_positions = farm.possible_stable_positions();
@@ -126,6 +126,7 @@ fn sim(farm: &Farm) -> i32 {
     score(&farm)
 }
 
+#[allow(clippy::cast_precision_loss)]
 fn main() {
     let mut farm = Farm::new();
     farm.build_room(0);
@@ -134,8 +135,9 @@ fn main() {
     let num_games = 1000;
     for i in 0..num_games {
         let score = sim(&farm);
-        println!("Sim {} => {}", i, score);
+        println!("Sim {i} => {score}");
         average_score += score;
     }
+
     println!("{}", average_score as f32 / num_games as f32);
 }

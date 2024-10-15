@@ -5,31 +5,17 @@ use agricola_game::agricola::{
     fencing::{get_all_pasture_configs, pasture_sizes_from_hash, PastureConfig},
 };
 
-fn test1() -> Vec<PastureConfig> {
+fn example_config() -> Vec<PastureConfig> {
     let mut farmyard_spaces = [FarmyardSpace::Empty; 15];
 
     farmyard_spaces[5] = FarmyardSpace::Room;
     farmyard_spaces[10] = FarmyardSpace::Room;
-
-    //farmyard_spaces[0] = FarmyardSpace::Room;
-
-    get_all_pasture_configs(&farmyard_spaces)
-}
-
-fn test2() -> Vec<PastureConfig> {
-    let mut farmyard_spaces = [FarmyardSpace::Empty; 15];
-    farmyard_spaces[2] = FarmyardSpace::Field(None);
-    farmyard_spaces[5] = FarmyardSpace::Room;
-    farmyard_spaces[10] = FarmyardSpace::Room;
-
-    farmyard_spaces[13] = FarmyardSpace::FencedPasture(false, 0);
-    farmyard_spaces[14] = FarmyardSpace::FencedPasture(false, 1);
 
     get_all_pasture_configs(&farmyard_spaces)
 }
 
 fn main() {
-    let pasture_configs = test1();
+    let pasture_configs = example_config();
     let mut size_config_map: HashMap<u64, Vec<PastureConfig>> = HashMap::new();
     for pasture_config in &pasture_configs {
         println!(
