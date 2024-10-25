@@ -228,33 +228,6 @@ impl State {
         s.finish()
     }
 
-    pub fn play_random(&mut self, opt_depth: Option<usize>) {
-        let mut d: usize = 0;
-        loop {
-            if let Some(depth) = opt_depth {
-                if d == depth {
-                    break;
-                }
-            }
-            let choices = Action::next_choices(self);
-            if choices.is_empty() {
-                break;
-            }
-
-            // Only one choice, play it
-            if choices.len() == 1 {
-                choices[0].apply_choice(self);
-                continue;
-            }
-
-            d += 1;
-
-            // Chose a random action
-            let action_idx = rand::thread_rng().gen_range(0..choices.len());
-            choices[action_idx].apply_choice(self);
-        }
-    }
-
     #[must_use]
     pub fn player_type(&self, player_idx: usize) -> PlayerType {
         self.player_types[player_idx]
@@ -1034,6 +1007,71 @@ impl State {
     #[must_use]
     pub fn player_farm(&self, player_idx: usize) -> &Farm {
         &self.farms[player_idx]
+    }
+
+    pub fn play_weighted_random(&mut self, opt_depth: Option<usize>) {
+        let mut d: usize = 0;
+        loop {
+            if let Some(depth) = opt_depth {
+                if d == depth {
+                    break;
+                }
+            }
+            let choices = Action::next_choices(self);
+            if choices.is_empty() {
+                break;
+            }
+
+            // Only one choice, play it
+            if choices.len() == 1 {
+                choices[0].0.apply_choice(self);
+                continue;
+            }
+
+            d += 1;
+
+            // Chose a random action
+            let mut total_weight = 0.0;
+            for (_, weight) in &choices {
+                total_weight += weight;
+            }
+
+            let mut action_idx_weight = rand::thread_rng().gen_range(0.0..total_weight);
+            for (action, weight) in &choices {
+                if action_idx_weight < *weight {
+                    action.apply_choice(self);
+                    break;
+                }
+                action_idx_weight -= weight;
+            }
+        }
+    }
+
+    pub fn play_random(&mut self, opt_depth: Option<usize>) {
+        let mut d: usize = 0;
+        loop {
+            if let Some(depth) = opt_depth {
+                if d == depth {
+                    break;
+                }
+            }
+            let choices = Action::next_choices(self);
+            if choices.is_empty() {
+                break;
+            }
+
+            // Only one choice, play it
+            if choices.len() == 1 {
+                choices[0].0.apply_choice(self);
+                continue;
+            }
+
+            d += 1;
+
+            // Chose a random action
+            let action_idx = rand::thread_rng().gen_range(0..choices.len());
+            choices[action_idx].0.apply_choice(self);
+        }
     }
 }
 

@@ -21,14 +21,14 @@ pub fn search(
 
     if actions.len() == 1 {
         let mut state_tmp = state.clone();
-        actions[0].apply_choice(&mut state_tmp);
+        actions[0].0.apply_choice(&mut state_tmp);
         *num_seen += 1;
         return search(&state_tmp, player_idx, depth, alpha, beta, num_seen);
     }
 
     if state.current_player_idx == player_idx {
         let mut best: f64 = -100_000.0;
-        for action in &actions {
+        for (action, _) in &actions {
             let mut state_tmp = state.clone();
             action.apply_choice(&mut state_tmp);
             *num_seen += 1;
@@ -45,7 +45,7 @@ pub fn search(
         best
     } else {
         let mut best: f64 = 100_000.0;
-        for action in &actions {
+        for (action, _) in &actions {
             let mut state_tmp = state.clone();
             action.apply_choice(&mut state_tmp);
             *num_seen += 1;
@@ -72,7 +72,7 @@ pub fn best_move(state: &State) -> Option<Action> {
     }
 
     if actions.len() == 1 {
-        return Some(actions[0].clone());
+        return Some(actions[0].0.clone());
     }
 
     let player_idx = state.current_player_idx;
@@ -81,7 +81,7 @@ pub fn best_move(state: &State) -> Option<Action> {
     let mut best: f64 = -100_000.0;
     let mut num_seen: usize = 0;
 
-    for action in &actions {
+    for (action, _) in &actions {
         let mut state_tmp = state.clone();
         action.apply_choice(&mut state_tmp);
         let v = search(

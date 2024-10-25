@@ -6,7 +6,7 @@ use agricola_game::agricola::algorithms::SimulationRecord;
 use agricola_game::agricola::display::{print_farm, print_resources};
 use agricola_game::agricola::state::{State, MAX_NUM_PLAYERS};
 use agricola_game::agricola::{
-    actions::Action,
+    actions::{Action, WeightedAction},
     algorithms::{PlayerType, AI},
 };
 use crossterm::{
@@ -22,7 +22,7 @@ use ratatui::{
     Frame, Terminal,
 };
 
-const NUM_GAMES_TO_SIMULATE: usize = 200;
+const NUM_GAMES_TO_SIMULATE: usize = 500;
 const DEPTH: Option<usize> = None;
 
 #[derive(Clone, Copy, Debug)]
@@ -50,7 +50,7 @@ struct App {
     move_selected: bool,
     ai: [Option<AI>; MAX_NUM_PLAYERS],
     records: Vec<SimulationRecord>,
-    current_actions: Vec<Action>,
+    current_actions: Vec<WeightedAction>,
 }
 
 impl App {
@@ -128,14 +128,14 @@ impl App {
 
         if let Some(state) = &mut self.state {
             if self.current_actions.len() == 1 {
-                self.current_actions[0].apply_choice(state);
+                self.current_actions[0].0.apply_choice(state);
             } else {
                 match state.player_type(state.current_player_idx) {
                     PlayerType::Human => {
                         if !self.move_selected {
                             return;
                         }
-                        self.current_actions[self.selection_y].apply_choice(state);
+                        self.current_actions[self.selection_y].0.apply_choice(state);
                         self.move_selected = false;
                     }
                     PlayerType::MctsAI | PlayerType::TdAI => {
@@ -198,7 +198,7 @@ impl App {
         if let Some(state) = &self.state {
             match state.player_type(state.current_player_idx) {
                 PlayerType::Human => {
-                    for (i, action) in self.current_actions.iter().enumerate() {
+                    for (i, (action, _)) in self.current_actions.iter().enumerate() {
                         if i == self.selection_y {
                             ret.push_str(&format!("\n>> {action:?}"));
                             if let Action::Fence(_) = action {

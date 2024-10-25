@@ -24,7 +24,7 @@ fn main() {
         }
 
         if actions.len() == 1 {
-            actions[0].apply_choice(&mut state);
+            actions[0].0.apply_choice(&mut state);
             println!("Auto-choosing single action [{:?}]", actions[0]);
             continue;
         }

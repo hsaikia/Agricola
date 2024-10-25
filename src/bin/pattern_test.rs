@@ -97,8 +97,8 @@ fn sim_one_game(players: &[PlayerType]) -> Vec<Statistics> {
             rand::thread_rng().gen_range(0..choices.len())
         };
 
-        choices[action_idx].apply_choice(&mut state);
-        add_to_stats(&mut statistics, &state, &choices[action_idx]);
+        choices[action_idx].0.apply_choice(&mut state);
+        add_to_stats(&mut statistics, &state, &choices[action_idx].0);
     }
 
     let fitness = state.fitness();

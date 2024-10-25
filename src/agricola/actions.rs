@@ -1,8 +1,9 @@
 use super::action_space::{
-    get_resource, take_resources, ActionSpace, CattleMarket, Cultivation, FarmExpansion,
-    FarmRedevelopment, Farmland, Fencing, GrainUtilization, HouseRedevelopment, Improvements,
-    Lessons1, Lessons2, PigMarket, SheepMarket, UrgentWishForChildren, WishForChildren,
-    ACCUMULATION_SPACE_INDICES, OPEN_SPACES, RESOURCE_SPACE_INDICES,
+    get_resource, take_resources, ActionSpace, CattleMarket, ClayPit, Copse, Cultivation,
+    DayLaborer, FarmExpansion, FarmRedevelopment, Farmland, Fencing, Fishing, Forest,
+    GrainUtilization, Grove, Hollow, HouseRedevelopment, Improvements, Lessons1, Lessons2,
+    PigMarket, ReedBank, ResourceMarket, SheepMarket, TravelingPlayers, UrgentWishForChildren,
+    WishForChildren, ACCUMULATION_SPACE_INDICES, OPEN_SPACES, RESOURCE_SPACE_INDICES,
 };
 use super::card::{
     anytime_exchanges, cost, harvest_exchanges, AssistantTiller, BasketmakersWorkshop, Card,
@@ -18,8 +19,10 @@ use super::quantity::{
     ResourceExchange, Sheep, Stone, Vegetable, Wood,
 };
 use super::state::State;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::hash::Hash;
 pub const NUM_RESOURCE_SPACES: usize = 18;
 
 // Tuple <called from grain utilization, baked bread already>
@@ -107,23 +110,30 @@ pub enum Action {
     GetResourceFromChildless(usize), // index of Grain or Vegetable
 }
 
+const DEFAULT_WEIGHT: f64 = 1.0;
+const ZERO_WEIGHT: f64 = 0.0;
+pub type WeightedAction = (Action, f64);
+
 impl Action {
     #[allow(clippy::too_many_lines)]
     #[must_use]
-    pub fn next_choices(state: &State) -> Vec<Self> {
-        let mut ret: Vec<Self> = Vec::new();
+    pub fn next_choices(state: &State) -> Vec<WeightedAction> {
+        let mut ret: Vec<WeightedAction> = Vec::new();
         match &state.last_action {
-            Self::GetResourceFromChildless(_res) => vec![Self::PlaceWorker],
+            Self::GetResourceFromChildless(_res) => vec![(Self::PlaceWorker, DEFAULT_WEIGHT)],
             Self::UseLessons(cheaper) => Self::occupation_choices(state, *cheaper),
             Self::EndGame => vec![],
-            Self::StartGame => vec![Self::StartRound],
-            Self::StartRound => vec![Self::PlaceWorker],
+            Self::StartGame => vec![(Self::StartRound, DEFAULT_WEIGHT)],
+            Self::StartRound => vec![(Self::PlaceWorker, DEFAULT_WEIGHT)],
             Self::PlaceWorker => Self::place_worker_choices(state),
             Self::UseFarmland => {
                 let field_opt = state.field_options();
                 if !field_opt.is_empty() {
                     for opt in field_opt {
-                        ret.push(Self::Plow(CalledFromCultivation(false), opt));
+                        ret.push((
+                            Self::Plow(CalledFromCultivation(false), opt),
+                            DEFAULT_WEIGHT,
+                        ));
                     }
                 }
                 ret
@@ -133,7 +143,7 @@ impl Action {
             Self::UseGrainUtilization => Self::grain_utilization_choices(state, false),
             Self::BuildRoom(_) | Self::BuildStable(_) => {
                 ret.extend(Self::farm_expansion_choices(state));
-                ret.push(Self::EndTurn);
+                ret.push((Self::EndTurn, DEFAULT_WEIGHT));
                 ret
             }
             Self::Sow(called_from_grain_util, _seed) => {
@@ -145,29 +155,32 @@ impl Action {
                 } else {
                     ret.extend(Self::sow_choices(state, called_from_grain_util));
                 }
-                ret.push(Self::EndTurn);
+                ret.push((Self::EndTurn, DEFAULT_WEIGHT));
                 ret
             }
-            Self::UseImprovements => vec![Self::BuildMajor], // TODO : Add BuildMinor here
+            Self::UseImprovements => vec![(Self::BuildMajor, DEFAULT_WEIGHT)], // TODO : Add BuildMinor here
             Self::BuildMajor => Self::build_major_choices(state),
             Self::BuildCard(idx, _) => {
                 if *idx == ClayOven.index() || *idx == StoneOven.index() {
                     ret.extend(Self::baking_choices(state, false));
                 }
-                ret.push(Self::EndTurn);
+                ret.push((Self::EndTurn, DEFAULT_WEIGHT));
                 ret
             }
             Self::BakeBread(called_from_grain_util, _num_grain_to_bake) => {
                 if called_from_grain_util.0 {
                     ret.extend(Self::grain_utilization_choices(state, true));
                 }
-                ret.push(Self::EndTurn);
+                ret.push((Self::EndTurn, DEFAULT_WEIGHT));
                 ret
             }
             Self::UseHouseRedevelopment => {
-                ret.push(Self::Renovate(
-                    CalledFromHouseRedevelopment(true),
-                    CalledFromFarmRedevelopment(false),
+                ret.push((
+                    Self::Renovate(
+                        CalledFromHouseRedevelopment(true),
+                        CalledFromFarmRedevelopment(false),
+                    ),
+                    DEFAULT_WEIGHT,
                 ));
                 ret
             }
@@ -175,8 +188,10 @@ impl Action {
                 Self::renovate_choices(state, from_house_redev, from_farm_redev)
             }
             // TODO add minor build
-            Self::UseWishForChildren => vec![Self::GrowFamily(WithRoom(true))],
-            Self::UseUrgentWishForChildren => vec![Self::GrowFamily(WithRoom(false))],
+            Self::UseWishForChildren => vec![(Self::GrowFamily(WithRoom(true)), DEFAULT_WEIGHT)],
+            Self::UseUrgentWishForChildren => {
+                vec![(Self::GrowFamily(WithRoom(false)), DEFAULT_WEIGHT)]
+            }
             Self::UseCultivation => {
                 // using baked_bread = true, but this is irrelevant
                 ret.extend(Self::sow_choices(
@@ -185,10 +200,10 @@ impl Action {
                 ));
                 let field_opt = state.field_options();
                 if field_opt.is_empty() {
-                    ret.push(Self::EndTurn);
+                    ret.push((Self::EndTurn, DEFAULT_WEIGHT));
                 } else {
                     for opt in field_opt {
-                        ret.push(Self::Plow(CalledFromCultivation(true), opt));
+                        ret.push((Self::Plow(CalledFromCultivation(true), opt), DEFAULT_WEIGHT));
                     }
                 }
                 ret
@@ -201,24 +216,27 @@ impl Action {
                         &CalledFromGrainUtilization(false, true),
                     ));
                 }
-                ret.push(Self::EndTurn);
+                ret.push((Self::EndTurn, DEFAULT_WEIGHT));
                 ret
             }
             Self::UseFarmRedevelopment => {
-                ret.push(Self::Renovate(
-                    CalledFromHouseRedevelopment(false),
-                    CalledFromFarmRedevelopment(true),
+                ret.push((
+                    Self::Renovate(
+                        CalledFromHouseRedevelopment(false),
+                        CalledFromFarmRedevelopment(true),
+                    ),
+                    DEFAULT_WEIGHT,
                 ));
                 ret
             }
             Self::EndTurn => Self::end_turn_choices(state),
             Self::Harvest => {
                 if !state.harvest_paid() {
-                    ret.push(Self::PreHarvest);
+                    ret.push((Self::PreHarvest, DEFAULT_WEIGHT));
                 } else if state.can_init_new_round() {
-                    ret.push(Self::StartRound);
+                    ret.push((Self::StartRound, DEFAULT_WEIGHT));
                 } else {
-                    ret.push(Self::EndGame);
+                    ret.push((Self::EndGame, DEFAULT_WEIGHT));
                 }
                 ret
             }
@@ -234,16 +252,16 @@ impl Action {
                 }
                 ret
             }
-            Self::PayFoodOrBeg => vec![Self::Harvest],
+            Self::PayFoodOrBeg => vec![(Self::Harvest, DEFAULT_WEIGHT)],
             Self::UseDayLaborer => {
                 ret.extend(Self::day_laborer_choices(state));
                 ret
             }
-            _ => vec![Self::EndTurn],
+            _ => vec![(Self::EndTurn, DEFAULT_WEIGHT)],
         }
     }
 
-    fn occupation_choices(state: &State, cheaper: bool) -> Vec<Self> {
+    fn occupation_choices(state: &State, cheaper: bool) -> Vec<WeightedAction> {
         let mut required_food = if cheaper { 1 } else { 2 };
         // First Occ on L1 = 0 else 1. So 0, 1, 1, 1, ..
         // First two Occs on L2 = 1 else 2. So 1, 1, 2, 2, 2, ..
@@ -254,7 +272,7 @@ impl Action {
             required_food = 1;
         }
 
-        let mut ret: Vec<Self> = Vec::new();
+        let mut ret: Vec<WeightedAction> = Vec::new();
 
         if state.current_player_quantities()[Food.index()] < required_food {
             ret.extend(Self::anytime_conversions(
@@ -263,32 +281,35 @@ impl Action {
             ));
         } else {
             for occ in &state.occupations_available() {
-                ret.push(Self::PlayOccupation(*occ, required_food));
+                ret.push((Self::PlayOccupation(*occ, required_food), DEFAULT_WEIGHT));
             }
         }
         ret
     }
 
-    fn day_laborer_choices(state: &State) -> Vec<Self> {
-        let mut ret: Vec<Self> = Vec::new();
+    fn day_laborer_choices(state: &State) -> Vec<WeightedAction> {
+        let mut ret: Vec<WeightedAction> = Vec::new();
         let field_opt = state.field_options();
         if !field_opt.is_empty() && state.current_player_cards()[AssistantTiller.index()] {
             for opt in field_opt {
-                ret.push(Self::Plow(CalledFromCultivation(false), opt));
+                ret.push((
+                    Self::Plow(CalledFromCultivation(false), opt),
+                    DEFAULT_WEIGHT,
+                ));
             }
         }
-        ret.push(Self::EndTurn);
+        ret.push((Self::EndTurn, DEFAULT_WEIGHT));
         ret
     }
 
-    fn end_turn_choices(state: &State) -> Vec<Self> {
-        let mut ret: Vec<Self> = Vec::new();
+    fn end_turn_choices(state: &State) -> Vec<WeightedAction> {
+        let mut ret: Vec<WeightedAction> = Vec::new();
         if state.people_placed_this_round < state.total_workers() {
-            ret.push(Self::PlaceWorker);
+            ret.push((Self::PlaceWorker, DEFAULT_WEIGHT));
         } else if state.is_harvest() {
-            ret.push(Self::Harvest);
+            ret.push((Self::Harvest, DEFAULT_WEIGHT));
         } else if state.can_init_new_round() {
-            ret.push(Self::StartRound);
+            ret.push((Self::StartRound, DEFAULT_WEIGHT));
         } else {
             panic!("EndTurn should not result in EndGame directly");
         }
@@ -299,44 +320,53 @@ impl Action {
         state: &State,
         from_house_redev: &CalledFromHouseRedevelopment,
         from_farm_redev: &CalledFromFarmRedevelopment,
-    ) -> Vec<Self> {
-        let mut ret: Vec<Self> = Vec::new();
+    ) -> Vec<WeightedAction> {
+        let mut ret: Vec<WeightedAction> = Vec::new();
         if from_house_redev.0 && state.available_majors_to_build().iter().any(|x| *x) {
             // TODO also add minor check
-            ret.push(Self::BuildMajor);
+            ret.push((Self::BuildMajor, DEFAULT_WEIGHT));
         }
         if from_farm_redev.0 && state.can_fence() {
             ret.extend(Self::fencing_choices(state));
         }
-        ret.push(Self::EndTurn);
+        ret.push((Self::EndTurn, DEFAULT_WEIGHT));
         ret
     }
 
-    fn anytime_conversions(state: &State, conversion_stage: &ConversionStage) -> Vec<Self> {
-        let mut ret: Vec<Self> = Vec::new();
+    fn anytime_conversions(
+        state: &State,
+        conversion_stage: &ConversionStage,
+    ) -> Vec<WeightedAction> {
+        let mut ret: Vec<WeightedAction> = Vec::new();
         if state.current_player_quantities()[Grain.index()] > 0 {
-            ret.push(Self::Convert(
-                ResourceExchange {
-                    from: Grain.index(),
-                    to: Food.index(),
-                    num_from: 1,
-                    num_to: 1,
-                },
-                None,
-                conversion_stage.clone(),
+            ret.push((
+                Self::Convert(
+                    ResourceExchange {
+                        from: Grain.index(),
+                        to: Food.index(),
+                        num_from: 1,
+                        num_to: 1,
+                    },
+                    None,
+                    conversion_stage.clone(),
+                ),
+                DEFAULT_WEIGHT,
             ));
         }
 
         if state.current_player_quantities()[Vegetable.index()] > 0 {
-            ret.push(Self::Convert(
-                ResourceExchange {
-                    from: Vegetable.index(),
-                    to: Food.index(),
-                    num_from: 1,
-                    num_to: 1,
-                },
-                None,
-                conversion_stage.clone(),
+            ret.push((
+                Self::Convert(
+                    ResourceExchange {
+                        from: Vegetable.index(),
+                        to: Food.index(),
+                        num_from: 1,
+                        num_to: 1,
+                    },
+                    None,
+                    conversion_stage.clone(),
+                ),
+                DEFAULT_WEIGHT,
             ));
         }
 
@@ -344,7 +374,10 @@ impl Action {
             if *owned {
                 for exchange in anytime_exchanges(idx) {
                     if state.can_use_exchange(&exchange) {
-                        ret.push(Self::Convert(exchange, None, conversion_stage.clone()));
+                        ret.push((
+                            Self::Convert(exchange, None, conversion_stage.clone()),
+                            DEFAULT_WEIGHT,
+                        ));
                     }
                 }
             }
@@ -353,8 +386,8 @@ impl Action {
         ret
     }
 
-    fn harvest_choices(state: &State) -> Vec<Self> {
-        let mut ret: Vec<Self> = Vec::new();
+    fn harvest_choices(state: &State) -> Vec<WeightedAction> {
+        let mut ret: Vec<WeightedAction> = Vec::new();
         ret.extend(Self::anytime_conversions(state, &ConversionStage::Harvest));
 
         for (idx, owned) in state.current_player_cards().iter().enumerate() {
@@ -364,26 +397,35 @@ impl Action {
                         if idx == Joinery.index()
                             && !state.current_player_flags()[UsedJoinery.index()]
                         {
-                            ret.push(Self::Convert(
-                                exchange,
-                                Some(UsedJoinery.index()),
-                                ConversionStage::Harvest,
+                            ret.push((
+                                Self::Convert(
+                                    exchange,
+                                    Some(UsedJoinery.index()),
+                                    ConversionStage::Harvest,
+                                ),
+                                DEFAULT_WEIGHT,
                             ));
                         } else if idx == Pottery.index()
                             && !state.current_player_flags()[UsedPottery.index()]
                         {
-                            ret.push(Self::Convert(
-                                exchange,
-                                Some(UsedPottery.index()),
-                                ConversionStage::Harvest,
+                            ret.push((
+                                Self::Convert(
+                                    exchange,
+                                    Some(UsedPottery.index()),
+                                    ConversionStage::Harvest,
+                                ),
+                                DEFAULT_WEIGHT,
                             ));
                         } else if idx == BasketmakersWorkshop.index()
                             && !state.current_player_flags()[UsedBasketmakersWorkshop.index()]
                         {
-                            ret.push(Self::Convert(
-                                exchange,
-                                Some(UsedBasketmakersWorkshop.index()),
-                                ConversionStage::Harvest,
+                            ret.push((
+                                Self::Convert(
+                                    exchange,
+                                    Some(UsedBasketmakersWorkshop.index()),
+                                    ConversionStage::Harvest,
+                                ),
+                                DEFAULT_WEIGHT,
                             ));
                         }
                     }
@@ -394,56 +436,68 @@ impl Action {
         // Option to beg is only present when there are really no conversions possible
         // Otherwise this leads to a bad average fitness from random sampling early on
         if ret.is_empty() || state.got_enough_food() {
-            ret.push(Self::PayFoodOrBeg);
+            ret.push((Self::PayFoodOrBeg, DEFAULT_WEIGHT));
         }
 
         ret
     }
 
-    fn farm_expansion_choices(state: &State) -> Vec<Self> {
-        let mut ret: Vec<Self> = Vec::new();
+    fn farm_expansion_choices(state: &State) -> Vec<WeightedAction> {
+        let mut ret: Vec<WeightedAction> = Vec::new();
         let room_options = state.room_options();
         for idx in room_options {
-            ret.push(Self::BuildRoom(idx));
+            ret.push((Self::BuildRoom(idx), DEFAULT_WEIGHT));
         }
         let stable_options = state.stable_options();
         for idx in stable_options {
-            ret.push(Self::BuildStable(idx));
+            ret.push((Self::BuildStable(idx), DEFAULT_WEIGHT));
         }
         ret
     }
 
-    fn fencing_choices(state: &State) -> Vec<Self> {
-        let mut ret: Vec<Self> = Vec::new();
+    fn fencing_choices(state: &State) -> Vec<WeightedAction> {
+        let mut ret: Vec<WeightedAction> = Vec::new();
         let pasture_configs = state.fencing_choices();
         for ps_conf in pasture_configs {
-            ret.push(Self::Fence(ps_conf));
+            ret.push((Self::Fence(ps_conf), DEFAULT_WEIGHT));
         }
-        ret.push(Self::EndTurn);
+        ret.push((Self::EndTurn, DEFAULT_WEIGHT));
         ret
     }
 
-    fn sow_choices(state: &State, from_grain_util: &CalledFromGrainUtilization) -> Vec<Self> {
-        let mut ret: Vec<Self> = Vec::new();
+    fn sow_choices(
+        state: &State,
+        from_grain_util: &CalledFromGrainUtilization,
+    ) -> Vec<WeightedAction> {
+        let mut ret: Vec<WeightedAction> = Vec::new();
         if state.can_sow() && state.current_player_quantities()[Grain.index()] > 0 {
-            ret.push(Self::Sow(from_grain_util.clone(), Seed::Grain));
+            ret.push((
+                Self::Sow(from_grain_util.clone(), Seed::Grain),
+                DEFAULT_WEIGHT,
+            ));
         }
         if state.can_sow() && state.current_player_quantities()[Vegetable.index()] > 0 {
-            ret.push(Self::Sow(from_grain_util.clone(), Seed::Vegetable));
+            ret.push((
+                Self::Sow(from_grain_util.clone(), Seed::Vegetable),
+                DEFAULT_WEIGHT,
+            ));
         }
         ret
     }
 
-    fn baking_choices(state: &State, from_grain_util: bool) -> Vec<Self> {
-        let mut ret: Vec<Self> = Vec::new();
+    fn baking_choices(state: &State, from_grain_util: bool) -> Vec<WeightedAction> {
+        let mut ret: Vec<WeightedAction> = Vec::new();
         if BAKING_IMPROVEMENTS_INDICES
             .iter()
             .any(|&x| state.current_player_cards()[x])
         {
             for grain in 1..=state.current_player_quantities()[Grain.index()] {
-                ret.push(Self::BakeBread(
-                    CalledFromGrainUtilization(from_grain_util, false),
-                    NumGrainToBake(grain),
+                ret.push((
+                    Self::BakeBread(
+                        CalledFromGrainUtilization(from_grain_util, false),
+                        NumGrainToBake(grain),
+                    ),
+                    DEFAULT_WEIGHT,
                 ));
             }
         }
@@ -451,8 +505,8 @@ impl Action {
         ret
     }
 
-    fn grain_utilization_choices(state: &State, baked_already: bool) -> Vec<Self> {
-        let mut ret: Vec<Self> = Vec::new();
+    fn grain_utilization_choices(state: &State, baked_already: bool) -> Vec<WeightedAction> {
+        let mut ret: Vec<WeightedAction> = Vec::new();
         ret.extend(Self::sow_choices(
             state,
             &CalledFromGrainUtilization(true, baked_already),
@@ -463,8 +517,9 @@ impl Action {
         ret
     }
 
-    fn place_worker_choices(state: &State) -> Vec<Self> {
-        let mut ret: Vec<Self> = Vec::new();
+    #[allow(clippy::too_many_lines)]
+    fn place_worker_choices(state: &State) -> Vec<WeightedAction> {
+        let mut ret: Vec<WeightedAction> = Vec::new();
 
         // At the start of each round, if you have at least 3 rooms but only 2 people, you get 1 food and 1 crop of your choice (grain or vegetable).
         if state.before_round_start()
@@ -472,12 +527,116 @@ impl Action {
             && state.family_members(state.current_player_idx) == 2
             && state.can_grow_family_with_room()
         {
-            ret.push(Self::GetResourceFromChildless(Grain.index()));
-            ret.push(Self::GetResourceFromChildless(Vegetable.index()));
+            ret.push((
+                Self::GetResourceFromChildless(Grain.index()),
+                DEFAULT_WEIGHT,
+            ));
+            ret.push((
+                Self::GetResourceFromChildless(Vegetable.index()),
+                DEFAULT_WEIGHT,
+            ));
         }
 
         if !ret.is_empty() {
             return ret;
+        }
+
+        // Weight whatever actions are available
+        let mut weights = HashMap::new();
+
+        // Occs
+        if state.num_occupations_played() == 0 {
+            weights.insert(Lessons2.index(), ZERO_WEIGHT);
+        }
+
+        // Wood
+        let copse_wood = if state.occupied[Copse.index()] {
+            0
+        } else {
+            state.accumulated_resources[Copse.index()][Wood.index()]
+        };
+        let grove_wood = if state.occupied[Grove.index()] {
+            0
+        } else {
+            state.accumulated_resources[Grove.index()][Wood.index()]
+        };
+        let forest_wood = if state.occupied[Forest.index()] {
+            0
+        } else {
+            state.accumulated_resources[Forest.index()][Wood.index()]
+        };
+
+        if copse_wood < grove_wood || copse_wood < forest_wood {
+            weights.insert(Copse.index(), ZERO_WEIGHT);
+        }
+
+        if grove_wood < copse_wood || grove_wood < forest_wood {
+            weights.insert(Grove.index(), ZERO_WEIGHT);
+        }
+
+        if forest_wood < copse_wood || forest_wood < grove_wood {
+            weights.insert(Forest.index(), ZERO_WEIGHT);
+        }
+
+        // Clay
+        let hollow_clay = if state.occupied[Hollow.index()] {
+            0
+        } else {
+            state.accumulated_resources[Hollow.index()][Clay.index()]
+        };
+        let clay_pit_clay = if state.occupied[ClayPit.index()] {
+            0
+        } else {
+            state.accumulated_resources[ClayPit.index()][Clay.index()]
+        };
+
+        if hollow_clay < clay_pit_clay {
+            weights.insert(Hollow.index(), ZERO_WEIGHT);
+        }
+
+        if clay_pit_clay < hollow_clay {
+            weights.insert(ClayPit.index(), ZERO_WEIGHT);
+        }
+
+        // Reed
+        let reed_bank_reed = if state.occupied[ReedBank.index()] {
+            0
+        } else {
+            state.accumulated_resources[ReedBank.index()][Reed.index()]
+        };
+        if !state.occupied[ResourceMarket.index()] && reed_bank_reed == 1 {
+            weights.insert(ReedBank.index(), ZERO_WEIGHT);
+        }
+
+        // Food
+        let traveling_players_food = if state.occupied[TravelingPlayers.index()] {
+            0
+        } else {
+            state.accumulated_resources[TravelingPlayers.index()][Food.index()]
+        };
+        let fishing_food = if state.occupied[Fishing.index()] {
+            0
+        } else {
+            state.accumulated_resources[Fishing.index()][Food.index()]
+        };
+        let day_laborer_food = if state.occupied[DayLaborer.index()] {
+            0
+        } else {
+            2
+        };
+
+        if traveling_players_food < fishing_food || traveling_players_food < day_laborer_food {
+            weights.insert(TravelingPlayers.index(), ZERO_WEIGHT);
+        }
+
+        if fishing_food < traveling_players_food || fishing_food < day_laborer_food {
+            weights.insert(Fishing.index(), ZERO_WEIGHT);
+        }
+
+        if (day_laborer_food < traveling_players_food || day_laborer_food < fishing_food)
+            && !state.current_player_cards()[AssistantTiller.index()]
+        {
+            weights.insert(DayLaborer.index(), ZERO_WEIGHT);
         }
 
         for i in 0..OPEN_SPACES + state.current_round {
@@ -539,13 +698,19 @@ impl Action {
             if idx == Lessons2.index() && state.occupations_available().is_empty() {
                 continue;
             }
-            ret.push(Self::action_space_idx_to_action(idx));
+
+            let w = if weights.contains_key(&idx) {
+                *weights.get(&idx).unwrap()
+            } else {
+                DEFAULT_WEIGHT
+            };
+            ret.push((Self::action_space_idx_to_action(idx), w));
         }
         ret
     }
 
-    fn build_major_choices(state: &State) -> Vec<Self> {
-        let mut ret: Vec<Self> = Vec::new();
+    fn build_major_choices(state: &State) -> Vec<WeightedAction> {
+        let mut ret: Vec<WeightedAction> = Vec::new();
 
         for major_idx in MAJOR_IMPROVEMENTS_INDICES {
             if !state.card_available(major_idx) {
@@ -556,11 +721,17 @@ impl Action {
                 && (state.current_player_cards()[Fireplace1.index()]
                     || state.current_player_cards()[Fireplace2.index()])
             {
-                ret.push(Self::BuildCard(major_idx, ReturnFireplace(true)));
+                ret.push((
+                    Self::BuildCard(major_idx, ReturnFireplace(true)),
+                    DEFAULT_WEIGHT,
+                ));
             }
 
             if can_pay_for_resource(&cost(major_idx), state.current_player_quantities()) {
-                ret.push(Self::BuildCard(major_idx, ReturnFireplace(false)));
+                ret.push((
+                    Self::BuildCard(major_idx, ReturnFireplace(false)),
+                    DEFAULT_WEIGHT,
+                ));
             }
         }
 

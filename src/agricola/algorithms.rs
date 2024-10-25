@@ -109,7 +109,7 @@ impl AI {
     pub fn get_simulation_records(state: &State) -> Vec<SimulationRecord> {
         let mut records: Vec<SimulationRecord> = Vec::new();
         let actions = Action::next_choices(state);
-        for action in actions {
+        for (action, _) in actions {
             let mut tmp_state = state.clone();
             action.apply_choice(&mut tmp_state);
             records.push(SimulationRecord {
@@ -186,7 +186,7 @@ impl AI {
             if sub_choices.is_empty() {
                 break;
             } else if sub_choices.len() == 1 {
-                sub_choices[0].apply_choice(state);
+                sub_choices[0].0.apply_choice(state);
             } else {
                 // Generate all child hashes
                 let sub_records: Vec<SimulationRecord> = AI::get_simulation_records(state);
@@ -229,7 +229,7 @@ impl AI {
         let final_node_hash = tmp_state.get_hash();
 
         // Perform playout - play the game out until the desired depth (if none, play until the end)
-        tmp_state.play_random(opt_depth);
+        tmp_state.play_weighted_random(opt_depth);
 
         // Calculate result and backpropagate to the root
         let res = tmp_state.fitness();
@@ -300,7 +300,7 @@ impl AI {
         let path = self.trace_path_uct(&mut tmp_state);
 
         // Perform playout - play the game out until the desired depth (if none, play until the end)
-        tmp_state.play_random(opt_depth);
+        tmp_state.play_weighted_random(opt_depth);
 
         // Calculate result and backpropagate to the root
         let res = tmp_state.fitness();
