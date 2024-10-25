@@ -473,7 +473,7 @@ pub fn remove_farmyard_idx(all_pasture_configs: &mut Vec<PastureConfig>, idx: us
     all_pasture_configs.retain(|x| x.pastures.iter().flatten().all(|&y| y != idx));
 }
 
-/// Get a random pasture configuration from all possible pasture configurations for a given pasture size configuration
+/// Get the best pasture configurations according to maximum future extensibility
 /// # Panics
 /// Panics if no pasture configurations are available for the given pasture size configuration
 #[must_use]
