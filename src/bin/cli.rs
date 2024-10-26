@@ -206,8 +206,9 @@ impl App {
                                 let mut farm = state.current_farm().clone();
                                 let mut wood = state.current_player_quantities()[Wood.index()];
                                 farm.fence_spaces(pc, &mut wood);
-                                let house_idx = state.room_material_idx(state.current_player_idx);
-                                additional_stuff = print_farm(&farm, house_idx);
+                                let room_material_index =
+                                    state.room_material_idx(state.current_player_idx);
+                                additional_stuff = print_farm(&farm, room_material_index);
                             }
                         } else {
                             ret.push_str(&format!("\n{action:?}"));

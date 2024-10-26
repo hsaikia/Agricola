@@ -1,21 +1,16 @@
 use super::{
-    farm::Farm,
-    flag::{ClayHouse, Flag},
-};
-use crate::agricola::{fencing::MAX_PASTURES, flag::WoodHouse};
-
-use super::{
     card::CARD_NAMES,
-    farm::{FarmyardSpace, L, W},
-    quantity::{AdultMembers, Children, Quantity, Resources, NUM_RESOURCES},
+    farm::{Farm, FarmyardSpace, L, W},
+    fencing::MAX_PASTURES,
+    quantity::{AdultMembers, Children, Clay, Quantity, Resources, Stone, Wood, NUM_RESOURCES},
     state::State,
 };
 
 pub const RESOURCE_EMOJIS: [&str; NUM_RESOURCES] = [
-    "\u{1f372}",
     "\u{1fab5}",
     "\u{1f9f1}",
     "\u{1faa8}",
+    "\u{1f372}",
     "\u{1f344}",
     "\u{1f33e}",
     "🎃",
@@ -73,19 +68,21 @@ pub fn print_resources(state: &State, player_idx: usize) -> String {
 }
 
 #[must_use]
-pub fn print_farm(farm: &Farm, house_idx: usize) -> String {
+pub fn print_farm(farm: &Farm, room_material_index: usize) -> String {
     const PASTURE_EMOJIS: [[&str; MAX_PASTURES]; 2] = [
         ["[p1]", "[p2]", "[p3]", "[p4]"],
         ["[P1]", "[P2]", "[P3]", "[P4]"],
     ];
     let mut ret = String::from("\n\n\n");
 
-    let room_emoji = if house_idx == WoodHouse.index() {
+    let room_emoji = if room_material_index == Wood.index() {
         "[WR]"
-    } else if house_idx == ClayHouse.index() {
+    } else if room_material_index == Clay.index() {
         "[CR]"
-    } else {
+    } else if room_material_index == Stone.index() {
         "[SR]"
+    } else {
+        panic!("Invalid room material index");
     };
 
     for i in 0..W {

@@ -2,10 +2,10 @@ pub trait Quantity {
     fn index(&self) -> usize;
 }
 
-pub struct Food;
 pub struct Wood;
 pub struct Clay;
 pub struct Stone;
+pub struct Food;
 pub struct Reed;
 pub struct Grain;
 pub struct Vegetable;
@@ -23,25 +23,25 @@ pub struct UnfencedStables;
 pub struct FencedStables;
 pub struct BeggingTokens;
 
-impl Quantity for Food {
+impl Quantity for Wood {
     fn index(&self) -> usize {
         0
     }
 }
 
-impl Quantity for Wood {
+impl Quantity for Clay {
     fn index(&self) -> usize {
         1
     }
 }
 
-impl Quantity for Clay {
+impl Quantity for Stone {
     fn index(&self) -> usize {
         2
     }
 }
 
-impl Quantity for Stone {
+impl Quantity for Food {
     fn index(&self) -> usize {
         3
     }
