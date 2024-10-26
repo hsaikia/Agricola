@@ -1,4 +1,7 @@
-use super::flag::{ClayHouse, Flag};
+use super::{
+    farm::Farm,
+    flag::{ClayHouse, Flag},
+};
 use crate::agricola::{fencing::MAX_PASTURES, flag::WoodHouse};
 
 use super::{
@@ -70,16 +73,16 @@ pub fn print_resources(state: &State, player_idx: usize) -> String {
 }
 
 #[must_use]
-pub fn print_farm(state: &State, player_idx: usize) -> String {
+pub fn print_farm(farm: &Farm, house_idx: usize) -> String {
     const PASTURE_EMOJIS: [[&str; MAX_PASTURES]; 2] = [
         ["[p1]", "[p2]", "[p3]", "[p4]"],
         ["[P1]", "[P2]", "[P3]", "[P4]"],
     ];
     let mut ret = String::from("\n\n\n");
 
-    let room_emoji = if state.player_flags(player_idx)[WoodHouse.index()] {
+    let room_emoji = if house_idx == WoodHouse.index() {
         "[WR]"
-    } else if state.player_flags(player_idx)[ClayHouse.index()] {
+    } else if house_idx == ClayHouse.index() {
         "[CR]"
     } else {
         "[SR]"
@@ -88,7 +91,7 @@ pub fn print_farm(state: &State, player_idx: usize) -> String {
     for i in 0..W {
         for j in 0..L {
             let idx = i * L + j;
-            match state.player_farm(player_idx).farmyard_spaces[idx] {
+            match farm.farmyard_spaces[idx] {
                 FarmyardSpace::Empty => {
                     ret.push_str("[--]");
                 }

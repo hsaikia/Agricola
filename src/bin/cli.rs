@@ -4,6 +4,7 @@ use std::{error::Error, io};
 
 use agricola_game::agricola::algorithms::SimulationRecord;
 use agricola_game::agricola::display::{print_farm, print_resources};
+use agricola_game::agricola::quantity::{Quantity, Wood};
 use agricola_game::agricola::state::{State, MAX_NUM_PLAYERS};
 use agricola_game::agricola::{
     actions::{Action, WeightedAction},
@@ -201,8 +202,12 @@ impl App {
                     for (i, (action, _)) in self.current_actions.iter().enumerate() {
                         if i == self.selection_y {
                             ret.push_str(&format!("\n>> {action:?}"));
-                            if let Action::Fence(_) = action {
-                                additional_stuff = print_farm(state, state.current_player_idx);
+                            if let Action::Fence(pc) = action {
+                                let mut farm = state.current_farm().clone();
+                                let mut wood = state.current_player_quantities()[Wood.index()];
+                                farm.fence_spaces(pc, &mut wood);
+                                let house_idx = state.room_material_idx(state.current_player_idx);
+                                additional_stuff = print_farm(&farm, house_idx);
                             }
                         } else {
                             ret.push_str(&format!("\n{action:?}"));
@@ -411,7 +416,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                 )
                 .split(farm_areas[2 * i]);
 
-            let farm_strings = print_farm(state, i);
+            let farm_strings = print_farm(state.player_farm(i), state.room_material_idx(i));
             let main_farm = Paragraph::new(farm_strings.to_string())
                 .style(Style::default())
                 .alignment(ratatui::layout::Alignment::Center);

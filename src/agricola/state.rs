@@ -399,12 +399,12 @@ impl State {
         }
     }
 
-    fn room_material_idx(&self) -> usize {
-        if self.current_player_flags()[WoodHouse.index()] {
+    pub fn room_material_idx(&self, player_idx: usize) -> usize {
+        if self.player_flags(player_idx)[WoodHouse.index()] {
             Wood.index()
-        } else if self.current_player_flags()[ClayHouse.index()] {
+        } else if self.player_flags(player_idx)[ClayHouse.index()] {
             Clay.index()
-        } else if self.current_player_flags()[StoneHouse.index()] {
+        } else if self.player_flags(player_idx)[StoneHouse.index()] {
             Stone.index()
         } else {
             panic!("No house type set");
@@ -414,7 +414,9 @@ impl State {
     pub fn set_can_build_room(&mut self) {
         self.current_player_flags_mut()[CanBuildRoom.index()] =
             !self.current_farm().possible_room_positions().is_empty()
-                && self.current_player_quantities()[self.room_material_idx()] >= 5
+                && self.current_player_quantities()
+                    [self.room_material_idx(self.current_player_idx)]
+                    >= 5
                 && self.current_player_quantities()[Reed.index()] >= 2;
     }
 
@@ -429,7 +431,7 @@ impl State {
     pub fn build_room(&mut self, idx: &usize) {
         assert!(self.can_build_room());
         // By default Rooms cost 5 of the corresponding building resource (as the material of the house and 2 Reed)
-        let room_material_idx = self.room_material_idx();
+        let room_material_idx = self.room_material_idx(self.current_player_idx);
         self.current_player_quantities_mut()[room_material_idx] -= 5;
         self.current_player_quantities_mut()[Reed.index()] -= 2;
         self.current_farm_mut().build_room(*idx);

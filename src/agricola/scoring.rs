@@ -1,6 +1,5 @@
 use super::farm::{FarmyardSpace, Seed};
 use super::fencing::get_existing_pastures;
-use super::flag::{ClayHouse, Flag, WoodHouse};
 use super::quantity::{Boar, Cattle, Grain, Quantity, Sheep, Vegetable};
 use super::state::State;
 
@@ -19,13 +18,7 @@ pub fn score_farm(state: &State, player_idx: usize) -> i32 {
     let mut num_fields: usize = 0;
     let mut player_quantities = *state.player_quantities(player_idx);
 
-    let house_type_idx = if state.player_flags(player_idx)[WoodHouse.index()] {
-        0
-    } else if state.player_flags(player_idx)[ClayHouse.index()] {
-        1
-    } else {
-        2
-    };
+    let house_type_idx = state.room_material_idx(player_idx);
 
     let num_pastures = get_existing_pastures(&state.player_farm(player_idx).farmyard_spaces)
         .iter()
