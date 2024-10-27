@@ -13,7 +13,7 @@ use super::card::{
     OCCUPATIONS_INDICES,
 };
 use super::display::format_resources;
-use super::farm::{Farm, Seed};
+use super::farm::{Farm, FarmyardSpace, Seed, NUM_FARMYARD_SPACES};
 use super::fencing::{get_all_pasture_configs, PastureConfig};
 use super::flag::{
     BakedOnceWithClayOven, BakedOnceWithStoneOven, BakedTwiceWithStoneOven, BeforeRoundStart,
@@ -399,6 +399,9 @@ impl State {
         }
     }
 
+    /// # Panics
+    /// Will panic if a wrong house type is set
+    #[must_use]
     pub fn room_material_idx(&self, player_idx: usize) -> usize {
         if self.player_flags(player_idx)[WoodHouse.index()] {
             Wood.index()
@@ -1009,6 +1012,23 @@ impl State {
     #[must_use]
     pub fn player_farm(&self, player_idx: usize) -> &Farm {
         &self.farms[player_idx]
+    }
+
+    #[must_use]
+    pub fn grain_and_veg_on_fields(&self, player_idx: usize) -> (usize, usize) {
+        let mut num_grain = 0;
+        let mut num_veg = 0;
+
+        for idx in 0..NUM_FARMYARD_SPACES {
+            if let FarmyardSpace::Field(some_seed) = self.farms[player_idx].farmyard_spaces[idx] {
+                match some_seed {
+                    Some((Seed::Grain, num)) => num_grain += num,
+                    Some((Seed::Vegetable, num)) => num_veg += num,
+                    _ => {}
+                }
+            }
+        }
+        (num_grain, num_veg)
     }
 
     pub fn play_weighted_random(&mut self, opt_depth: Option<usize>) {

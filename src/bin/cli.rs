@@ -409,9 +409,9 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                 .direction(Direction::Horizontal)
                 .constraints(
                     [
-                        Constraint::Percentage(30),
-                        Constraint::Percentage(30),
-                        Constraint::Percentage(40),
+                        Constraint::Percentage(45),
+                        Constraint::Percentage(10),
+                        Constraint::Percentage(45),
                     ]
                     .as_ref(),
                 )

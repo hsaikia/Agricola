@@ -2,7 +2,10 @@ use super::{
     card::CARD_NAMES,
     farm::{Farm, FarmyardSpace, L, W},
     fencing::MAX_PASTURES,
-    quantity::{AdultMembers, Children, Clay, Quantity, Resources, Stone, Wood, NUM_RESOURCES},
+    quantity::{
+        AdultMembers, Children, Clay, Grain, Quantity, Resources, Stone, Vegetable, Wood,
+        NUM_RESOURCES,
+    },
     state::State,
 };
 
@@ -35,10 +38,31 @@ pub fn format_resources(resource: &Resources) -> String {
 #[must_use]
 pub fn print_resources(state: &State, player_idx: usize) -> String {
     let resource = state.player_quantities(player_idx);
+    let unharvested_grain_and_veg = state.grain_and_veg_on_fields(player_idx);
     let mut ret = String::from("\n");
 
     for (i, num_res) in resource.iter().take(NUM_RESOURCES).enumerate() {
-        if num_res == &0 {
+        let mut extra = 0;
+        if i == Grain.index() {
+            extra = unharvested_grain_and_veg.0;
+        }
+
+        if i == Vegetable.index() {
+            extra = unharvested_grain_and_veg.1;
+        }
+
+        if num_res == &0 && extra == 0 {
+            continue;
+        }
+
+        if extra > 0 {
+            ret.push_str(&format!(
+                "\n{:2} {} + {:2} {}",
+                num_res,
+                RESOURCE_EMOJIS[i].repeat(*num_res),
+                extra,
+                RESOURCE_EMOJIS[i].repeat(extra)
+            ));
             continue;
         }
         ret.push_str(&format!(
@@ -67,6 +91,8 @@ pub fn print_resources(state: &State, player_idx: usize) -> String {
     ret
 }
 
+/// # Panics
+/// If `room_material_index` is not one of the valid indices
 #[must_use]
 pub fn print_farm(farm: &Farm, room_material_index: usize) -> String {
     const PASTURE_EMOJIS: [[&str; MAX_PASTURES]; 2] = [
