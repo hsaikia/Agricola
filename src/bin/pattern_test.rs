@@ -24,7 +24,9 @@ impl Pattern {
                 }
             }
             Self::Grow => {
-                if state.can_grow_family_with_room() || state.can_grow_family_without_room() {
+                if state.can_grow_family_with_room(state.current_player_idx)
+                    || state.can_grow_family_without_room(state.current_player_idx)
+                {
                     matches!(action, Action::GrowFamily(_))
                 } else {
                     false

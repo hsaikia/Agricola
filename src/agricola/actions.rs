@@ -110,6 +110,7 @@ pub enum Action {
     GetResourceFromChildless(usize), // index of Grain or Vegetable
 }
 
+const LARGE_WEIGHT: f64 = 100.0;
 const DEFAULT_WEIGHT: f64 = 1.0;
 const ZERO_WEIGHT: f64 = 0.0;
 pub type WeightedAction = (Action, f64);
@@ -529,7 +530,7 @@ impl Action {
         if state.before_round_start()
             && state.current_player_cards()[Childless.index()]
             && state.family_members(state.current_player_idx) == 2
-            && state.can_grow_family_with_room()
+            && state.can_grow_family_with_room(state.current_player_idx)
         {
             ret.push((
                 Self::GetResourceFromChildless(Grain.index()),
@@ -683,11 +684,15 @@ impl Action {
                 continue;
             }
 
-            if idx == WishForChildren.index() && !state.can_grow_family_with_room() {
+            if idx == WishForChildren.index()
+                && !state.can_grow_family_with_room(state.current_player_idx)
+            {
                 continue;
             }
 
-            if idx == UrgentWishForChildren.index() && !state.can_grow_family_without_room() {
+            if idx == UrgentWishForChildren.index()
+                && !state.can_grow_family_without_room(state.current_player_idx)
+            {
                 continue;
             }
 
@@ -704,6 +709,27 @@ impl Action {
 
             if idx == Lessons2.index() && state.occupations_available().is_empty() {
                 continue;
+            }
+
+            // Growing before others
+            if idx == WishForChildren.index()
+                && !state.occupied[WishForChildren.index()]
+                && state.can_grow_family_with_room(state.current_player_idx)
+                && (0..state.num_players)
+                    .filter(|&x| x != state.current_player_idx)
+                    .any(|x| state.can_grow_family_with_room(x))
+            {
+                weights.insert(idx, LARGE_WEIGHT);
+            }
+
+            if idx == UrgentWishForChildren.index()
+                && !state.occupied[UrgentWishForChildren.index()]
+                && state.can_grow_family_with_room(state.current_player_idx)
+                && (0..state.num_players)
+                    .filter(|&x| x != state.current_player_idx)
+                    .any(|x| state.can_grow_family_with_room(x))
+            {
+                weights.insert(idx, LARGE_WEIGHT);
             }
 
             let w = if weights.contains_key(&idx) {

@@ -203,20 +203,18 @@ impl State {
     }
 
     #[must_use]
-    pub fn can_grow_family_with_room(&self) -> bool {
-        self.family_members(self.current_player_idx) < MAX_FAMILY_MEMBERS
-            && self.current_player_flags()[HasRoomToGrow.index()]
+    pub fn can_grow_family_with_room(&self, player_idx: usize) -> bool {
+        self.family_members(player_idx) < MAX_FAMILY_MEMBERS
+            && self.player_flags(player_idx)[HasRoomToGrow.index()]
     }
 
     /// # Panics
     /// Will panic if the family cannot grow without room
-    pub fn grow_family_with_room(&mut self) {
-        assert!(self.can_grow_family_with_room());
-        self.current_player_quantities_mut()[Children.index()] += 1;
-        if self.family_members(self.current_player_idx)
-            >= self.current_player_quantities()[Rooms.index()]
-        {
-            self.current_player_flags_mut()[HasRoomToGrow.index()] = false;
+    pub fn grow_family_with_room(&mut self, player_idx: usize) {
+        assert!(self.can_grow_family_with_room(player_idx));
+        self.player_quantities_mut(player_idx)[Children.index()] += 1;
+        if self.family_members(player_idx) >= self.player_quantities(player_idx)[Rooms.index()] {
+            self.player_flags_mut(player_idx)[HasRoomToGrow.index()] = false;
         }
     }
 
@@ -804,21 +802,21 @@ impl State {
 
     /// # Panics
     /// Will panic if the assertion fails
-    pub fn grow_family_without_room(&mut self) {
-        assert!(self.can_grow_family_without_room());
-        self.current_player_quantities_mut()[Children.index()] += 1;
+    pub fn grow_family_without_room(&mut self, player_idx: usize) {
+        assert!(self.can_grow_family_without_room(player_idx));
+        self.player_quantities_mut(player_idx)[Children.index()] += 1;
     }
 
     #[must_use]
-    pub fn can_grow_family_without_room(&self) -> bool {
-        self.family_members(self.current_player_idx) < MAX_FAMILY_MEMBERS
+    pub fn can_grow_family_without_room(&self, player_idx: usize) -> bool {
+        self.family_members(player_idx) < MAX_FAMILY_MEMBERS
     }
 
     pub fn grow_family(&mut self, with_room: bool) {
         if with_room {
-            self.grow_family_with_room();
+            self.grow_family_with_room(self.current_player_idx);
         } else {
-            self.grow_family_without_room();
+            self.grow_family_without_room(self.current_player_idx);
         }
     }
 
