@@ -23,7 +23,7 @@ use ratatui::{
     Frame, Terminal,
 };
 
-const NUM_GAMES_TO_SIMULATE: usize = 500;
+const NUM_GAMES_TO_SIMULATE: usize = 100;
 const DEPTH: Option<usize> = None;
 
 #[derive(Clone, Copy, Debug)]
@@ -340,8 +340,8 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         .direction(Direction::Horizontal)
         .constraints(
             [
-                Constraint::Percentage(20),
-                Constraint::Percentage(50),
+                Constraint::Percentage(30),
+                Constraint::Percentage(40),
                 Constraint::Percentage(30),
             ]
             .as_ref(),
