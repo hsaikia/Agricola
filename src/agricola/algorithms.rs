@@ -109,7 +109,11 @@ impl AI {
     pub fn get_simulation_records(state: &State) -> Vec<SimulationRecord> {
         let mut records: Vec<SimulationRecord> = Vec::new();
         let actions = Action::next_choices(state);
-        for (action, _) in actions {
+        for (action, weight) in actions {
+            if weight == 0.0 {
+                continue;
+            }
+
             let mut tmp_state = state.clone();
             action.apply_choice(&mut tmp_state);
             records.push(SimulationRecord {

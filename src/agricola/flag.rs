@@ -10,9 +10,6 @@ pub struct GotEnoughFood;
 pub struct HarvestPaid;
 pub struct HasRoomToGrow;
 pub struct BeforeRoundStart;
-pub struct CanRenovate;
-pub struct CanBuildRoom;
-pub struct CanBuildStable;
 pub struct BakedOnceWithClayOven;
 pub struct BakedOnceWithStoneOven;
 pub struct BakedTwiceWithStoneOven;
@@ -68,58 +65,40 @@ impl Flag for BeforeRoundStart {
     }
 }
 
-impl Flag for CanRenovate {
+impl Flag for BakedOnceWithClayOven {
     fn index(&self) -> usize {
         8
     }
 }
 
-impl Flag for CanBuildRoom {
+impl Flag for BakedOnceWithStoneOven {
     fn index(&self) -> usize {
         9
     }
 }
 
-impl Flag for CanBuildStable {
+impl Flag for BakedTwiceWithStoneOven {
     fn index(&self) -> usize {
         10
     }
 }
 
-impl Flag for BakedOnceWithClayOven {
+impl Flag for UsedJoinery {
     fn index(&self) -> usize {
         11
     }
 }
 
-impl Flag for BakedOnceWithStoneOven {
+impl Flag for UsedPottery {
     fn index(&self) -> usize {
         12
     }
 }
 
-impl Flag for BakedTwiceWithStoneOven {
+impl Flag for UsedBasketmakersWorkshop {
     fn index(&self) -> usize {
         13
     }
 }
 
-impl Flag for UsedJoinery {
-    fn index(&self) -> usize {
-        14
-    }
-}
-
-impl Flag for UsedPottery {
-    fn index(&self) -> usize {
-        15
-    }
-}
-
-impl Flag for UsedBasketmakersWorkshop {
-    fn index(&self) -> usize {
-        16
-    }
-}
-
-pub const NUM_FLAGS: usize = 17;
+pub const NUM_FLAGS: usize = 14;

@@ -1,7 +1,8 @@
 use derivative::Derivative;
 
-use super::fencing::{get_existing_pasture_capacities, PastureConfig};
-use crate::agricola::fencing::get_best_fence_options;
+use super::fencing::{
+    best_fence_options, get_existing_pasture_capacities, get_existing_pastures, PastureConfig,
+};
 use std::{collections::VecDeque, hash::Hash};
 
 pub const L: usize = 5;
@@ -10,6 +11,13 @@ pub const NUM_FARMYARD_SPACES: usize = L * W;
 pub const MAX_FENCES: usize = 15;
 pub const MAX_STABLES: usize = 4;
 pub const ROOM_INDICES: [usize; 2] = [5, 10];
+
+const ROOM_ORDER: [usize; 13] = [0, 11, 6, 12, 7, 13, 8, 14, 9, 1, 2, 3, 4];
+const FIELD_ORDER: [usize; 13] = [0, 1, 6, 2, 7, 3, 8, 4, 9, 11, 12, 13, 14];
+const PASTURE_ORDER: [usize; 13] = [14, 9, 13, 8, 4, 3, 12, 7, 2, 11, 6, 1, 0];
+
+// Try and place one stable each in pastures without stables
+const STABLE_ORDER: [usize; 13] = [14, 9, 4, 13, 8, 3, 12, 7, 2, 11, 6, 1, 0];
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq)]
 pub enum Seed {
@@ -155,7 +163,7 @@ impl Farm {
         if self.fences_used >= MAX_FENCES {
             return Vec::new();
         }
-        get_best_fence_options(cache, self.fences_used, wood)
+        best_fence_options(cache, self.fences_used, wood, &PASTURE_ORDER)
     }
 
     pub fn fence_spaces(&mut self, pasture_config: &PastureConfig, wood: &mut usize) {
@@ -181,36 +189,62 @@ impl Farm {
     }
 
     #[must_use]
-    pub fn possible_field_positions(&self) -> Vec<usize> {
-        let field_idxs = self.field_indices();
+    fn next_best_position(&self, idxs: &[usize], order: &[usize]) -> Option<usize> {
+        let potential_positions = if idxs.is_empty() {
+            self.empty_indices()
+        } else {
+            self.neighbor_empty_indices(idxs)
+        };
 
-        if field_idxs.is_empty() {
-            return self.empty_indices();
+        for idx in order {
+            if potential_positions.contains(idx) {
+                return Some(*idx);
+            }
         }
 
-        self.neighbor_empty_indices(&field_idxs)
+        None
     }
 
     #[must_use]
-    pub fn possible_room_positions(&self) -> Vec<usize> {
-        let room_idxs = self.room_indices();
-
-        if room_idxs.is_empty() {
-            return self.empty_indices();
-        }
-        self.neighbor_empty_indices(&room_idxs)
+    pub fn next_field_position(&self) -> Option<usize> {
+        self.next_best_position(&self.field_indices(), &FIELD_ORDER)
     }
 
     #[must_use]
-    pub fn possible_stable_positions(&self) -> Vec<usize> {
-        (0..NUM_FARMYARD_SPACES)
-            .filter(|&i| {
-                matches!(
-                    self.farmyard_spaces[i],
-                    FarmyardSpace::Empty | FarmyardSpace::FencedPasture(false, _)
-                )
+    pub fn next_room_position(&self) -> Option<usize> {
+        self.next_best_position(&self.room_indices(), &ROOM_ORDER)
+    }
+
+    #[must_use]
+    pub fn next_stable_position(&self) -> Option<usize> {
+        let existing_pastures = get_existing_pastures(&self.farmyard_spaces);
+        let stable_positions = self
+            .farmyard_spaces
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, fs)| {
+                if let FarmyardSpace::UnfencedStable | FarmyardSpace::FencedPasture(true, _) = fs {
+                    Some(idx)
+                } else {
+                    None
+                }
             })
-            .collect()
+            .collect::<Vec<_>>();
+        for pastures in existing_pastures {
+            // Check if there's any stable in the pasture
+            if pastures.iter().any(|&idx| {
+                matches!(
+                    self.farmyard_spaces[idx],
+                    FarmyardSpace::FencedPasture(true, _)
+                )
+            }) {
+                continue;
+            }
+            return Some(pastures[0]);
+        }
+
+        // If no pasture without stable, then check for empty spaces and pastures with stables in the given order
+        self.next_best_position(&stable_positions, &STABLE_ORDER)
     }
 
     #[must_use]
@@ -337,26 +371,5 @@ impl Farm {
             }
         }
         ret
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    // Note this useful idiom: importing names from outer (for mod tests) scope.
-    use super::*;
-
-    #[test]
-    fn test_field_options() {
-        let farm = Farm::new();
-        let field_opt = farm.possible_field_positions();
-        assert_eq!(field_opt, vec![0, 1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14]);
-    }
-
-    #[test]
-    fn test_room_options() {
-        let farm = Farm::new();
-        let room_opt = farm.possible_room_positions();
-        //println!("{:?}", room_opt);
-        assert_eq!(room_opt, [0, 6, 11]);
     }
 }

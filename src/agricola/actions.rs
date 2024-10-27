@@ -127,14 +127,12 @@ impl Action {
             Self::StartRound => vec![(Self::PlaceWorker, DEFAULT_WEIGHT)],
             Self::PlaceWorker => Self::place_worker_choices(state),
             Self::UseFarmland => {
-                let field_opt = state.field_options();
-                if !field_opt.is_empty() {
-                    for opt in field_opt {
-                        ret.push((
-                            Self::Plow(CalledFromCultivation(false), opt),
-                            DEFAULT_WEIGHT,
-                        ));
-                    }
+                let field_opt = state.next_field_position();
+                if let Some(field_idx) = field_opt {
+                    ret.push((
+                        Self::Plow(CalledFromCultivation(false), field_idx),
+                        DEFAULT_WEIGHT,
+                    ));
                 }
                 ret
             }
@@ -198,13 +196,15 @@ impl Action {
                     state,
                     &CalledFromGrainUtilization(false, true),
                 ));
-                let field_opt = state.field_options();
-                if field_opt.is_empty() {
-                    ret.push((Self::EndTurn, DEFAULT_WEIGHT));
+                let opt_field_idx = state.next_field_position();
+
+                if let Some(field_idx) = opt_field_idx {
+                    ret.push((
+                        Self::Plow(CalledFromCultivation(true), field_idx),
+                        DEFAULT_WEIGHT,
+                    ));
                 } else {
-                    for opt in field_opt {
-                        ret.push((Self::Plow(CalledFromCultivation(true), opt), DEFAULT_WEIGHT));
-                    }
+                    ret.push((Self::EndTurn, DEFAULT_WEIGHT));
                 }
                 ret
             }
@@ -289,11 +289,12 @@ impl Action {
 
     fn day_laborer_choices(state: &State) -> Vec<WeightedAction> {
         let mut ret: Vec<WeightedAction> = Vec::new();
-        let field_opt = state.field_options();
-        if !field_opt.is_empty() && state.current_player_cards()[AssistantTiller.index()] {
-            for opt in field_opt {
+
+        if state.current_player_cards()[AssistantTiller.index()] {
+            let opt_field_idx = state.next_field_position();
+            if let Some(field_idx) = opt_field_idx {
                 ret.push((
-                    Self::Plow(CalledFromCultivation(false), opt),
+                    Self::Plow(CalledFromCultivation(false), field_idx),
                     DEFAULT_WEIGHT,
                 ));
             }
@@ -444,14 +445,17 @@ impl Action {
 
     fn farm_expansion_choices(state: &State) -> Vec<WeightedAction> {
         let mut ret: Vec<WeightedAction> = Vec::new();
-        let room_options = state.room_options();
-        for idx in room_options {
-            ret.push((Self::BuildRoom(idx), DEFAULT_WEIGHT));
+
+        let opt_room_idx = state.next_room_position();
+        if let Some(room_idx) = opt_room_idx {
+            ret.push((Self::BuildRoom(room_idx), DEFAULT_WEIGHT));
         }
-        let stable_options = state.stable_options();
-        for idx in stable_options {
-            ret.push((Self::BuildStable(idx), DEFAULT_WEIGHT));
+
+        let opt_stable_idx = state.next_stable_position();
+        if let Some(stable_idx) = opt_stable_idx {
+            ret.push((Self::BuildStable(stable_idx), DEFAULT_WEIGHT));
         }
+
         ret
     }
 
@@ -545,7 +549,7 @@ impl Action {
         let mut weights = HashMap::new();
 
         // Occs
-        if state.num_occupations_played() == 0 {
+        if state.num_occupations_played() == 0 && !state.occupied[Lessons1.index()] {
             weights.insert(Lessons2.index(), ZERO_WEIGHT);
         }
 
@@ -645,12 +649,12 @@ impl Action {
                 continue;
             }
 
-            if idx == Farmland.index() && state.field_options().is_empty() {
+            if idx == Farmland.index() && state.next_field_position().is_none() {
                 continue;
             }
             if idx == FarmExpansion.index()
-                && state.room_options().is_empty()
-                && state.stable_options().is_empty()
+                && state.next_room_position().is_none()
+                && state.next_stable_position().is_none()
             {
                 continue;
             }
@@ -687,7 +691,10 @@ impl Action {
                 continue;
             }
 
-            if idx == Cultivation.index() && !state.can_sow() && state.field_options().is_empty() {
+            if idx == Cultivation.index()
+                && !state.can_sow()
+                && state.next_field_position().is_none()
+            {
                 continue;
             }
 
@@ -905,16 +912,10 @@ impl Action {
             }
 
             state.accumulated_resources[self.action_idx()] = new_res();
-            state.set_can_renovate();
-            state.set_can_build_room();
-            state.set_can_build_stable();
         }
 
         if RESOURCE_SPACE_INDICES.contains(&self.action_idx()) {
             get_resource(self.action_idx(), state.current_player_quantities_mut());
-            state.set_can_renovate();
-            state.set_can_build_room();
-            state.set_can_build_stable();
         }
     }
 }

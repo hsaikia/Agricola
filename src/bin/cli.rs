@@ -23,7 +23,7 @@ use ratatui::{
     Frame, Terminal,
 };
 
-const NUM_GAMES_TO_SIMULATE: usize = 100;
+const NUM_GAMES_TO_SIMULATE: usize = 200;
 const DEPTH: Option<usize> = None;
 
 #[derive(Clone, Copy, Debug)]

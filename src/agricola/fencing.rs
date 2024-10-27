@@ -330,14 +330,6 @@ fn all_possible_fence_configs(
         Default::default();
 
     for (ps, wood) in &all_pastures {
-        //let hash = pasture_config_hash(ps);
-        //let min_wood = pasture_config_to_min_wood_map.get(&hash).unwrap();
-
-        // // Reject a multi-pasture if the wood required to build the exact same config is greater than the min_wood required to build that config
-        // if wood > min_wood {
-        //     continue;
-        // }
-
         possible_pastures_from_wood[*wood].push(ps.clone());
     }
     possible_pastures_from_wood
@@ -382,7 +374,7 @@ pub fn get_existing_pasture_capacities(farmyard_spaces: &[FarmyardSpace]) -> Vec
 }
 
 #[must_use]
-pub fn get_existing_pastures(farmyard_spaces: &[FarmyardSpace]) -> [Pasture; MAX_PASTURES] {
+pub fn get_existing_pastures(farmyard_spaces: &[FarmyardSpace]) -> Vec<Pasture> {
     let mut existing_pastures: [Pasture; MAX_PASTURES] = Default::default();
 
     for (idx, space) in farmyard_spaces.iter().enumerate() {
@@ -393,6 +385,9 @@ pub fn get_existing_pastures(farmyard_spaces: &[FarmyardSpace]) -> [Pasture; MAX
 
     existing_pastures.sort();
     existing_pastures
+        .into_iter()
+        .filter(|p| !p.is_empty())
+        .collect()
 }
 
 #[must_use]
@@ -402,10 +397,7 @@ pub fn get_all_pasture_configs(farmyard_spaces: &[FarmyardSpace]) -> Vec<Pasture
         false, false,
     ];
 
-    let existing_pastures_configs = get_existing_pastures(farmyard_spaces)
-        .into_iter()
-        .filter(|p| !p.is_empty())
-        .collect::<Vec<Pasture>>();
+    let existing_pastures_configs = get_existing_pastures(farmyard_spaces);
 
     for (idx, space) in farmyard_spaces.iter().enumerate() {
         match space {
@@ -471,6 +463,46 @@ pub fn get_all_pasture_configs(farmyard_spaces: &[FarmyardSpace]) -> Vec<Pasture
 
 pub fn remove_farmyard_idx(all_pasture_configs: &mut Vec<PastureConfig>, idx: usize) {
     all_pasture_configs.retain(|x| x.pastures.iter().flatten().all(|&y| y != idx));
+}
+
+#[must_use]
+pub fn best_fence_options(
+    all_pasture_configs: &[PastureConfig],
+    fences_used: usize,
+    wood_available: usize,
+    order: &[usize],
+) -> Vec<PastureConfig> {
+    let mut ret = Vec::new();
+
+    for pasture_config in all_pasture_configs {
+        if pasture_config.wood > wood_available + fences_used || pasture_config.wood <= fences_used
+        {
+            continue;
+        }
+
+        let mut indices = pasture_config
+            .pastures
+            .iter()
+            .flatten()
+            .copied()
+            .collect::<Vec<usize>>();
+        indices.sort_unstable();
+
+        let mut order_indices = order
+            .iter()
+            .take(indices.len())
+            .copied()
+            .collect::<Vec<usize>>();
+        order_indices.sort_unstable();
+
+        if indices != order_indices {
+            continue;
+        }
+
+        ret.push(pasture_config.clone());
+    }
+
+    ret
 }
 
 /// Get the best pasture configurations according to maximum future extensibility

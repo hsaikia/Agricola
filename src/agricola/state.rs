@@ -17,9 +17,8 @@ use super::farm::{Farm, FarmyardSpace, Seed, NUM_FARMYARD_SPACES};
 use super::fencing::{get_all_pasture_configs, PastureConfig};
 use super::flag::{
     BakedOnceWithClayOven, BakedOnceWithStoneOven, BakedTwiceWithStoneOven, BeforeRoundStart,
-    CanBuildRoom, CanBuildStable, CanRenovate, ClayHouse, Flag, HarvestPaid, HasCookingImprovement,
-    HasRoomToGrow, StoneHouse, UsedBasketmakersWorkshop, UsedJoinery, UsedPottery, WoodHouse,
-    NUM_FLAGS,
+    ClayHouse, Flag, HarvestPaid, HasCookingImprovement, HasRoomToGrow, StoneHouse,
+    UsedBasketmakersWorkshop, UsedJoinery, UsedPottery, WoodHouse, NUM_FLAGS,
 };
 use super::quantity::{
     can_pay_for_resource, pay_for_resource, AdultMembers, BeggingTokens, Boar, Cattle, Children,
@@ -345,8 +344,8 @@ impl State {
     }
 
     #[must_use]
-    pub fn field_options(&self) -> Vec<usize> {
-        self.current_farm().possible_field_positions()
+    pub fn next_field_position(&self) -> Option<usize> {
+        self.current_farm().next_field_position()
     }
 
     fn is_major_played(&self, major_idx: usize) -> bool {
@@ -414,18 +413,12 @@ impl State {
         }
     }
 
-    pub fn set_can_build_room(&mut self) {
-        self.current_player_flags_mut()[CanBuildRoom.index()] =
-            !self.current_farm().possible_room_positions().is_empty()
-                && self.current_player_quantities()
-                    [self.room_material_idx(self.current_player_idx)]
-                    >= 5
-                && self.current_player_quantities()[Reed.index()] >= 2;
-    }
-
     #[must_use]
     pub fn can_build_room(&self) -> bool {
-        self.current_player_flags()[CanBuildRoom.index()]
+        self.current_farm().next_field_position().is_some()
+            && self.current_player_quantities()[self.room_material_idx(self.current_player_idx)]
+                >= 5
+            && self.current_player_quantities()[Reed.index()] >= 2
     }
 
     /// Builds a single room
@@ -448,34 +441,20 @@ impl State {
         if rooms > self.family_members(self.current_player_idx) {
             self.current_player_flags_mut()[HasRoomToGrow.index()] = true;
         }
-
-        // Can Renovate flag is perhaps dirty, set it
-        self.set_can_renovate();
-
-        // Can Build Room flag is perhaps dirty, set it
-        self.set_can_build_room();
-
-        // Can Build Stable flag is perhaps dirty, set it
-        self.set_can_build_stable();
     }
 
     #[must_use]
-    pub fn room_options(&self) -> Vec<usize> {
+    pub fn next_room_position(&self) -> Option<usize> {
         if self.can_build_room() {
-            return self.current_farm().possible_room_positions();
+            return self.current_farm().next_room_position();
         }
-        Vec::new()
-    }
-
-    pub fn set_can_build_stable(&mut self) {
-        self.current_player_flags_mut()[CanBuildStable.index()] =
-            self.current_player_quantities()[Wood.index()] >= 2
-                && self.current_farm().can_build_stable();
+        None
     }
 
     #[must_use]
     pub fn can_build_stable(&self) -> bool {
-        self.current_player_flags()[CanBuildStable.index()]
+        self.current_player_quantities()[Wood.index()] >= 2
+            && self.current_farm().can_build_stable()
     }
 
     /// Builds a single stable
@@ -485,33 +464,25 @@ impl State {
         assert!(self.can_build_stable());
         self.current_player_quantities_mut()[Wood.index()] -= 2;
         self.current_farm_mut().build_stable(*idx);
-        // Set flags
-        self.set_can_build_stable();
-        self.set_can_build_room();
     }
 
     #[must_use]
-    pub fn stable_options(&self) -> Vec<usize> {
+    pub fn next_stable_position(&self) -> Option<usize> {
         if self.can_build_stable() {
-            return self.current_farm().possible_stable_positions();
+            return self.current_farm().next_stable_position();
         }
-        Vec::new()
-    }
-
-    pub fn set_can_renovate(&mut self) {
-        self.current_player_flags_mut()[CanRenovate.index()] =
-            self.current_player_quantities()[Reed.index()] >= 1
-                && ((self.current_player_flags()[WoodHouse.index()]
-                    && self.current_player_quantities()[Clay.index()]
-                        >= self.current_player_quantities()[Rooms.index()])
-                    || (self.current_player_flags()[ClayHouse.index()]
-                        && self.current_player_quantities()[Stone.index()]
-                            >= self.current_player_quantities()[Rooms.index()]));
+        None
     }
 
     #[must_use]
     pub fn can_renovate(&self) -> bool {
-        self.current_player_flags()[CanRenovate.index()]
+        let reno_material = self.renovation_material_idx();
+        if let Some(reno_material) = reno_material {
+            return self.current_player_quantities()[Reed.index()] >= 1
+                && (self.current_player_quantities()[reno_material]
+                    >= self.current_player_quantities()[Rooms.index()]);
+        }
+        false
     }
 
     fn renovation_material_idx(&self) -> Option<usize> {
@@ -527,11 +498,16 @@ impl State {
     /// # Panics
     /// Will panic if the player cannot renovate
     pub fn renovate(&mut self) {
-        assert!(self.current_player_flags()[CanRenovate.index()]);
+        assert!(self.can_renovate());
         // TODO for cards like Conservator this must be implemented in a more general way
         let renovation_material_idx = self.renovation_material_idx();
 
         if let Some(renovation_material_idx) = renovation_material_idx {
+            assert!(
+                self.current_player_quantities()[renovation_material_idx]
+                    >= self.current_player_quantities()[Rooms.index()]
+            );
+            assert!(self.current_player_quantities()[Reed.index()] >= 1);
             self.current_player_quantities_mut()[renovation_material_idx] -=
                 self.current_player_quantities()[Rooms.index()];
             self.current_player_quantities_mut()[Reed.index()] -= 1;
@@ -594,9 +570,6 @@ impl State {
         self.current_player_quantities_mut()[Wood.index()] = wood;
         self.fence_options_cache[self.current_player_idx]
             .retain(|x| is_future_extension(&x.pastures, &pasture_config.pastures));
-        // Set flags
-        self.set_can_build_stable();
-        self.set_can_build_room();
     }
 
     #[must_use]
@@ -1111,29 +1084,16 @@ mod tests {
 
         assert!(state.current_player_flags()[WoodHouse.index()]);
 
-        let room_positions = state.current_farm().possible_room_positions();
+        let next_room_position = state.current_farm().next_room_position();
 
-        // There shouldbe 3 neighboring spots
-        assert_eq!(room_positions.len(), 3);
+        assert!(next_room_position.is_some());
 
         // Add resources to enable building one room
         state.current_player_quantities_mut()[Wood.index()] = 5;
         state.current_player_quantities_mut()[Reed.index()] = 2;
 
-        // Flag isn't set, so room cannot be built yet
-        assert!(!state.can_build_room());
-
-        // Set the flag
-        state.set_can_build_room();
-
         // Now room can be built
         assert!(state.can_build_room());
-
-        // Flag isn't set, so stable cannot be built yet
-        assert!(!state.can_build_stable());
-
-        // Set the flag
-        state.set_can_build_stable();
 
         // Now stable can be built
         assert!(state.can_build_stable());
@@ -1147,8 +1107,6 @@ mod tests {
 
         // Add more wood
         state.current_player_quantities_mut()[Wood.index()] = 10;
-        // Set flag again
-        state.set_can_build_stable();
 
         assert!(state.can_build_stable());
 
