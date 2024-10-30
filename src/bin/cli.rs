@@ -15,6 +15,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use rand::seq::SliceRandom;
 use ratatui::style::{Color, Style};
 use ratatui::{
     backend::{Backend, CrosstermBackend},
@@ -25,6 +26,8 @@ use ratatui::{
 
 const NUM_GAMES_TO_SIMULATE: usize = 1000;
 const DEPTH: Option<usize> = None;
+
+const PLAYER_COLORS: [Color; 4] = [Color::Red, Color::Green, Color::Blue, Color::Yellow];
 
 #[derive(Clone, Copy, Debug)]
 enum PlayerSelection {
@@ -52,10 +55,14 @@ struct App {
     ai: [Option<AI>; MAX_NUM_PLAYERS],
     records: Vec<SimulationRecord>,
     current_actions: Vec<WeightedAction>,
+    player_colors: [Color; 4],
 }
 
 impl App {
     fn new() -> App {
+        let mut rng = rand::thread_rng();
+        let mut player_colors = PLAYER_COLORS;
+        player_colors.shuffle(&mut rng);
         App {
             selection_x: 0,
             selection_y: 0,
@@ -67,6 +74,7 @@ impl App {
             ai: [const { None }; MAX_NUM_PLAYERS],
             records: Vec::new(),
             current_actions: Vec::new(),
+            player_colors,
         }
     }
 
@@ -401,7 +409,11 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                 title_string = format!("{title_string} | 🔻 ");
             }
 
-            let farm = Block::default().title(title_string).borders(Borders::ALL);
+            let farm = Block::default()
+                .title(title_string)
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(app.player_colors[i]));
 
             f.render_widget(farm, farm_areas[2 * i]);
 
