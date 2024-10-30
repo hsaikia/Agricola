@@ -24,7 +24,7 @@ use ratatui::{
     Frame, Terminal,
 };
 
-const NUM_GAMES_TO_SIMULATE: usize = 1000;
+const NUM_GAMES_TO_SIMULATE_PER_MOVE: usize = 50;
 const DEPTH: Option<usize> = None;
 
 const PLAYER_COLORS: [Color; 4] = [Color::Red, Color::Green, Color::Blue, Color::Yellow];
@@ -153,7 +153,9 @@ impl App {
                             self.records = AI::get_simulation_records(state);
                         }
 
-                        if !self.move_selected && ai.num_games_sampled < NUM_GAMES_TO_SIMULATE {
+                        let total_games_to_simulate =
+                            NUM_GAMES_TO_SIMULATE_PER_MOVE * self.records.len();
+                        if !self.move_selected && ai.num_games_sampled < total_games_to_simulate {
                             ai.sample_once(&mut self.records, state, DEPTH);
                             AI::sort_records(&mut self.records);
                             return;
@@ -225,10 +227,12 @@ impl App {
                 }
                 PlayerType::MctsAI | PlayerType::TdAI => {
                     let ai = self.ai[state.current_player_idx].as_ref().unwrap();
+                    let total_games_to_simulate =
+                        NUM_GAMES_TO_SIMULATE_PER_MOVE * self.records.len();
                     ret = format!(
                         "{}/{} Games Simulated..\nCache Size {}\n",
                         ai.num_games_sampled,
-                        NUM_GAMES_TO_SIMULATE,
+                        total_games_to_simulate,
                         ai.cache.len()
                     );
 
@@ -239,8 +243,13 @@ impl App {
                                 rec.score, rec.games, rec.action
                             ));
 
-                            if let Action::Fence(_) = &rec.action {
-                                additional_stuff = String::from("Fence Layout : TODO");
+                            if let Action::Fence(pc) = &rec.action {
+                                let mut farm = state.current_farm().clone();
+                                let mut wood = state.current_player_quantities()[Wood.index()];
+                                farm.fence_spaces(pc, &mut wood);
+                                let room_material_index =
+                                    state.room_material_idx(state.current_player_idx);
+                                additional_stuff = print_farm(&farm, room_material_index);
                             }
                         } else {
                             ret.push_str(&format!(
@@ -343,6 +352,7 @@ fn run_app<B: Backend>(
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)

@@ -550,22 +550,22 @@ impl Action {
         let mut weights = HashMap::new();
 
         // Occs
-        if state.num_occupations_played() == 0 && !state.occupied[Lessons1.index()] {
+        if state.num_occupations_played() == 0 && state.occupied[Lessons1.index()].is_none() {
             weights.insert(Lessons2.index(), ZERO_WEIGHT);
         }
 
         // Wood
-        let copse_wood = if state.occupied[Copse.index()] {
+        let copse_wood = if state.occupied[Copse.index()].is_some() {
             0
         } else {
             state.accumulated_resources[Copse.index()][Wood.index()]
         };
-        let grove_wood = if state.occupied[Grove.index()] {
+        let grove_wood = if state.occupied[Grove.index()].is_some() {
             0
         } else {
             state.accumulated_resources[Grove.index()][Wood.index()]
         };
-        let forest_wood = if state.occupied[Forest.index()] {
+        let forest_wood = if state.occupied[Forest.index()].is_some() {
             0
         } else {
             state.accumulated_resources[Forest.index()][Wood.index()]
@@ -584,12 +584,12 @@ impl Action {
         }
 
         // Clay
-        let hollow_clay = if state.occupied[Hollow.index()] {
+        let hollow_clay = if state.occupied[Hollow.index()].is_some() {
             0
         } else {
             state.accumulated_resources[Hollow.index()][Clay.index()]
         };
-        let clay_pit_clay = if state.occupied[ClayPit.index()] {
+        let clay_pit_clay = if state.occupied[ClayPit.index()].is_some() {
             0
         } else {
             state.accumulated_resources[ClayPit.index()][Clay.index()]
@@ -604,27 +604,27 @@ impl Action {
         }
 
         // Reed
-        let reed_bank_reed = if state.occupied[ReedBank.index()] {
+        let reed_bank_reed = if state.occupied[ReedBank.index()].is_some() {
             0
         } else {
             state.accumulated_resources[ReedBank.index()][Reed.index()]
         };
-        if !state.occupied[ResourceMarket.index()] && reed_bank_reed == 1 {
+        if state.occupied[ResourceMarket.index()].is_none() && reed_bank_reed == 1 {
             weights.insert(ReedBank.index(), ZERO_WEIGHT);
         }
 
         // Food
-        let traveling_players_food = if state.occupied[TravelingPlayers.index()] {
+        let traveling_players_food = if state.occupied[TravelingPlayers.index()].is_some() {
             0
         } else {
             state.accumulated_resources[TravelingPlayers.index()][Food.index()]
         };
-        let fishing_food = if state.occupied[Fishing.index()] {
+        let fishing_food = if state.occupied[Fishing.index()].is_some() {
             0
         } else {
             state.accumulated_resources[Fishing.index()][Food.index()]
         };
-        let day_laborer_food = if state.occupied[DayLaborer.index()] {
+        let day_laborer_food = if state.occupied[DayLaborer.index()].is_some() {
             0
         } else {
             2
@@ -646,7 +646,7 @@ impl Action {
 
         for i in 0..OPEN_SPACES + state.current_round {
             let idx = state.action_spaces[i];
-            if state.occupied[idx] {
+            if state.occupied[idx].is_some() {
                 continue;
             }
 
@@ -713,7 +713,7 @@ impl Action {
 
             // Growing before others
             if idx == WishForChildren.index()
-                && !state.occupied[WishForChildren.index()]
+                && state.occupied[WishForChildren.index()].is_none()
                 && state.can_grow_family_with_room(state.current_player_idx)
                 && (0..state.num_players)
                     .filter(|&x| x != state.current_player_idx)
@@ -723,7 +723,7 @@ impl Action {
             }
 
             if idx == UrgentWishForChildren.index()
-                && !state.occupied[UrgentWishForChildren.index()]
+                && state.occupied[UrgentWishForChildren.index()].is_none()
                 && state.can_grow_family_with_room(state.current_player_idx)
                 && (0..state.num_players)
                     .filter(|&x| x != state.current_player_idx)

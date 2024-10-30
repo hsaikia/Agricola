@@ -49,7 +49,7 @@ pub struct State {
     pub current_round: usize,
     pub accumulated_resources: [Resources; NUM_ACTION_SPACES], // Only accumulation spaces are used
     pub action_spaces: [usize; NUM_ACTION_SPACES],
-    pub occupied: [bool; NUM_ACTION_SPACES],
+    pub occupied: [Option<usize>; NUM_ACTION_SPACES],
     pub harvest_done: bool,
     player_types: [PlayerType; MAX_NUM_PLAYERS],
     player_quantities: [[usize; NUM_QUANTITIES]; MAX_NUM_PLAYERS],
@@ -107,7 +107,7 @@ impl State {
                 .collect::<Vec<usize>>()
                 .try_into()
                 .unwrap(),
-            occupied: [false; NUM_ACTION_SPACES],
+            occupied: [None; NUM_ACTION_SPACES],
             harvest_done: false,
             player_types,
             player_quantities,
@@ -129,7 +129,7 @@ impl State {
         if action.action_idx() < NUM_ACTION_SPACES {
             // This only works because the indices of actions and action spaces are the same.
             // TODO : Fix this duplication
-            self.occupied[action.action_idx()] = true;
+            self.occupied[action.action_idx()] = Some(self.current_player_idx);
         }
 
         // Add action to the sequence of actions taken by the current player
@@ -251,11 +251,9 @@ impl State {
         for f in &mut fitness {
             if (*f - sorted_scores[0]).abs() < EPSILON {
                 // winner
-                //*f -= sorted_scores[1];
-                *f = 1.0;
+                *f -= sorted_scores[1];
             } else {
-                //*f -= sorted_scores[0];
-                *f = 0.0;
+                *f -= sorted_scores[0];
             }
         }
         fitness
@@ -309,7 +307,7 @@ impl State {
         self.reset_for_next_round();
         self.people_placed_this_round = 0;
 
-        self.occupied = [false; NUM_ACTION_SPACES];
+        self.occupied = [None; NUM_ACTION_SPACES];
 
         // Update accumulation spaces
         for i in 0..OPEN_SPACES + self.current_round {
@@ -878,8 +876,12 @@ impl State {
 
         for i in (0..NUM_ACTION_SPACES).take(OPEN_SPACES + self.current_round) {
             let idx = self.action_spaces[i];
-            if self.occupied[idx] {
-                ret.push_str(&format!("\n[X] {}", ACTION_SPACE_NAMES[idx]));
+            if let Some(player_idx) = self.occupied[idx] {
+                ret.push_str(&format!(
+                    "\n[{}] {}",
+                    player_idx + 1,
+                    ACTION_SPACE_NAMES[idx]
+                ));
             } else {
                 ret.push_str(&format!("\n[-] {}", ACTION_SPACE_NAMES[idx]));
                 if ACCUMULATION_SPACE_INDICES.contains(&idx) {
@@ -897,11 +899,7 @@ impl State {
                 let owner_idx = (0..self.num_players)
                     .find(|i| self.player_cards[*i][card_idx])
                     .unwrap();
-                ret.push_str(&format!(
-                    "\n[X] {} is owned by Player {}",
-                    card_name,
-                    owner_idx + 1
-                ));
+                ret.push_str(&format!("\n[{}] {}", owner_idx + 1, card_name,));
             }
         }
 
