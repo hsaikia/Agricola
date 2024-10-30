@@ -103,6 +103,7 @@ impl AI {
 
     pub fn reset(&mut self) {
         self.num_games_sampled = 0;
+        self.cache.clear();
     }
 
     #[must_use]

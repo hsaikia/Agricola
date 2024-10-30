@@ -23,7 +23,7 @@ use ratatui::{
     Frame, Terminal,
 };
 
-const NUM_GAMES_TO_SIMULATE: usize = 200;
+const NUM_GAMES_TO_SIMULATE: usize = 1000;
 const DEPTH: Option<usize> = None;
 
 #[derive(Clone, Copy, Debug)]
@@ -260,7 +260,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     // create app and run it
-    let tick_rate = Duration::from_millis(10);
+    let tick_rate = Duration::from_millis(1);
     let app = App::new();
     let res = run_app(&mut terminal, app, tick_rate);
 

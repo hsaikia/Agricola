@@ -251,9 +251,11 @@ impl State {
         for f in &mut fitness {
             if (*f - sorted_scores[0]).abs() < EPSILON {
                 // winner
-                *f -= sorted_scores[1];
+                //*f -= sorted_scores[1];
+                *f = 1.0;
             } else {
-                *f -= sorted_scores[0];
+                //*f -= sorted_scores[0];
+                *f = 0.0;
             }
         }
         fitness
@@ -805,6 +807,9 @@ impl State {
     pub fn grow_family_without_room(&mut self, player_idx: usize) {
         assert!(self.can_grow_family_without_room(player_idx));
         self.player_quantities_mut(player_idx)[Children.index()] += 1;
+        if self.family_members(player_idx) >= self.player_quantities(player_idx)[Rooms.index()] {
+            self.player_flags_mut(player_idx)[HasRoomToGrow.index()] = false;
+        }
     }
 
     #[must_use]
